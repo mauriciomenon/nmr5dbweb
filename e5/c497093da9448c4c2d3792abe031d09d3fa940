@@ -1,0 +1,25 @@
+AGENTS.md
+  ca10bf88e9c9159b 1-136
+CODEX_SETTINGS.md
+  ca10bf88e9c9159b 1-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "e5c497093da9448c4c2d3792abe031d09d3fa940",
+  "prompts": {
+    "ca10bf88e9c9159b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ce87e-ba2d-7741-ba15-57c251ceed20",
+        "model": "gpt-5.3-codex"
+      },
+      "human_author": "Maurício Menon <54405514+mauriciomenon@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 172,
+      "total_deletions": 0,
+      "accepted_lines": 172,
+      "overriden_lines": 0
+    }
+  }
+}

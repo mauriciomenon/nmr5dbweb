@@ -1,0 +1,27 @@
+access_convert.py
+  33ace41bd7d40856 506-512,532-538,553-559
+interface/access_parser_utils.py
+  33ace41bd7d40856 9,193-195,200
+tests/test_access_parser_utils_normalize.py
+  33ace41bd7d40856 47-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "079c96ff3542eea052de68f3c48f7904b9dbb082",
+  "prompts": {
+    "33ace41bd7d40856": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ce9dc-3a0f-7c41-91bd-a20547c97c25",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Maurício Menon <54405514+mauriciomenon@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 50,
+      "total_deletions": 9,
+      "accepted_lines": 44,
+      "overriden_lines": 0
+    }
+  }
+}
