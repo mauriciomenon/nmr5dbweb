@@ -43,3 +43,5 @@ venv.bak/
 
 logs/
 *.log
+
+temp/
