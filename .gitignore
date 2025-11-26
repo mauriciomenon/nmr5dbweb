@@ -46,3 +46,4 @@ logs/
 
 temp/
 benchmark_results_*.json
+/import_folder

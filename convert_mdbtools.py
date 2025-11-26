@@ -41,10 +41,10 @@ def get_mdb_tables(mdb_file: Path) -> List[str]:
         tables = [t.strip() for t in result.stdout.split('\n') if t.strip()]
         return tables
     except subprocess.CalledProcessError as e:
-        print(f"Erro ao listar tabelas: {e}")
+        print(f"Error listing tables: {e}")
         return []
     except FileNotFoundError:
-        print("mdb-tools não encontrado. Instale com: brew install mdbtools (macOS) ou sudo apt install mdbtools (Linux)")
+        print("mdb-tools not found. Install with: brew install mdbtools (macOS) or sudo apt install mdbtools (Linux)")
         sys.exit(1)
 
 
@@ -67,23 +67,23 @@ def import_to_duckdb(
     duckdb_file: Path,
     file_date: Optional[str] = None
 ):
-    print(f"\nProcessando: {mdb_file.name}")
+    print(f"\nProcessing: {mdb_file.name}")
     
     if not file_date:
         file_date = extract_date_from_filename(mdb_file.name)
     
     if not file_date:
-        print(f"AVISO: Não foi possível extrair data do arquivo {mdb_file.name}")
+        print(f"WARNING: Could not extract date from file {mdb_file.name}")
         file_date = datetime.now().strftime('%Y-%m-%d')
     
-    print(f"Data extraída: {file_date}")
+    print(f"Date extracted: {file_date}")
     
     tables = get_mdb_tables(mdb_file)
     if not tables:
-        print("Nenhuma tabela encontrada")
+        print("No tables found")
         return
     
-    print(f"Tabelas encontradas: {len(tables)}")
+    print(f"Tables found: {len(tables)}")
     
     conn = duckdb.connect(str(duckdb_file))
     
@@ -105,16 +105,16 @@ def import_to_duckdb(
     temp_dir.mkdir(exist_ok=True)
     
     for table in tables:
-        print(f"  Importando: {table}...", end=' ', flush=True)
+        print(f"  Importing: {table}...", end=' ', flush=True)
         
         csv_file = temp_dir / f"{table}.csv"
         
         if not export_table_to_csv(mdb_file, table, csv_file):
-            print("FALHOU")
+            print("FAILED")
             continue
         
         if csv_file.stat().st_size == 0:
-            print("VAZIA")
+            print("EMPTY")
             csv_file.unlink()
             continue
         
@@ -139,22 +139,22 @@ def import_to_duckdb(
                 VALUES (nextval('seq_import_id'), ?, ?, ?, ?, ?)
             """, [mdb_file.name, file_date, import_timestamp, table_with_date, row_count])
             
-            print(f"OK ({row_count} linhas)")
+            print(f"OK ({row_count} rows)")
             
         except Exception as e:
-            print(f"ERRO: {e}")
+            print(f"ERROR: {e}")
         finally:
             csv_file.unlink(missing_ok=True)
     
     conn.close()
-    print(f"\n✓ Importação concluída: {duckdb_file}")
+    print(f"\nImport completed: {duckdb_file}")
 
 
 def batch_import(input_dir: Path, duckdb_file: Path):
     mdb_files = sorted(list(input_dir.glob('*.mdb')) + list(input_dir.glob('*.accdb')))
     
     if not mdb_files:
-        print(f"Nenhum arquivo MDB/ACCDB encontrado em {input_dir}")
+        print(f"No MDB/ACCDB files found in {input_dir}")
         return
     
     print(f"\n{'='*60}")
@@ -168,23 +168,23 @@ def batch_import(input_dir: Path, duckdb_file: Path):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Converte arquivos MDB/ACCDB para DuckDB'
+        description='Convert MDB/ACCDB to DuckDB using mdbtools'
     )
     parser.add_argument(
         '--input',
         type=Path,
-        help='Arquivo MDB/ACCDB de entrada ou diretório para batch'
+        help='Input MDB/ACCDB file or directory for batch'
     )
     parser.add_argument(
         '--output',
         type=Path,
         default=Path('database.duckdb'),
-        help='Arquivo DuckDB de saída (padrão: database.duckdb)'
+        help='Output DuckDB file (default: database.duckdb)'
     )
     parser.add_argument(
         '--batch',
         action='store_true',
-        help='Processar todos os arquivos MDB/ACCDB do diretório --input'
+        help='Process all MDB/ACCDB files in --input directory'
     )
     
     args = parser.parse_args()
@@ -194,17 +194,17 @@ def main():
         sys.exit(1)
     
     if not args.input.exists():
-        print(f"Erro: {args.input} não encontrado")
+        print(f"Error: {args.input} not found")
         sys.exit(1)
     
     if args.batch:
         if not args.input.is_dir():
-            print("Erro: --batch requer que --input seja um diretório")
+            print("Error: --batch requires --input to be a directory")
             sys.exit(1)
         batch_import(args.input, args.output)
     else:
         if not args.input.is_file():
-            print("Erro: --input deve ser um arquivo MDB/ACCDB")
+            print("Error: --input must be a MDB/ACCDB file")
             sys.exit(1)
         import_to_duckdb(args.input, args.output)
 

@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Busca DuckDB — Painel</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root { --bg:#f6f7fb; --card:#fff; --muted:#666; --primary:#0b63d6; --accent:#ffcc00; }
+    body{ font-family: Inter, Roboto, Arial, sans-serif; margin:0; background:var(--bg); color:#111; }
+    header{ background: linear-gradient(90deg,#fff 0%, #f2f6ff 100%); padding:12px 18px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #e6e9ef; }
+    header h1{ font-size:18px; margin:0; }
+    .top-right{ margin-left:auto; display:flex; gap:10px; align-items:center; }
+    .badge{ font-size:13px; color:var(--muted); }
+    .btn{ background:var(--primary); color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    .btn.ghost{ background:transparent; color:var(--primary); border:1px solid #d7e3ff; }
+    .container{ display:flex; gap:16px; padding:14px; }
+    aside{ width:260px; background:var(--card); border-radius:8px; padding:12px; box-shadow:0 1px 2px rgba(0,0,0,0.03); height:calc(100vh - 96px); overflow:auto; }
+    main{ flex:1; min-width:0; }
+    .search-row{ display:flex; gap:8px; align-items:center; margin-bottom:12px; }
+    input[type=text], input[type=number], select { padding:8px; border:1px solid #dfe6f0; border-radius:6px; font-size:14px; }
+    .card{ background:var(--card); padding:10px; border-radius:8px; box-shadow:0 1px 2px rgba(0,0,0,0.03); margin-bottom:12px; }
+    .small{ font-size:13px; color:var(--muted); }
+    .muted{ color:var(--muted); font-size:12px; }
+    ul.table-list{ list-style:none; padding:0; margin:0; }
+    li.table-item{ padding:8px; border-bottom:1px solid #eef2f6; display:flex; justify-content:space-between; align-items:center; }
+    .config-modal, .overlay{ display:none; }
+    .modal-open .overlay{ display:block; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:50; }
+    .modal-open .config-modal{ display:block; position:fixed; z-index:60; left:50%; top:50%; transform:translate(-50%,-50%); width:960px; max-width:95%; max-height:90vh; overflow:auto; background:var(--card); padding:16px; border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+    .progress-wrapper{ background:#f0f3f8; border-radius:6px; padding:6px; margin-top:8px; }
+    .progress-bar{ height:14px; background:linear-gradient(90deg,#0b63d6,#3aa0ff); border-radius:6px; width:0%; }
+    table.results{ width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }
+    table.results th, table.results td{ border:1px solid #eef2f6; padding:8px; text-align:left; vertical-align:top; }
+    mark{ background:var(--accent); padding:0 2px; border-radius:2px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Busca DuckDB — Painel</h1>
+    <div class="small">Ferramenta local para buscas tolerantes (fuzzy)</div>
+    <div class="top-right">
+      <div id="currentDb" class="badge">DB: carregando...</div>
+      <div id="modeBadge" class="badge">Modo: —</div>
+      <div id="indexStatus" class="badge">Status: --</div>
+      <button id="openConfig" class="btn">Configurar / Upload</button>
+      <button id="refreshBtn" class="btn ghost">Atualizar</button>
+    </div>
+  </header>
+
+  <div class="container">
+    <aside class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <strong>Tabelas</strong>
+        <button id="refreshTables" class="btn ghost">Atualizar</button>
+      </div>
+      <input id="filterTables" placeholder="Filtrar tabelas..." style="width:100%; margin-bottom:8px;" />
+      <ul id="tableList" class="table-list"></ul>
+      <div style="margin-top:10px" class="small">Clique em uma tabela para abri-la na visualização completa.</div>
+    </aside>
+
+    <main>
+      <div class="card">
+        <div class="search-row">
+          <input id="q" type="text" placeholder="Digite termo (ex: energia solar) — Enter para pesquisar" style="flex:1" />
+          <button id="searchBtn" class="btn">Pesquisar</button>
+          <button id="exportAllBtn" class="btn" style="background:#2f9e44;">Exportar resultados CSV</button>
+        </div>
+
+        <div class="controls small">
+          <label>por tabela:
+            <input id="per_table" type="number" value="10" style="width:80px" />
+          </label>
+          <label>candidatos SQL:
+            <input id="candidate_limit" type="number" value="1000" style="width:110px" />
+          </label>
+          <label>total_max:
+            <input id="total_limit" type="number" value="500" style="width:80px" />
+          </label>
+          <label>modo tokens:
+            <select id="token_mode"><option value="any">qualquer</option><option value="all">todas</option></select>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;">
+            min_score:
+            <input id="min_score" type="range" min="40" max="100" value="70" />
+            <span id="minScoreVal" class="small">70</span>
+          </label>
+        </div>
+
+        <div id="searchMeta" class="muted">Digite um termo e clique em Pesquisar.</div>
+      </div>
+
+      <div id="resultsArea"></div>
+    </main>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+  <div class="config-modal" id="configModal" role="dialog" aria-modal="true" aria-hidden="true">
+    <h3>Configuração e Upload</h3>
+    <div style="margin-bottom:8px">DB atual: <span id="cfgCurrentDb" class="muted">carregando...</span></div>
+
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+      <input id="fileInput" type="file" accept=".duckdb,.mdb,.accdb" />
+      <button id="uploadBtn" class="btn">Enviar</button>
+      <div id="uploadMsg" class="muted" style="margin-left:12px"></div>
+    </div>
+
+    <div style="margin-top:8px"><strong>Ou selecione um DB já enviado:</strong></div>
+    <div id="uploadsList" class="muted" style="margin-top:8px"></div>
+
+    <hr/>
+
+    <div style="display:flex;gap:12px">
+      <div style="flex:1">
+        <div style="font-weight:600;margin-bottom:6px">Todas as tabelas</div>
+        <ul id="allTablesList" style="border:1px solid #eef2f6;padding:8px;max-height:220px;overflow:auto"></ul>
+      </div>
+      <div style="flex:1">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <div style="font-weight:600">Tabelas prioritárias (selecionadas)</div>
+          <div class="small">Arraste para reordenar</div>
+        </div>
+        <ul id="priorityListModal" style="border:1px solid #eef2f6;padding:8px;max-height:220px;overflow:auto"></ul>
+      </div>
+    </div>
+
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="savePriorityBtnModal" class="btn">Salvar prioridade</button>
+      <button id="refreshPriorityBtnModal" class="btn ghost">Atualizar</button>
+      <div id="priorityMsg" class="muted" style="margin-left:8px"></div>
+    </div>
+
+    <hr/>
+    <div><strong>Conversão (progresso)</strong>
+      <div class="progress-wrapper">
+        <div style="display:flex;justify-content:space-between"><div id="convStatusText" class="muted">Nenhuma conversão em andamento</div><div id="convPercentText" class="muted">0%</div></div>
+        <div style="margin-top:6px;background:#e9eef8;border-radius:6px;overflow:hidden"><div id="convBar" class="progress-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <hr/>
+    <div><strong>Iniciar indexação (_fulltext)</strong>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+        <label class="muted">Recriar _fulltext?</label><input id="dropCheckbox" type="checkbox" />
+        <label class="muted">Chunk:</label><input id="chunk" type="number" value="2000" style="width:100px" />
+        <label class="muted">Batch:</label><input id="batch" type="number" value="1000" style="width:100px" />
+        <button id="startIndex" class="btn">Iniciar Indexação</button>
+      </div>
+      <div id="indexMsg" class="muted" style="margin-top:8px"></div>
+    </div>
+
+    <hr/>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div id="adminStatus" class="muted">Status: carregando...</div>
+      <button id="closeConfig" class="btn ghost">Fechar</button>
+    </div>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+let lastResults = null;
+let currentDb = null;
+
+async function apiJSON(path, opts){
+  const r = await fetch(path, opts);
+  return r.json();
+}
+
+async function refreshUiState(){
+  try{
+    const uploads = await apiJSON('/admin/list_uploads');
+    currentDb = uploads.current_db || null;
+    $('currentDb').textContent = 'DB: ' + (currentDb || 'não definido');
+    $('cfgCurrentDb').textContent = currentDb || '(nenhum)';
+    const ul = uploads.uploads || [];
+    $('uploadsList').innerHTML = ul.map(f => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0"><div style="font-weight:600">${f.name}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="selectUpload('${encodeURIComponent(f.name)}')">Selecionar</button><a href="/uploads/${encodeURIComponent(f.name)}" target="_blank" class="muted">Baixar</a><button class="btn ghost" onclick="deleteUpload('${encodeURIComponent(f.name)}')">Excluir</button></div></div>`).join('') || '<div class="muted">Nenhum upload encontrado.</div>';
+  }catch(e){ $('uploadsList').textContent='Erro ao listar uploads'; }
+  refreshStatus(); refreshTables();
+  loadPriorityModal();
+}
+
+async function refreshStatus(){
+  try{
+    const s = await apiJSON('/admin/status');
+    $('indexStatus').textContent = s.indexing ? 'Indexando...' : (s.fulltext_count ? 'Pronto' : 'Parado');
+    if(s.conversion && s.conversion.running){
+      const percent = s.conversion.percent || 0;
+      $('convBar').style.width = percent + '%';
+      $('convPercentText').textContent = (percent||0) + '%';
+      $('convStatusText').textContent = `Convertendo: ${s.conversion.current_table || ''} (${s.conversion.processed_tables || 0}/${s.conversion.total_tables || 0})`;
+      $('modeBadge').textContent = 'Modo: convertendo...';
+    } else {
+      const db = s.db || '';
+      if(db.toLowerCase().endsWith('.duckdb')) $('modeBadge').textContent = 'Modo: duckdb (rápido)';
+      else if(db.toLowerCase().endsWith('.mdb') || db.toLowerCase().endsWith('.accdb')) $('modeBadge').textContent = 'Modo: fallback';
+      else $('modeBadge').textContent = 'Modo: —';
+      $('convStatusText').textContent = s.conversion && s.conversion.msg ? s.conversion.msg : 'Nenhuma conversão em andamento';
+      $('convBar').style.width = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
+      $('convPercentText').textContent = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
+    }
+    let html = `<div>DB: ${s.db || '(nenhum)'}<br/>_fulltext linhas: ${s.fulltext_count || 0}</div>`;
+    if(s.top_tables && s.top_tables.length){
+      html += '<div style="margin-top:8px"><strong>Top tabelas:</strong><ul>' + s.top_tables.map(t=>`<li>${t.table} — ${t.count}</li>`).join('') + '</ul></div>';
+    }
+    $('adminStatus').innerHTML = html;
+  }catch(e){ $('adminStatus').textContent='Erro no status'; }
+}
+
+async function refreshTables(){
+  try{
+    const t = await apiJSON('/api/tables');
+    if(t.error){ $('tableList').innerHTML = `<div class="muted">Erro: ${t.error}</div>`; return; }
+    const list = t.tables || [];
+    const filter = $('filterTables').value.toLowerCase();
+    const container = $('tableList'); container.innerHTML = '';
+    list.filter(name => name.toLowerCase().includes(filter)).forEach(name => {
+      const li = document.createElement('li'); li.className='table-item';
+      li.innerHTML = `<div>${name}</div><div><button class="btn ghost" onclick="openTable(event,'${encodeURIComponent(name)}')">Abrir</button></div>`;
+      li.onclick = () => openTable(null, encodeURIComponent(name));
+      container.appendChild(li);
+    });
+  }catch(e){ $('tableList').innerHTML = '<div class="muted">Erro ao carregar tabelas</div>'; }
+}
+
+/* modal open/close */
+$('openConfig').addEventListener('click', ()=> document.body.classList.add('modal-open'));
+$('closeConfig').addEventListener('click', ()=> document.body.classList.remove('modal-open'));
+$('overlay').addEventListener('click', ()=> document.body.classList.remove('modal-open'));
+
+/* upload/select/delete actions */
+$('uploadBtn').addEventListener('click', async ()=>{
+  const fi = $('fileInput'); if(!fi.files.length){ $('uploadMsg').textContent='Selecione um arquivo.'; return; }
+  const f = fi.files[0]; const fd = new FormData(); fd.append('file', f); $('uploadMsg').textContent='Enviando...';
+  try{ const res = await fetch('/admin/upload',{method:'POST', body: fd}); const j = await res.json(); $('uploadMsg').textContent = JSON.stringify(j); await refreshUiState(); } catch(e){ $('uploadMsg').textContent='Erro no upload'; }
+});
+async function selectUpload(nameEnc){ const name = decodeURIComponent(nameEnc); const res = await fetch('/admin/select',{method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({filename: name})}); const j = await res.json(); alert(JSON.stringify(j)); await refreshUiState(); }
+async function deleteUpload(nameEnc){ if(!confirm('Deseja realmente excluir este arquivo?')) return; const name = decodeURIComponent(nameEnc); const res = await fetch('/admin/delete',{method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({filename: name})}); const j = await res.json(); if(j.ok){ alert('Arquivo apagado'); await refreshUiState(); } else alert('Erro: '+(j.error||JSON.stringify(j))); }
+
+/* priority modal */
+async function loadPriorityModal(){
+  const allEl = $('allTablesList'), selEl = $('priorityListModal');
+  if(!allEl || !selEl) return;
+  allEl.innerHTML=''; selEl.innerHTML=''; $('priorityMsg').textContent='Carregando...';
+  try{
+    const t = await apiJSON('/api/tables'); const tables = t.tables || [];
+    const visible = tables.filter(n => !/^MSys/i.test(n));
+    const st = await apiJSON('/admin/list_uploads'); const saved = st.priority_tables || [];
+    const remaining = visible.filter(x => !saved.includes(x));
+    remaining.forEach(name => {
+      const li = document.createElement('li'); li.dataset.table=name;
+      li.innerHTML = `<label style="display:flex;align-items:center;gap:8px;width:100%"><input type="checkbox" data-name="${escapeHtml(name)}" onchange="onTableCheckboxChange(this)"> <span style="flex:1">${escapeHtml(name)}</span></label>`;
+      allEl.appendChild(li);
+    });
+    saved.forEach(name => {
+      const li = document.createElement('li'); li.draggable=true; li.dataset.table=name;
+      li.innerHTML = `<div style="flex:1">${escapeHtml(name)}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)">▲</button><button class="btn ghost" onclick="prioMoveDown(this)">▼</button><button class="btn ghost" onclick="prioRemove(this)">✕</button></div>`;
+      selEl.appendChild(li);
+    });
+    enableDragAndDrop(selEl); $('priorityMsg').textContent='';
+  }catch(e){ allEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>'; selEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>'; $('priorityMsg').textContent=''; }
+}
+function onTableCheckboxChange(chk){ const name = chk.getAttribute('data-name'); if(chk.checked){ const selEl = $('priorityListModal'); const li = document.createElement('li'); li.draggable=true; li.dataset.table=name; li.innerHTML = `<div style="flex:1">${escapeHtml(name)}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)">▲</button><button class="btn ghost" onclick="prioMoveDown(this)">▼</button><button class="btn ghost" onclick="prioRemove(this)">✕</button></div>`; selEl.appendChild(li); enableDragAndDrop(selEl); } else { const selEl = $('priorityListModal'); const it = Array.from(selEl.children).find(li => li.dataset.table === name); if(it) selEl.removeChild(it); } }
+function enableDragAndDrop(listEl){ let dragSrc=null; Array.from(listEl.children).forEach(li=>{ li.addEventListener('dragstart',(e)=>{ dragSrc=li; li.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; }); li.addEventListener('dragend',()=>{ li.classList.remove('dragging'); }); li.addEventListener('dragover',(e)=>{ e.preventDefault(); const target=e.currentTarget; if(target===dragSrc) return; const rect=target.getBoundingClientRect(); const next=(e.clientY-rect.top)>rect.height/2; if(next){ target.parentNode.insertBefore(dragSrc,target.nextSibling); } else { target.parentNode.insertBefore(dragSrc,target); } }); li.addEventListener('drop',(e)=>{ e.preventDefault(); }); }); }
+function prioMoveUp(btn){ const li=btn.closest('li'); const prev=li.previousElementSibling; if(prev) li.parentNode.insertBefore(li,prev); }
+function prioMoveDown(btn){ const li=btn.closest('li'); const next=li.nextElementSibling; if(next) li.parentNode.insertBefore(li,next.nextElementSibling); }
+function prioRemove(btn){ const li=btn.closest('li'); const name=li.dataset.table; li.parentNode.removeChild(li); const leftChk = Array.from(document.querySelectorAll('#allTablesList input[type=checkbox]')).find(c=>c.getAttribute('data-name')===name); if(leftChk) leftChk.checked=false; }
+
+$('refreshPriorityBtnModal').addEventListener('click', ()=> loadPriorityModal());
+$('savePriorityBtnModal').addEventListener('click', async ()=>{ const listEl=$('priorityListModal'); const tables=Array.from(listEl.querySelectorAll('li')).map(li=>li.dataset.table); const res=await fetch('/admin/set_priority',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({tables:tables})}); const j=await res.json(); $('priorityMsg').textContent = JSON.stringify(j); await refreshUiState(); });
+
+/* search */
+$('searchBtn').addEventListener('click', doSearch);
+$('q').addEventListener('keydown', (e)=> { if(e.key==='Enter') doSearch(); });
+$('refreshBtn').addEventListener('click', ()=> refreshUiState());
+$('filterTables').addEventListener('input', ()=> refreshTables());
+$('min_score').addEventListener('input', ()=> $('minScoreVal').textContent = $('min_score').value);
+
+async function doSearch(){
+  const q = $('q').value.trim();
+  if(!q){ alert('Digite um termo para pesquisar'); return; }
+  const per_table = parseInt($('per_table').value) || 10;
+  const candidate_limit = parseInt($('candidate_limit').value) || 1000;
+  const total_limit = parseInt($('total_limit').value) || 500;
+  const token_mode = $('token_mode').value;
+  const min_score = parseInt($('min_score').value) || null;
+  $('searchMeta').textContent = `Buscando: "${q}" ...`;
+  const url = `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}${min_score?('&min_score='+min_score):''}`;
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.error){ $('searchMeta').textContent = 'Erro: ' + data.error; return; }
+    lastResults = data;
+    $('searchMeta').textContent = `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`;
+    renderResults(q, data.results || {}, per_table);
+  }catch(e){ $('searchMeta').textContent = 'Erro na busca'; }
+}
+
+/* render */
+function renderResults(q, results, per_table){
+  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const root = $('resultsArea'); root.innerHTML = '';
+  const keys = Object.keys(results);
+  if(keys.length===0){ root.innerHTML = '<div class="card small">Nenhum resultado encontrado.</div>'; return; }
+  keys.forEach(tbl => {
+    const block = document.createElement('div'); block.className='card';
+    const header = document.createElement('div'); header.style.display='flex'; header.style.justifyContent='space-between';
+    header.innerHTML = `<div><span id="tag-${tbl}" style="display:none;background:#eef7ff;color:var(--primary);padding:4px 8px;border-radius:999px;margin-right:8px;font-size:12px">PRIORITÁRIO</span><strong>${tbl}</strong> <span class="muted">(${results[tbl].length})</span></div>
+      <div><button class="btn ghost" onclick="openTable(event,'${encodeURIComponent(tbl)}')">Abrir</button><button class="btn ghost" onclick="exportTableCsv('${encodeURIComponent(tbl)}')">Export CSV</button></div>`;
+    block.appendChild(header);
+    const rows = results[tbl];
+    const colsSet = new Set();
+    const rowObjs = [];
+    rows.forEach(it => {
+      const r = it.row || (it.row_json ? JSON.parse(it.row_json||'{}') : {});
+      rowObjs.push({score: it.score, row: r});
+      if(r && typeof r === 'object') Object.keys(r).forEach(c=>colsSet.add(c));
+    });
+    const cols = Array.from(colsSet).slice(0,200);
+    if(cols.length===0){
+      const pre = document.createElement('pre'); pre.textContent = JSON.stringify(rowObjs,null,2); block.appendChild(pre);
+    } else {
+      const table = document.createElement('table'); table.className='results';
+      const thead = document.createElement('thead');
+      thead.innerHTML = '<tr><th style="width:90px">pontuação</th>' + cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      rowObjs.slice(0, per_table).forEach(r => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${r.score==null?'':r.score}</td>` + cols.map(c => {
+          let v = r.row && r.row.hasOwnProperty(c) ? r.row[c] : '';
+          if(v===null||v===undefined) v='';
+          if(typeof v === 'object') return `<td><pre style="font-size:12px">${escapeHtml(JSON.stringify(v,null,2))}</pre></td>`;
+          return `<td>${highlightText(escapeHtml(String(v)), tokens)}</td>`;
+        }).join('');
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      block.appendChild(table);
+    }
+    root.appendChild(block);
+  });
+
+  // show priority tags
+  try{
+    fetch('/admin/list_uploads').then(r=>r.json()).then(u=>{
+      const pri = u.priority_tables || [];
+      pri.forEach(p => {
+        const el = document.getElementById('tag-'+p);
+        if(el) el.style.display = 'inline-block';
+      });
+    }).catch(()=>{});
+  }catch(e){}
+}
+
+/* utilities */
+function escapeHtml(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function highlightText(text, tokens){
+  if(!text) return '';
+  if(!tokens || tokens.length===0) return text;
+  try{
+    const parts = tokens.map(t=>escapeRegExp(t)).filter(Boolean);
+    if(parts.length===0) return text;
+    const re = new RegExp('('+parts.join('|')+')', 'ig');
+    return text.replace(re, m => `<mark>${m}</mark>`);
+  }catch(e){ return text; }
+}
+
+/* table viewer / export */
+async function openTable(ev, tableEnc){ if(ev) ev.stopPropagation(); const table = decodeURIComponent(tableEnc); const limit=100, offset=0; const res = await fetch(`/api/table?name=${encodeURIComponent(table)}&limit=${limit}&offset=${offset}`); const data = await res.json(); if(data.error){ alert('Erro ao abrir tabela: ' + data.error); return; } const area = $('resultsArea'); area.innerHTML = `<div class="card"><h3>Tabela: ${escapeHtml(table)} <span class="muted">linhas: ${data.total}</span></h3></div>`; const hdr = document.createElement('div'); hdr.className='card'; const tableEl = document.createElement('table'); tableEl.className='results'; const thead = document.createElement('thead'); thead.innerHTML = '<tr>' + data.columns.map(c=>`<th>${escapeHtml(c)}</th>`).join('') + '</tr>'; tableEl.appendChild(thead); const tbody = document.createElement('tbody'); data.rows.forEach(row => { const tr = document.createElement('tr'); row.forEach(cell => tr.innerHTML += `<td>${escapeHtml(cell===null?'':String(cell))}</td>`); tbody.appendChild(tr); }); tableEl.appendChild(tbody); hdr.appendChild(tableEl); const pager = document.createElement('div'); pager.className='controls-footer'; pager.innerHTML = `<button class="btn ghost" onclick="refreshUiState()">Voltar</button>`; hdr.appendChild(pager); area.appendChild(hdr); }
+async function exportTableCsv(tableEnc){ const table = decodeURIComponent(tableEnc); const res = await fetch(`/api/table?name=${encodeURIComponent(table)}&limit=1000&offset=0`); const data = await res.json(); if(data.error){ alert('Erro ao exportar: ' + data.error); return; } const cols = data.columns; const rows = data.rows; const esc = v => '"' + String(v).replace(/"/g,'""') + '"'; const header = cols.map(esc).join(',') + '\n'; const body = rows.map(r => r.map(esc).join(',')).join('\n'); const blob = new Blob([header + body], {type:'text/csv;charset=utf-8;'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `${table}.csv`; a.click(); URL.revokeObjectURL(url); }
+
+/* startup */
+refreshUiState();
+setInterval(refreshStatus, 3000);
+</script>
+</body>
+</html>

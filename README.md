@@ -177,8 +177,8 @@ Files should contain date in one of these formats:
 - YYYYMMDD
 
 Examples:
-- DB3_04_09_2013.mdb → 2013-09-04
-- database_20190801.accdb → 2019-08-01
+- DB3_04_09_2013.mdb -> 2013-09-04
+- database_20190801.accdb -> 2019-08-01
 
 ## Database Structure
 
