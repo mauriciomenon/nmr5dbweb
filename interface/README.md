@@ -1,0 +1,91 @@
+# Interface — Visão Geral e Relações
+
+Este diretório contém o backend Flask e utilitários para busca local em bases DuckDB (com fallback opcional para Access via ODBC) e a construção do índice `_fulltext`.
+
+## Componentes
+
+- `app_flask_search.py`: Backend Flask simples.
+  - Endpoints: `/` (serve `static/index.html`), `/api/tables`, `/api/table`, `/api/search`.
+  - Busca por ILIKE diretamente nas colunas das tabelas (sem `_fulltext`).
+  - Usa `DB_PATH` fixo (`minha.duckdb`). Ideal para demo rápida.
+
+- `app_flask_local_search.py`: Backend Flask completo para operação local.
+  - Upload/seleção/remoção de arquivos: `/admin/upload`, `/admin/select`, `/admin/delete`, `/admin/list_uploads`.
+  - Conversão Access→DuckDB (se existir `access_convert.convert_access_to_duckdb`).
+  - Status consolidado: `/admin/status` (progresso de conversão, contagem `_fulltext`, top tabelas).
+  - Iniciar indexação `_fulltext`: `/admin/start_index` (usa `create_fulltext.create_or_resume_fulltext`).
+  - Definir prioridade de tabelas: `/admin/set_priority` (afeta ordenação de resultados na UI).
+  - Busca principal `/api/search`:
+    - Com `.duckdb`: usa `_fulltext` e ranking `RapidFuzz` (mais rápido e tolerante).
+    - Com `.mdb/.accdb`: fallback via `pyodbc` (se instalado), faz LIKE e ranking em Python.
+  - Lê/atualiza `config.json` com `db_path`, `priority_tables` e `auto_index_after_convert`.
+
+- `create_fulltext.py`: Indexador seguro de `_fulltext`.
+  - Ignora tabelas de sistema e a própria `_fulltext`.
+  - Suporta `drop` para reindex do zero e resume a partir do que já foi indexado.
+  - Normaliza texto com `utils.normalize_text` e serializa com `utils.serialize_value`.
+  - Pode ser usado via CLI: `python interface/create_fulltext.py --db <arquivo.duckdb> [--drop] [--chunk N] [--batch N]`.
+
+- `check_progress.py`: Diagnóstico de progresso.
+  - Compara linhas por tabela com o que já está em `_fulltext`.
+  - Lista quais tabelas ainda não estão totalmente indexadas.
+
+- `utils.py`: Funções utilitárias comuns.
+  - `normalize_text(s)`: remove acentos, lowercase, normaliza pontuação/underscores/hífens e colapsa espaços.
+  - `serialize_value(v)`: converte tipos (datas, decimals, bytes etc.) para valores JSON-compatíveis.
+
+## Relações entre arquivos
+
+- UI (`static/index.html`) → chama endpoints do `app_flask_local_search.py`:
+  - Estado inicial: `/admin/list_uploads`.
+  - Listar tabelas: `/api/tables`.
+  - Busca: `/api/search` (usa `_fulltext` em DuckDB; fallback Access com `pyodbc`).
+  - Indexação `_fulltext`: `/admin/start_index`.
+  - Prioridade de tabelas: `/admin/set_priority`.
+  - Upload/seleção/remoção: `/admin/upload`, `/admin/select`, `/admin/delete`.
+
+- `app_flask_local_search.py` chama:
+  - `create_fulltext.create_or_resume_fulltext` para construir/retomar o índice `_fulltext`.
+  - `utils.normalize_text` e `utils.serialize_value` (normalização/serialização).
+  - Opcional `access_convert.convert_access_to_duckdb` para conversão.
+
+- `app_flask_search.py` é independente de `_fulltext` e de `utils.py` (usa ILIKE direto). Serve `static/index.html` como o completo, mas com menos recursos.
+
+## Quando precisam estar juntos?
+
+- Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade):
+  - Necessários: `app_flask_local_search.py`, `create_fulltext.py`, `utils.py` e `static/index.html` (fora deste diretório).
+  - O `check_progress.py` é opcional (diagnóstico).
+  - `access_convert.py` é opcional, porém necessário para conversão de `.mdb/.accdb` para `.duckdb` via UI.
+  - `pyodbc` é opcional (apenas para fallback Access).
+
+- Para a versão simples:
+  - Basta `app_flask_search.py` e `static/index.html`, com `minha.duckdb` disponível.
+
+## Dependências
+
+- Obrigatórias (app completa DuckDB): `flask`, `duckdb`, `rapidfuzz`.
+- Opcionais: `pyodbc` (fallback Access), `pandas` (se for usar scripts auxiliares), `matplotlib` (gráficos em ferramentas).
+- Sistema (para Access): driver ODBC Microsoft Access (Windows) ou configuração equivalente.
+
+## Como rodar
+
+- Versão simples:
+```
+python interface/app_flask_search.py
+```
+Acesse `http://127.0.0.1:5000/`.
+
+- Versão completa:
+```
+python interface/app_flask_local_search.py
+```
+Acesse `http://127.0.0.1:5000/`.
+
+Selecione um DB em "Configurar/Upload"; para `.duckdb`, a busca usa `_fulltext` quando disponível. Para `.mdb/.accdb`, se `pyodbc` estiver instalado, o fallback faz a busca direta.
+
+## Observações
+
+- Após converter Access→DuckDB, a indexação automática pode ser acionada (se `auto_index_after_convert` estiver habilitado).
+- A prioridade de tabelas influencia a ordem de exibição dos resultados.
+- Use `check_progress.py` para verificar se `_fulltext` já cobre todas as tabelas.
