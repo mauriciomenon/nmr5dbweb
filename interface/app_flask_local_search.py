@@ -19,10 +19,19 @@ import os
 import json
 import threading
 from pathlib import Path
+import sys
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import duckdb
 from rapidfuzz import fuzz
+
+# Garante que o diretório raiz do projeto esteja em sys.path, para que
+# possamos importar access_convert.py e create_fulltext.py mesmo rodando
+# este app a partir da pasta "interface".
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 # Optional modules
 try:
@@ -54,6 +63,7 @@ except Exception:
             return repr(v)
 
 BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 CONFIG_FILE = BASE_DIR / "config.json"
@@ -103,7 +113,7 @@ def set_db_path(p):
     cfg["db_path"] = str(p)
     save_config(cfg)
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 
 # ---------------- Static files ----------------
 @app.route("/")
@@ -120,6 +130,7 @@ def duckdb_connect(path):
     return duckdb.connect(str(path))
 
 def list_tables_duckdb(path):
+    """Lista tabelas de um arquivo DuckDB/SQLite."""
     try:
         conn = duckdb_connect(path)
         try:
@@ -131,24 +142,25 @@ def list_tables_duckdb(path):
         raise
 
 def list_tables_access(path):
+    """Lista tabelas de um banco Access via ODBC (pyodbc)."""
     if pyodbc is None:
         raise RuntimeError("pyodbc not installed")
     conn = None
+    conn_strs = [
+        fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
+        fr"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
+    ]
+    last_err = None
+    for cs in conn_strs:
+        try:
+            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
+            break
+        except Exception as e:
+            last_err = e
+            conn = None
+    if conn is None:
+        raise RuntimeError(f"ODBC connect failed: {last_err}")
     try:
-        conn_strs = [
-            fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-            fr"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};"
-        ]
-        last_err = None
-        for cs in conn_strs:
-            try:
-                conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-                break
-            except Exception as e:
-                last_err = e
-                conn = None
-        if conn is None:
-            raise last_err
         cur = conn.cursor()
         tables = []
         try:
@@ -160,24 +172,18 @@ def list_tables_access(path):
                 if tname and not str(tname).startswith("MSys"):
                     tables.append(tname)
         except Exception:
-            # fallback
+            # fallback via MSysObjects
             try:
                 rows = cur.execute("SELECT Name FROM MSysObjects WHERE Type In (1,4) AND Flags = 0").fetchall()
                 tables = [r[0] for r in rows]
             except Exception:
                 tables = []
+        return tables
+    finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
-        return tables
-    except Exception as e:
-        try:
-            if conn:
-                conn.close()
-        except:
-            pass
-        raise
 
 # ---------------- Admin endpoints ----------------
 @app.route("/admin/list_uploads", methods=["GET"])
@@ -263,14 +269,19 @@ def admin_upload():
                         convert_status["percent"] = 100 if ok else convert_status.get("percent", 0)
                     if ok:
                         set_db_path(str(out_duckdb))
-                        # optional auto-index
-                        if cfg.get("auto_index_after_convert", True) and create_fulltext:
-                            def run_index_auto():
-                                try:
-                                    create_fulltext(str(out_duckdb), drop=False, chunk=2000, batch_insert=1000)
-                                except Exception as e:
-                                    print("auto index failed:", e)
-                            t = threading.Thread(target=run_index_auto, daemon=True); t.start()
+                        # optional auto-index with create_or_resume_fulltext
+                        if cfg.get("auto_index_after_convert", True) and create_or_resume_fulltext:
+                            # reutiliza o mesmo mecanismo de indexação monitorado por /admin/status
+                            global index_thread
+                            with index_lock:
+                                if not index_thread or not index_thread.is_alive():
+                                    def run_index_auto():
+                                        try:
+                                            create_or_resume_fulltext(str(out_duckdb), drop=False, chunk=2000, batch_insert=1000)
+                                        except Exception as e:
+                                            print("auto index failed:", e)
+                                    index_thread = threading.Thread(target=run_index_auto, daemon=True)
+                                    index_thread.start()
                 except Exception as e:
                     with convert_lock:
                         convert_status["running"] = False
@@ -369,7 +380,120 @@ def admin_start_index():
         index_thread.start()
     return jsonify({"ok": True, "started": True, "db": get_db_path()})
 
-# ---------------- Search endpoints ----------------
+# ---------------- Search + table endpoints ----------------
+@app.route("/api/tables", methods=["GET"])
+def api_tables():
+    dbpath = get_db_path()
+    if not dbpath:
+        return jsonify({"error": "No DB selected"}), 400
+    ext = Path(dbpath).suffix.lower()
+    try:
+        if ext in (".duckdb", ".db", ".sqlite", ".sqlite3"):
+            tables = list_tables_duckdb(dbpath)
+        elif ext in (".mdb", ".accdb"):
+            # Para Access, usamos o helper específico
+            tables = list_tables_access(dbpath)
+        else:
+            return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
+        return jsonify({"tables": tables})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/table", methods=["GET"])
+def api_table():
+    table = request.args.get("name")
+    if not table:
+        return jsonify({"error": "table name required (?name=TABLE_NAME)"}), 400
+    dbpath = get_db_path()
+    if not dbpath:
+        return jsonify({"error": "No DB selected"}), 400
+    ext = Path(dbpath).suffix.lower()
+    if ext not in (".duckdb", ".db", ".sqlite", ".sqlite3"):
+        return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {dbpath}"}), 400
+    try:
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+    except Exception:
+        return jsonify({"error": "limit and offset must be integers"}), 400
+
+    col = request.args.get("col")
+    q = request.args.get("q")
+    sort = request.args.get("sort")
+    order = request.args.get("order", "ASC").upper()
+    if order not in ("ASC", "DESC"):
+        order = "ASC"
+
+    try:
+        conn = duckdb_connect(dbpath)
+        tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
+        if table not in tables:
+            conn.close()
+            return jsonify({"error": f"table not found: {table}"}), 404
+
+        # obter colunas
+        cur = conn.execute(f'SELECT * FROM "{table}" LIMIT 0')
+        cols = [c[0] for c in cur.description]
+
+        params = []
+        where_clause = ""
+        if col and q:
+            if col not in cols:
+                conn.close()
+                return jsonify({"error": f"column not found: {col}"}), 400
+            where_clause = f'WHERE CAST("{col}" AS VARCHAR) ILIKE ?'
+            params.append(f"%{q}%")
+
+        order_clause = ""
+        if sort:
+            if sort not in cols:
+                conn.close()
+                return jsonify({"error": f"sort column not found: {sort}"}), 400
+            order_clause = f'ORDER BY "{sort}" {order}'
+
+        count_sql = f'SELECT COUNT(*) FROM "{table}"'
+        if where_clause:
+            count_sql += f" {where_clause}"
+        total = conn.execute(count_sql, params).fetchone()[0]
+
+        data_sql = f'SELECT * FROM "{table}"'
+        if where_clause:
+            data_sql += f" {where_clause}"
+        if order_clause:
+            data_sql += f" {order_clause}"
+        # LIMIT só se limit > 0 (0 significa ilimitado)
+        if limit > 0:
+            data_sql += f" LIMIT {limit} OFFSET {offset}"
+
+        rows = conn.execute(data_sql, params).fetchall()
+        conn.close()
+
+        data = []
+        for r in rows:
+            row_obj = {}
+            for i, cname in enumerate(cols):
+                try:
+                    row_obj[cname] = serialize_value(r[i])
+                except Exception:
+                    row_obj[cname] = None
+            data.append(row_obj)
+
+        return jsonify({
+            "table": table,
+            "total": int(total),
+            "limit": limit,
+            "offset": offset,
+            "columns": cols,
+            "rows": data,
+        })
+    except Exception as e:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return jsonify({"error": str(e)}), 500
+
+
 def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score):
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
@@ -385,10 +509,27 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
     else:
         where_sql = "content_norm LIKE ?"
         params = [f"%{q_norm}%"]
-    sql = f"SELECT table_name, pk_col, pk_value, row_offset, content_norm, row_json FROM _fulltext WHERE {where_sql} LIMIT {candidate_limit}"
+    # Ao montar os candidatos SQL, já priorizamos as tabelas marcadas em priority_tables
+    priority_tables = cfg.get("priority_tables", []) or []
+    if priority_tables:
+        in_placeholders = ",".join(["?"] * len(priority_tables))
+        sql = (
+            "SELECT table_name, pk_col, pk_value, row_offset, content_norm, row_json "
+            f"FROM _fulltext WHERE {where_sql} "
+            f"ORDER BY CASE WHEN table_name IN ({in_placeholders}) THEN 0 ELSE 1 END, table_name "
+            f"LIMIT {candidate_limit}"
+        )
+        # Atenção: os parâmetros do WHERE vêm primeiro, depois os do IN, na ordem dos placeholders.
+        sql_params = params + list(priority_tables)
+    else:
+        sql = (
+            "SELECT table_name, pk_col, pk_value, row_offset, content_norm, row_json "
+            f"FROM _fulltext WHERE {where_sql} LIMIT {candidate_limit}"
+        )
+        sql_params = params
     try:
         conn = duckdb_connect(get_db_path())
-        rows = conn.execute(sql, params).fetchall()
+        rows = conn.execute(sql, sql_params).fetchall()
         conn.close()
     except Exception as e:
         try:
@@ -424,8 +565,29 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
         if c["score"] > table_max.get(t, 0):
             table_max[t] = c["score"]
         total_count += 1
-    # apply priority ordering
+
+    # Garante que cada tabela prioritária com candidatos apareça pelo menos com 1 linha,
+    # mesmo que tenha ficado de fora pelo corte de total_limit acima.
     priority_tables = cfg.get("priority_tables", []) or []
+    if priority_tables:
+        for p in priority_tables:
+            if p in grouped:
+                continue
+            best = None
+            for c in candidates:
+                if c["table"] == p:
+                    if best is None or c["score"] > best["score"]:
+                        best = c
+            if best is not None:
+                try:
+                    row_obj = json.loads(best["row_json"])
+                except Exception:
+                    row_obj = None
+                grouped[p] = [{"score": best["score"], "row": row_obj}]
+                table_max[p] = best["score"]
+                total_count += 1
+
+    # apply priority ordering
     ordered = {}
     for p in priority_tables:
         if p in grouped:
@@ -436,7 +598,7 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
     return {"q": q, "q_norm": q_norm, "candidate_count": len(candidates), "returned_count": total_count, "results": ordered}
 
 # Fallback search for Access DBs via ODBC (pyodbc)
-def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, total_limit=500, token_mode="any", min_score=None, max_tables=20, max_rows_per_table=2000):
+def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, total_limit=500, token_mode="any", min_score=None, max_tables=500, max_rows_per_table=2000):
     if pyodbc is None:
         return {"error": "pyodbc not installed; fallback unavailable"}
     q_norm = q.lower()

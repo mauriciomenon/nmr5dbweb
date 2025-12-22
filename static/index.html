@@ -158,6 +158,8 @@
 const $ = id => document.getElementById(id);
 let lastResults = null;
 let currentDb = null;
+let lastStatus = null; // status mais recente vindo de /admin/status
+let priorityTables = []; // lista atual de tabelas prioritárias
 
 async function apiJSON(path, opts){
   const r = await fetch(path, opts);
@@ -168,6 +170,7 @@ async function refreshUiState(){
   try{
     const uploads = await apiJSON('/admin/list_uploads');
     currentDb = uploads.current_db || null;
+    priorityTables = uploads.priority_tables || [];
     $('currentDb').textContent = 'DB: ' + (currentDb || 'não definido');
     $('cfgCurrentDb').textContent = currentDb || '(nenhum)';
     const ul = uploads.uploads || [];
@@ -180,7 +183,9 @@ async function refreshUiState(){
 async function refreshStatus(){
   try{
     const s = await apiJSON('/admin/status');
+    lastStatus = s;
     $('indexStatus').textContent = s.indexing ? 'Indexando...' : (s.fulltext_count ? 'Pronto' : 'Parado');
+    // 1) Conversão em andamento
     if(s.conversion && s.conversion.running){
       const percent = s.conversion.percent || 0;
       $('convBar').style.width = percent + '%';
@@ -192,9 +197,39 @@ async function refreshStatus(){
       if(db.toLowerCase().endsWith('.duckdb')) $('modeBadge').textContent = 'Modo: duckdb (rápido)';
       else if(db.toLowerCase().endsWith('.mdb') || db.toLowerCase().endsWith('.accdb')) $('modeBadge').textContent = 'Modo: fallback';
       else $('modeBadge').textContent = 'Modo: —';
-      $('convStatusText').textContent = s.conversion && s.conversion.msg ? s.conversion.msg : 'Nenhuma conversão em andamento';
-      $('convBar').style.width = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
-      $('convPercentText').textContent = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
+      // 2) Conversão já terminou, mas indexação ainda em andamento
+      if(s.indexing){
+        const baseMsg = (s.conversion && s.conversion.ok) ? (s.conversion.msg || 'Conversão finalizada') : 'Banco carregado';
+        $('convStatusText').textContent = baseMsg + ' — indexando _fulltext...';
+        $('convBar').style.width = '100%';
+        $('convPercentText').textContent = '100%';
+      }
+      // 3) Conversão concluída e índice pronto
+      else if(s.conversion && s.conversion.ok && s.fulltext_count){
+        const msg = s.conversion.msg || 'Conversão finalizada';
+        $('convStatusText').textContent = msg + ' — indexação concluída';
+        $('convBar').style.width = '100%';
+        $('convPercentText').textContent = '100%';
+      }
+      // 4) Conversão concluída mas ainda sem _fulltext (aguardando clicar em "Iniciar Indexação")
+      else if(s.conversion && s.conversion.ok && !s.fulltext_count){
+        const msg = s.conversion.msg || 'Conversão finalizada';
+        $('convStatusText').textContent = msg + ' — aguarda indexação (_fulltext)';
+        $('convBar').style.width = '100%';
+        $('convPercentText').textContent = '100%';
+      }
+      // 5) Nenhuma conversão registrada
+      else {
+        $('convStatusText').textContent = s.conversion && s.conversion.msg ? s.conversion.msg : 'Nenhuma conversão em andamento';
+        $('convBar').style.width = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
+        $('convPercentText').textContent = (s.conversion && s.conversion.percent) ? s.conversion.percent + '%' : '0%';
+      }
+    }
+
+    // Sincroniza mensagem de upload para não ficar eternamente com status:"converting"
+    const upEl = $('uploadMsg');
+    if(upEl && s.conversion && !s.conversion.running && s.conversion.ok){
+      upEl.textContent = 'Upload e conversão concluídos.';
     }
     let html = `<div>DB: ${s.db || '(nenhum)'}<br/>_fulltext linhas: ${s.fulltext_count || 0}</div>`;
     if(s.top_tables && s.top_tables.length){
@@ -276,6 +311,23 @@ $('min_score').addEventListener('input', ()=> $('minScoreVal').textContent = $('
 async function doSearch(){
   const q = $('q').value.trim();
   if(!q){ alert('Digite um termo para pesquisar'); return; }
+
+  // Bloqueia busca enquanto conversão ou indexação estiverem em andamento
+  try{
+    if(lastStatus && lastStatus.conversion && lastStatus.conversion.running){
+      alert('Aguarde a conversão do banco terminar antes de pesquisar.');
+      return;
+    }
+    if(lastStatus && lastStatus.indexing){
+      alert('Aguarde a indexação (_fulltext) terminar antes de pesquisar.');
+      return;
+    }
+    if(lastStatus && lastStatus.db && lastStatus.db.toLowerCase().endsWith('.duckdb') && !lastStatus.fulltext_count){
+      alert('Este banco DuckDB ainda não possui índice _fulltext. Inicie a indexação antes de pesquisar.');
+      return;
+    }
+  }catch(e){}
+
   const per_table = parseInt($('per_table').value) || 10;
   const candidate_limit = parseInt($('candidate_limit').value) || 1000;
   const total_limit = parseInt($('total_limit').value) || 500;
@@ -297,7 +349,14 @@ async function doSearch(){
 function renderResults(q, results, per_table){
   const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
   const root = $('resultsArea'); root.innerHTML = '';
-  const keys = Object.keys(results);
+  let keys = Object.keys(results);
+  // Reordena chaves colocando as tabelas prioritárias primeiro, na ordem salva
+  if(priorityTables && priorityTables.length){
+    const set = new Set(priorityTables);
+    const pri = priorityTables.filter(t => keys.includes(t));
+    const others = keys.filter(k => !set.has(k));
+    keys = pri.concat(others);
+  }
   if(keys.length===0){ root.innerHTML = '<div class="card small">Nenhum resultado encontrado.</div>'; return; }
   keys.forEach(tbl => {
     const block = document.createElement('div'); block.className='card';
@@ -340,13 +399,10 @@ function renderResults(q, results, per_table){
 
   // show priority tags
   try{
-    fetch('/admin/list_uploads').then(r=>r.json()).then(u=>{
-      const pri = u.priority_tables || [];
-      pri.forEach(p => {
-        const el = document.getElementById('tag-'+p);
-        if(el) el.style.display = 'inline-block';
-      });
-    }).catch(()=>{});
+    (priorityTables || []).forEach(p => {
+      const el = document.getElementById('tag-'+p);
+      if(el) el.style.display = 'inline-block';
+    });
   }catch(e){}
 }
 

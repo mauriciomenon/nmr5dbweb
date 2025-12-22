@@ -10,7 +10,10 @@ import decimal
 # Caminho padrão para o arquivo DuckDB gerado pelo conversor
 DB_PATH = r"C:\mdb2sql_fork\minha.duckdb"
 
-app = Flask(__name__, static_folder="static", static_url_path="")
+BASE_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BASE_DIR.parent
+
+app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 
 def connect_db():
     db_file = Path(DB_PATH)
