@@ -1,2 +1,9 @@
 duckdb
+flask
+rapidfuzz
+pyodbc
+pandas
+numpy
+matplotlib
+plotly
 access-parser
