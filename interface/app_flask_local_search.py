@@ -25,13 +25,15 @@ from werkzeug.utils import secure_filename
 import duckdb
 from rapidfuzz import fuzz
 
-# Garante que o diretório raiz do projeto esteja em sys.path, para que
-# possamos importar access_convert.py e create_fulltext.py mesmo rodando
-# este app a partir da pasta "interface".
+# Garante que o diretório raiz do projeto e a pasta "interface" estejam em sys.path,
+# para que possamos importar access_convert.py, create_fulltext.py e utils.py
+# corretamente, independentemente de o app ser executado diretamente ou via main.py.
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 # Optional modules
 try:
@@ -372,7 +374,8 @@ def admin_set_priority():
 
 @app.route("/admin/start_index", methods=["POST"])
 def admin_start_index():
-    if create_fulltext is None and create_or_resume_fulltext is None:
+    # Se não conseguimos importar create_or_resume_fulltext em nenhum lugar, indexador indisponível
+    if create_or_resume_fulltext is None:
         return jsonify({"error": "indexador não disponível (create_fulltext.py ausente)"}), 500
     data = request.get_json() or {}
     drop = bool(data.get("drop", False))
