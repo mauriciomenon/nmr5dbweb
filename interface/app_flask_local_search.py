@@ -90,10 +90,20 @@ index_thread = None
 def load_config():
     if CONFIG_FILE.exists():
         try:
-            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         except Exception:
-            pass
-    return {"db_path": str(BASE_DIR / "minha.duckdb"), "priority_tables": [], "auto_index_after_convert": True}
+            cfg = {}
+    else:
+        cfg = {}
+
+    # valores padrão seguros para novo ambiente
+    if "db_path" not in cfg:
+        cfg["db_path"] = ""
+    if "priority_tables" not in cfg:
+        cfg["priority_tables"] = []
+    if "auto_index_after_convert" not in cfg:
+        cfg["auto_index_after_convert"] = True
+    return cfg
 
 def save_config(cfg):
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -104,6 +114,16 @@ if not isinstance(cfg.get("priority_tables"), list):
     cfg["priority_tables"] = []
 else:
     cfg["priority_tables"] = [t for t in cfg["priority_tables"] if t and t != "None"]
+
+# se o caminho do DB configurado não existir (por exemplo, em outro computador),
+# limpamos para evitar erros ao abrir a interface em um ambiente novo
+db_cfg = cfg.get("db_path") or ""
+try:
+    if db_cfg and not Path(db_cfg).exists():
+        cfg["db_path"] = ""
+except Exception:
+    cfg["db_path"] = ""
+
 save_config(cfg)
 
 def get_db_path():
