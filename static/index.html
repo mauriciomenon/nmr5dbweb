@@ -78,6 +78,11 @@
           <label>modo tokens:
             <select id="token_mode"><option value="any">qualquer</option><option value="all">todas</option></select>
           </label>
+          <label style="display:flex;align-items:center;gap:4px;">
+            <span>tabelas (filtro):</span>
+            <select id="tablesFilter" multiple size="3" style="min-width:160px;max-width:220px;"></select>
+            <button type="button" id="clearTablesFilter" class="btn ghost" style="padding:4px 8px;font-size:11px;">Limpar</button>
+          </label>
           <label style="display:flex;align-items:center;gap:8px;">
             min_score:
             <input id="min_score" type="range" min="40" max="100" value="70" />
@@ -160,6 +165,7 @@ let lastResults = null;
 let currentDb = null;
 let lastStatus = null; // status mais recente vindo de /admin/status
 let priorityTables = []; // lista atual de tabelas prioritárias
+let allTables = []; // cache de todas as tabelas conhecidas
 
 async function apiJSON(path, opts){
   const r = await fetch(path, opts);
@@ -244,6 +250,7 @@ async function refreshTables(){
     const t = await apiJSON('/api/tables');
     if(t.error){ $('tableList').innerHTML = `<div class="muted">Erro: ${t.error}</div>`; return; }
     const list = t.tables || [];
+    allTables = list.slice();
     const filter = $('filterTables').value.toLowerCase();
     const container = $('tableList'); container.innerHTML = '';
     list.filter(name => name.toLowerCase().includes(filter)).forEach(name => {
@@ -252,6 +259,21 @@ async function refreshTables(){
       li.onclick = () => openTable(null, encodeURIComponent(name));
       container.appendChild(li);
     });
+
+    // Atualiza select de filtro de tabelas na busca, preservando seleções atuais
+    const sel = $('tablesFilter');
+    if(sel){
+      const previouslySelected = Array.from(sel.selectedOptions).map(o => o.value);
+      sel.innerHTML = '';
+      const visibleForFilter = list.filter(n => !/^MSys/i.test(n));
+      visibleForFilter.forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if(previouslySelected.includes(name)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
   }catch(e){ $('tableList').innerHTML = '<div class="muted">Erro ao carregar tabelas</div>'; }
 }
 
@@ -307,10 +329,21 @@ $('q').addEventListener('keydown', (e)=> { if(e.key==='Enter') doSearch(); });
 $('refreshBtn').addEventListener('click', ()=> refreshUiState());
 $('filterTables').addEventListener('input', ()=> refreshTables());
 $('min_score').addEventListener('input', ()=> $('minScoreVal').textContent = $('min_score').value);
+const clearTablesBtn = $('clearTablesFilter');
+if(clearTablesBtn){
+  clearTablesBtn.addEventListener('click', ()=>{
+    const sel = $('tablesFilter');
+    if(!sel) return;
+    Array.from(sel.options).forEach(o => o.selected = false);
+  });
+}
 
 async function doSearch(){
   const q = $('q').value.trim();
   if(!q){ alert('Digite um termo para pesquisar'); return; }
+
+  const btn = $('searchBtn');
+  if(btn.disabled) return; // evita buscas duplicadas
 
   // Bloqueia busca enquanto conversão ou indexação estiverem em andamento
   try{
@@ -334,7 +367,19 @@ async function doSearch(){
   const token_mode = $('token_mode').value;
   const min_score = parseInt($('min_score').value) || null;
   $('searchMeta').textContent = `Buscando: "${q}" ...`;
-  const url = `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}${min_score?('&min_score='+min_score):''}`;
+  // Monta parâmetro opcional de filtro de tabelas
+  const tablesSel = $('tablesFilter');
+  let tablesParam = '';
+  if(tablesSel){
+    const selectedTables = Array.from(tablesSel.selectedOptions).map(o => o.value).filter(Boolean);
+    if(selectedTables.length){
+      tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
+    }
+  }
+
+  const url = `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}${min_score?('&min_score='+min_score):''}${tablesParam}`;
+  btn.disabled = true;
+  btn.textContent = 'Buscando...';
   try{
     const res = await fetch(url);
     const data = await res.json();
@@ -342,7 +387,12 @@ async function doSearch(){
     lastResults = data;
     $('searchMeta').textContent = `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`;
     renderResults(q, data.results || {}, per_table);
-  }catch(e){ $('searchMeta').textContent = 'Erro na busca'; }
+  }catch(e){
+    $('searchMeta').textContent = 'Erro na busca';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Pesquisar';
+  }
 }
 
 /* render */

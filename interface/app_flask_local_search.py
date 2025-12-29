@@ -494,7 +494,7 @@ def api_table():
         return jsonify({"error": str(e)}), 500
 
 
-def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score):
+def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=None):
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
     if tokens:
@@ -537,6 +537,13 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
         except:
             pass
         return {"error": f"search failed: {e}"}
+
+    # Filtro opcional por lista de tabelas (tables=[...])
+    allowed_tables = None
+    if tables:
+        allowed_tables = {str(t).strip() for t in tables if str(t).strip()}
+        if allowed_tables:
+            rows = [r for r in rows if r[0] in allowed_tables]
     candidates = []
     for r in rows:
         table_name, pk_col, pk_value, row_offset, content_norm, row_json = r
@@ -571,6 +578,8 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
     priority_tables = cfg.get("priority_tables", []) or []
     if priority_tables:
         for p in priority_tables:
+            if allowed_tables and p not in allowed_tables:
+                continue
             if p in grouped:
                 continue
             best = None
@@ -765,12 +774,18 @@ def api_search():
         min_score = int(min_score) if min_score is not None else None
     except:
         min_score = None
+
+    # Filtro opcional de tabelas: ?tables=TAB1,TAB2
+    tables_param = request.args.get("tables")
+    tables = None
+    if tables_param:
+        tables = [t.strip() for t in tables_param.split(",") if t.strip()]
     dbpath = get_db_path()
     if not dbpath:
         return jsonify({"error": "No DB selected"}), 400
     ext = Path(dbpath).suffix.lower()
     if ext in (".duckdb", ".db", ".sqlite", ".sqlite3"):
-        return jsonify(api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score))
+        return jsonify(api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=tables))
     elif ext in (".mdb", ".accdb"):
         fb = fallback_search_access(dbpath, q, per_table=per_table, candidate_limit=candidate_limit, total_limit=total_limit, token_mode=token_mode, min_score=min_score)
         if isinstance(fb, dict) and fb.get("error"):
