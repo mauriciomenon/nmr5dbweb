@@ -522,9 +522,16 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
     tokens = [t for t in q_norm.split() if t]
     if tokens:
         if token_mode == "any":
+            # Modo "qualquer": pelo menos um token precisa bater, mas o
+            # último termo digitado pelo usuário é tratado como obrigatório.
+            # Isso evita resultados que ignorem completamente, por exemplo,
+            # o "SVP" em "AUX_UNIDAD SVP".
             where_parts = ["content_norm LIKE ?" for _ in tokens]
-            where_sql = " OR ".join(where_parts)
+            base_where = " OR ".join(where_parts)
             params = [f"%{t}%" for t in tokens]
+            last_tok = tokens[-1]
+            where_sql = f"({base_where}) AND content_norm LIKE ?"
+            params.append(f"%{last_tok}%")
         else:
             where_parts = ["content_norm LIKE ?" for _ in tokens]
             where_sql = " AND ".join(where_parts)
@@ -570,11 +577,39 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
     candidates = []
     for r in rows:
         table_name, pk_col, pk_value, row_offset, content_norm, row_json = r
+        # Score principal: similaridade fuzzy entre a query normalizada e o
+        # conteúdo normalizado da linha inteira.
         score = fuzz.token_set_ratio(q_norm, content_norm)
         if min_score is not None and score < min_score:
             continue
-        candidates.append({"score": score, "table": table_name, "pk_col": pk_col, "pk_value": pk_value, "row_json": row_json})
-    candidates.sort(key=lambda x: x["score"], reverse=True)
+        # Cobertura/força de match por tokens: quantos tokens da query estão
+        # presentes em content_norm e se TODOS estão presentes. Isso ajuda a
+        # priorizar, por exemplo, linhas que contenham "svp" quando a consulta
+        # é "aux_unidad svp".
+        coverage = 0
+        has_all = 0
+        if tokens:
+            try:
+                for tok in tokens:
+                    if tok and tok in content_norm:
+                        coverage += 1
+                if coverage == len(tokens):
+                    has_all = 1
+            except Exception:
+                coverage = 0
+                has_all = 0
+        candidates.append({
+            "score": score,
+            "coverage": coverage,
+            "has_all": has_all,
+            "table": table_name,
+            "pk_col": pk_col,
+            "pk_value": pk_value,
+            "row_json": row_json,
+        })
+    # Ordena dando prioridade para linhas que contenham TODOS os tokens da
+    # consulta, depois maior cobertura e, por fim, maior score fuzzy.
+    candidates.sort(key=lambda x: (x.get("has_all", 0), x.get("coverage", 0), x["score"]), reverse=True)
     grouped = {}
     table_max = {}
     total_count = 0
@@ -608,7 +643,8 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
             best = None
             for c in candidates:
                 if c["table"] == p:
-                    if best is None or c["score"] > best["score"]:
+                    # mesmo critério de ordenação usado acima (has_all, coverage, score)
+                    if best is None or (c.get("has_all", 0), c.get("coverage", 0), c["score"]) > (best.get("has_all", 0), best.get("coverage", 0), best["score"]):
                         best = c
             if best is not None:
                 try:
