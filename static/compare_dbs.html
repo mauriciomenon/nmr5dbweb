@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Comparar bancos (diff)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg-body: #020617;
+      --bg-main: #020617;
+      --bg-elevated: #020617;
+      --bg-card: #020617;
+      --bg-card-soft: #020617;
+      --border-subtle: #1f2937;
+      --border-strong: #1d4ed8;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --text-soft: #6b7280;
+      --accent: #2563eb;
+      --accent-soft: #1d4ed8;
+      --badge-added: #14532d;
+      --badge-added-text: #bbf7d0;
+      --badge-removed: #7f1d1d;
+      --badge-removed-text: #fecaca;
+      --badge-changed: #78350f;
+      --badge-changed-text: #fed7aa;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: radial-gradient(circle at top, #020617 0, #020617 40%, #020617 100%);
+      color: var(--text-main);
+    }
+    header {
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: rgba(2, 6, 23, 0.96);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .brand-title {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+    }
+    .brand-subtitle {
+      margin: 0;
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+    nav.tabs {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    nav.tabs a {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 13px;
+      text-decoration: none;
+      color: #9ca3af;
+      border: 1px solid transparent;
+    }
+    nav.tabs a.active {
+      background: #020617;
+      color: #bfdbfe;
+      border-color: #1d4ed8;
+    }
+    main {
+      padding: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .workflow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: linear-gradient(90deg, rgba(15,23,42,0.9), rgba(15,23,42,0.75));
+    }
+    .workflow-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1 1 220px;
+    }
+    .workflow-step-label {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .card {
+      background: radial-gradient(circle at top left, #020617 0, #020617 45%, #020617 100%);
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+      padding: 16px 18px 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.55);
+    }
+    .card h2 {
+      margin-top: 0;
+      font-size: 16px;
+      margin-bottom: 8px;
+    }
+    .card-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .card-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .step-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      border: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      background: #020617;
+      color: var(--text-muted);
+    }
+    .card-title-main {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .card-title-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin: 0;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+    input[type="text"], select, textarea {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 4px;
+      border: 1px solid #374151;
+      background: #020617;
+      color: var(--text-main);
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .col {
+      flex: 1 1 260px;
+    }
+    button.primary {
+      padding: 8px 16px;
+      border-radius: 4px;
+      border: none;
+      background: linear-gradient(90deg, var(--accent) 0, #1d4ed8 100%);
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    button.primary:hover {
+      background: #1d4ed8;
+    }
+    button.secondary {
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid #374151;
+      background: #111827;
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 12px;
+    }
+    button.secondary:hover {
+      background: #1f2937;
+    }
+    .status {
+      font-size: 13px;
+      margin-top: 8px;
+      white-space: pre-line;
+    }
+    .help-text {
+      font-size: 11px;
+      color: #9ca3af;
+    }
+    .divider {
+      margin: 16px 0 12px;
+      border-top: 1px dashed #1f2937;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid #1f2937;
+      padding: 4px 6px;
+      text-align: left;
+    }
+    th {
+      background: #111827;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+    }
+    .badge.added { background: var(--badge-added); color: var(--badge-added-text); }
+    .badge.removed { background: var(--badge-removed); color: var(--badge-removed-text); }
+    .badge.changed { background: var(--badge-changed); color: var(--badge-changed-text); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1 class="brand-title">Ferramentas DuckDB</h1>
+      <p class="brand-subtitle">Comparação visual de bancos DuckDB</p>
+    </div>
+    <nav class="tabs">
+      <a href="/">Busca</a>
+      <a href="/track_record">Rastrear registro</a>
+      <a href="/compare_dbs" class="active">Comparar bancos</a>
+    </nav>
+  </header>
+  <main>
+    <section class="workflow">
+      <div class="workflow-step">
+        <div class="step-badge">1</div>
+        <div>
+          <div class="workflow-step-label">Escolha os arquivos</div>
+          <div style="font-size:13px;">Selecione os bancos A (origem) e B (destino) em .duckdb.</div>
+        </div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-badge">2</div>
+        <div>
+          <div class="workflow-step-label">Defina tabela e chaves</div>
+          <div style="font-size:13px;">Escolha a tabela, a chave K (ex.: RTUNO,PNTNO) e filtros opcionais.</div>
+        </div>
+      </div>
+      <div class="workflow-step">
+        <div class="step-badge">3</div>
+        <div>
+          <div class="workflow-step-label">Revise as diferenças</div>
+          <div style="font-size:13px;">Veja o resumo geral e expanda os registros com diferenças.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="card">
+      <div class="card-header-row">
+        <div>
+          <p class="card-title-main">1. Escolher bancos DuckDB</p>
+          <p class="card-title-sub">Defina os arquivos que serão comparados (A = antigo, B = novo).</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label for="db1Path">Banco A (.duckdb)</label>
+          <input id="db1Path" type="text" placeholder="Ex: C:/caminho/para/ANTIGO.duckdb" />
+          <div style="margin-top:4px; display:flex; align-items:center; gap:8px; font-size:12px; color:#9ca3af;">
+            <input id="fileInputA" type="file" accept=".duckdb" style="display:none" />
+            <button type="button" id="btnUploadA" class="secondary" onclick="document.getElementById('fileInputA').click()">Escolher arquivo...</button>
+            <span id="fileNameA">Nenhum arquivo escolhido</span>
+          </div>
+        </div>
+        <div class="col">
+          <label for="db2Path">Banco B (.duckdb)</label>
+          <input id="db2Path" type="text" placeholder="Ex: C:/caminho/para/NOVO.duckdb" />
+          <div style="margin-top:4px; display:flex; align-items:center; gap:8px; font-size:12px; color:#9ca3af;">
+            <input id="fileInputB" type="file" accept=".duckdb" style="display:none" />
+            <button type="button" id="btnUploadB" class="secondary" onclick="document.getElementById('fileInputB').click()">Escolher arquivo...</button>
+            <span id="fileNameB">Nenhum arquivo escolhido</span>
+          </div>
+        </div>
+      </div>
+      <div id="uploadStatus" class="status"></div>
+      <div style="margin-top:8px;" class="help-text">
+        Informe caminhos completos de arquivos .duckdb. Para outros formatos (Access, etc.),
+        converta antes para DuckDB usando o fluxo normal da ferramenta.
+      </div>
+      <div style="margin-top:8px;">
+        <button id="btnLoadTables" class="primary" onclick="loadTables()">Carregar tabelas em comum</button>
+      </div>
+      <div id="statusMeta" class="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row">
+        <div>
+          <p class="card-title-main">2. Selecionar tabela, chaves e filtros</p>
+          <p class="card-title-sub">Escolha a tabela, defina a chave (K) e, se quiser, refine com filtros.</p>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col">
+          <label for="tableSelect">Tabela</label>
+          <select id="tableSelect" onchange="onTableChange()">
+            <option value="">-- carregue as tabelas primeiro --</option>
+          </select>
+        </div>
+        <div class="col">
+          <label for="keyColumns">Colunas-chave (K)</label>
+          <input id="keyColumns" type="text" placeholder="Ex: ID ou ID,DATA" />
+          <div class="help-text" style="margin-top:2px;">
+            K = nome(s) das coluna(s) que identificam unicamente cada linha (chave primária).
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <label for="compareColumns">Colunas para comparar (opcional)</label>
+        <textarea id="compareColumns" placeholder="Se vazio, compara todas as colunas não-chave.
+Ex: COL1,COL2,COL3"></textarea>
+      </div>
+      <div style="margin-top:8px;">
+        <label for="keyFilter">Filtro opcional por chave (K)</label>
+        <input id="keyFilter" type="text" placeholder="Ex: RTUNO=1,PNTNO=2304" />
+        <div class="help-text" style="margin-top:2px;">
+          Se preenchido, os detalhes abaixo mostram apenas os registros cuja chave K bate com este filtro.
+          O resumo geral continua considerando toda a tabela.
+        </div>
+      </div>
+      <div style="margin-top:8px; font-size:11px;">
+        <div style="margin-bottom:2px;">Filtrar por tipo de diferença (somente na visualização):</div>
+        <label style="margin-right:8px;"><input type="checkbox" id="filterChanged" checked /> Alteradas</label>
+        <label style="margin-right:8px;"><input type="checkbox" id="filterAdded" checked /> Novas</label>
+        <label><input type="checkbox" id="filterRemoved" checked /> Removidas</label>
+      </div>
+      <div style="margin-top:4px; font-size:11px;">
+        <label for="filterColumn">Filtrar por coluna alterada (opcional)</label>
+        <select id="filterColumn" style="max-width:260px; font-size:11px;">
+          <option value="">-- todas as colunas --</option>
+        </select>
+        <div class="help-text" style="margin-top:2px;">
+          Aplica-se apenas às linhas <strong>alteradas</strong> (chave existe em A e B).
+        </div>
+      </div>
+      <div style="margin-top:4px; font-size:11px;">
+        <a href="#" onclick="toggleAdvancedOptions(event)" style="color:#60a5fa; text-decoration:none;">Opções avançadas de comparação</a>
+      </div>
+      <div id="advancedOptions" style="margin-top:4px; display:none; font-size:11px; color:#9ca3af; border:1px dashed #1f2937; border-radius:6px; padding:8px; max-width:420px;">
+        <div style="margin-bottom:4px; font-weight:500; color:#e5e7eb;">Limites e desempenho</div>
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+          <input type="checkbox" id="rowLimitEnabled" checked />
+          <span>Aplicar limite de chaves com diferença nos detalhes</span>
+        </label>
+        <label for="rowLimit" style="display:block; margin-bottom:2px;">Quantidade máxima de chaves com diferença (detalhe)</label>
+        <input id="rowLimit" type="number" min="1" value="100" style="max-width:120px; font-size:12px;" />
+        <div class="help-text" style="margin-top:2px;">
+          Quando o limite está ativo, apenas as primeiras N chaves (registros) com diferença
+          são carregadas para os detalhes abaixo. O resumo geral continua considerando toda a tabela.
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <button class="primary" onclick="runCompare()">Comparar tabela completa</button>
+      </div>
+      <div id="statusCompare" class="status"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header-row">
+        <div>
+          <p class="card-title-main">3. Resultado</p>
+          <p class="card-title-sub">Resumo geral em cima e detalhes agrupados logo abaixo.</p>
+        </div>
+      </div>
+      <div id="summary"></div>
+      <div id="results"></div>
+      <div id="pagination" style="margin-top:8px; font-size:12px;"></div>
+    </div>
+  </main>
+
+  <script>
+    let tablesMeta = [];
+    let lastComparePayload = null;
+    const uploadTimeouts = { A: null, B: null };
+    let tablesTimeout = null;
+
+    function toggleAdvancedOptions(ev) {
+      if (ev && ev.preventDefault) ev.preventDefault();
+      const box = document.getElementById('advancedOptions');
+      if (!box) return;
+      const isHidden = !box.style.display || box.style.display === 'none';
+      box.style.display = isHidden ? 'block' : 'none';
+    }
+
+    function updateRowLimitState() {
+      const cb = document.getElementById('rowLimitEnabled');
+      const input = document.getElementById('rowLimit');
+      if (!cb || !input) return;
+      const enabled = cb.checked;
+      input.disabled = !enabled;
+      input.style.opacity = enabled ? '1' : '0.6';
+    }
+
+    function setUploadStatus(message, isError = false) {
+      const el = document.getElementById('uploadStatus');
+      if (!el) return;
+      el.textContent = message || '';
+      el.style.color = isError ? '#fecaca' : '#9ca3af';
+    }
+
+    // Upload de arquivos .duckdb para o servidor, reaproveitando /admin/upload,
+    // apenas para obter o caminho salvo e preencher automaticamente os campos
+    // de Banco A / Banco B.
+    async function handleFileUpload(side) {
+      const input = document.getElementById(side === 'A' ? 'fileInputA' : 'fileInputB');
+      const nameSpan = document.getElementById(side === 'A' ? 'fileNameA' : 'fileNameB');
+      const pathInput = document.getElementById(side === 'A' ? 'db1Path' : 'db2Path');
+      const btn = document.getElementById(side === 'A' ? 'btnUploadA' : 'btnUploadB');
+      if (!input || !input.files || !input.files.length) return;
+      const file = input.files[0];
+      nameSpan.textContent = file.name;
+
+      const fd = new FormData();
+      fd.append('file', file);
+      nameSpan.textContent = file.name + ' (enviando...)';
+
+      // feedback imediato na interface
+      setUploadStatus(`Enviando "${file.name}" para Banco ${side}... Aguarde, o upload pode levar alguns segundos ou minutos dependendo do tamanho.`);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Enviando...';
+      }
+
+      // se demorar demais, avisa o usuário que pode ter travado
+      if (uploadTimeouts[side]) {
+        clearTimeout(uploadTimeouts[side]);
+      }
+      uploadTimeouts[side] = setTimeout(() => {
+        setUploadStatus(`O upload do Banco ${side} está levando mais de 60 segundos. Se continuar assim, pode ter havido um travamento. Verifique a conexão e o tamanho do arquivo.` , true);
+      }, 60000);
+
+      try {
+        const res = await fetch('/admin/upload', { method: 'POST', body: fd });
+        const data = await res.json();
+        if (!res.ok || data.error) {
+          throw new Error(data.error || res.statusText);
+        }
+        // Para .duckdb, o backend já salva o arquivo em interface/uploads
+        // e devolve o caminho em db_path.
+        if (data.db_path) {
+          pathInput.value = data.db_path;
+          nameSpan.textContent = file.name + ' (carregado)';
+          setUploadStatus(`Upload do Banco ${side} concluído com sucesso.`);
+        } else if (data.output) {
+          // fallback caso no futuro seja usado Access convertido
+          pathInput.value = data.output;
+          nameSpan.textContent = file.name + ' (carregado)';
+          setUploadStatus(`Upload do Banco ${side} concluído com sucesso.`);
+        } else {
+          nameSpan.textContent = file.name + ' (enviado)';
+          setUploadStatus(`Upload do Banco ${side} concluído.`);
+        }
+      } catch (err) {
+        console.error(err);
+        nameSpan.textContent = file.name + ' (erro ao enviar)';
+        setUploadStatus(`Erro ao enviar Banco ${side}: ${err.message}`, true);
+        alert('Erro ao enviar arquivo: ' + err.message);
+      } finally {
+        if (uploadTimeouts[side]) {
+          clearTimeout(uploadTimeouts[side]);
+          uploadTimeouts[side] = null;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Escolher arquivo...';
+        }
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const fa = document.getElementById('fileInputA');
+      const fb = document.getElementById('fileInputB');
+      if (fa) {
+        fa.addEventListener('change', () => handleFileUpload('A'));
+      }
+      if (fb) {
+        fb.addEventListener('change', () => handleFileUpload('B'));
+      }
+
+      const rowLimitCb = document.getElementById('rowLimitEnabled');
+      if (rowLimitCb) {
+        rowLimitCb.addEventListener('change', updateRowLimitState);
+        updateRowLimitState();
+      }
+    });
+
+    async function loadTables() {
+      const db1 = document.getElementById('db1Path').value.trim();
+      const db2 = document.getElementById('db2Path').value.trim();
+      const statusEl = document.getElementById('statusMeta');
+      const tableSelect = document.getElementById('tableSelect');
+      const btn = document.getElementById('btnLoadTables');
+      tablesMeta = [];
+      tableSelect.innerHTML = '<option value="">carregando...</option>';
+      statusEl.textContent = 'Carregando tabelas em comum...';
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Carregando...';
+      }
+
+      if (tablesTimeout) {
+        clearTimeout(tablesTimeout);
+        tablesTimeout = null;
+      }
+
+      tablesTimeout = setTimeout(() => {
+        statusEl.textContent = 'A carga das tabelas em comum está levando mais de 60 segundos. Se continuar assim, pode ter ocorrido algum travamento ou os bancos são muito grandes.';
+      }, 60000);
+
+      if (!db1 || !db2) {
+        statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
+        tableSelect.innerHTML = '<option value="">-- informe os caminhos acima --</option>';
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Carregar tabelas em comum';
+        }
+        if (tablesTimeout) {
+          clearTimeout(tablesTimeout);
+          tablesTimeout = null;
+        }
+        return;
+      }
+
+      try {
+        const resp = await fetch('/api/compare_db_tables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ db1_path: db1, db2_path: db2 })
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+          throw new Error(data.error || 'Falha ao carregar tabelas');
+        }
+        tablesMeta = data.tables || [];
+        if (!tablesMeta.length) {
+          statusEl.textContent = 'Nenhuma tabela em comum encontrada entre os dois bancos.';
+          tableSelect.innerHTML = '<option value="">-- nenhuma tabela em comum --</option>';
+          return;
+        }
+        tableSelect.innerHTML = '';
+        const preferredTable = 'RANGER_SOSTAT';
+        let hasPreferred = false;
+        for (const t of tablesMeta) {
+          const opt = document.createElement('option');
+          opt.value = t.name;
+          opt.textContent = t.name;
+          if (t.name && t.name.toUpperCase() === preferredTable) {
+            opt.selected = true;
+            hasPreferred = true;
+          }
+          tableSelect.appendChild(opt);
+        }
+        // Se a tabela RANGER_SOSTAT existir, deixamos ela pré-selecionada;
+        // caso contrário, o navegador mantém a primeira opção selecionada.
+        statusEl.textContent = `Tabelas em comum: ${tablesMeta.length}`;
+        onTableChange();
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Erro: ' + err.message;
+        tableSelect.innerHTML = '<option value="">-- erro ao carregar tabelas --</option>';
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Carregar tabelas em comum';
+        }
+        if (tablesTimeout) {
+          clearTimeout(tablesTimeout);
+          tablesTimeout = null;
+        }
+      }
+    }
+
+    function onTableChange() {
+      const table = document.getElementById('tableSelect').value;
+      const keyInput = document.getElementById('keyColumns');
+      const cmpInput = document.getElementById('compareColumns');
+      if (!table) return;
+      const meta = tablesMeta.find(t => t.name === table);
+      if (!meta) return;
+      // Se a tabela padrão RANGER_SOSTAT estiver selecionada, usa RTUNO,PNTNO como chave K
+      if (table.toUpperCase() === 'RANGER_SOSTAT') {
+        keyInput.value = 'RTUNO,PNTNO';
+      } else {
+        // sugestão simples: se houver coluna ID, assume-a como chave
+        const cols = meta.columns || [];
+        const lower = cols.map(c => c.toLowerCase());
+        let suggestedKey = '';
+        if (lower.includes('id')) {
+          suggestedKey = cols[lower.indexOf('id')];
+        }
+        keyInput.value = suggestedKey;
+      }
+      cmpInput.value = '';
+    }
+
+    async function runCompare() {
+      const db1 = document.getElementById('db1Path').value.trim();
+      const db2 = document.getElementById('db2Path').value.trim();
+      const table = document.getElementById('tableSelect').value;
+      const keyColsStr = document.getElementById('keyColumns').value.trim();
+      const cmpColsStr = document.getElementById('compareColumns').value.trim();
+      const keyFilterStr = document.getElementById('keyFilter').value.trim();
+      const cbChanged = document.getElementById('filterChanged');
+      const cbAdded = document.getElementById('filterAdded');
+      const cbRemoved = document.getElementById('filterRemoved');
+      const colSelect = document.getElementById('filterColumn');
+      const rowLimitEl = document.getElementById('rowLimit');
+      const rowLimitEnabledEl = document.getElementById('rowLimitEnabled');
+      const statusEl = document.getElementById('statusCompare');
+      const summaryEl = document.getElementById('summary');
+      const resultsEl = document.getElementById('results');
+      const btn = document.querySelector('button.primary[onclick="runCompare()"]');
+
+      let compareTimeout = null;
+
+      summaryEl.innerHTML = '';
+      resultsEl.innerHTML = '';
+      statusEl.textContent = '';
+
+      if (!db1 || !db2) {
+        statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
+        return;
+      }
+      if (!table) {
+        statusEl.textContent = 'Selecione uma tabela.';
+        return;
+      }
+      if (!keyColsStr) {
+        statusEl.textContent = 'Informe pelo menos uma coluna-chave K.';
+        return;
+      }
+
+      const key_columns = keyColsStr.split(',').map(s => s.trim()).filter(Boolean);
+      const compare_columns = cmpColsStr ? cmpColsStr.split(',').map(s => s.trim()).filter(Boolean) : null;
+
+      let row_limit = null;
+      const limitEnabled = !rowLimitEnabledEl || rowLimitEnabledEl.checked;
+      if (limitEnabled && rowLimitEl) {
+        const raw = String(rowLimitEl.value || '').trim();
+        if (raw) {
+          const parsed = parseInt(raw, 10);
+          if (!Number.isNaN(parsed) && parsed >= 1) {
+            row_limit = parsed;
+          }
+        }
+      }
+
+      // monta parâmetros de filtro para o backend
+      const change_types = [];
+      if (!cbChanged || cbChanged.checked) change_types.push('changed');
+      if (!cbAdded || cbAdded.checked) change_types.push('added');
+      if (!cbRemoved || cbRemoved.checked) change_types.push('removed');
+
+      const changed_column = (colSelect && colSelect.value) ? colSelect.value : null;
+
+      // monta payload principal de comparação (página 1 por padrão)
+      const page_size = row_limit || null;
+      const payload = {
+        db1_path: db1,
+        db2_path: db2,
+        table,
+        key_columns,
+        compare_columns,
+        row_limit,
+        key_filter: keyFilterStr || null,
+        change_types,
+        changed_column,
+        page: 1,
+        page_size,
+      };
+
+      lastComparePayload = payload;
+
+      statusEl.textContent = 'Comparando tabela completa entre A e B (pode levar alguns segundos)...';
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Comparando...';
+      }
+
+      // Aviso se a comparação demorar demais
+      compareTimeout = setTimeout(() => {
+        statusEl.textContent = 'A comparação está levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso é esperado. Caso não conclua, tente restringir por chave (K) ou revisar os bancos.';
+      }, 60000);
+
+      try {
+        const resp = await fetch('/api/compare_db_rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        let data = null;
+        try {
+          data = await resp.json();
+        } catch (e) {
+          data = null;
+        }
+
+        if (!resp.ok) {
+          const apiMsg = data && (data.message || data.error);
+          if (apiMsg) {
+            statusEl.textContent = 'Erro ao comparar: ' + apiMsg;
+          } else {
+            statusEl.textContent = 'Erro ao comparar: resposta HTTP ' + resp.status;
+          }
+          return;
+        }
+
+        renderResult(data);
+        statusEl.textContent = 'Comparação concluída.';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Erro inesperado ao comparar: ' + (err && err.message ? err.message : String(err));
+      } finally {
+        if (compareTimeout) {
+          clearTimeout(compareTimeout);
+          compareTimeout = null;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Comparar tabela completa';
+        }
+      }
+    }
+
+    function valuesDifferent(a, b) {
+      // Comparação simples, tratando null/undefined como iguais quando ambos "vazios".
+      if (a == null && b == null) return false;
+      return JSON.stringify(a) !== JSON.stringify(b);
+    }
+
+    function shortValue(v, maxLen = 80) {
+      let s;
+      try {
+        s = JSON.stringify(v);
+      } catch (e) {
+        s = String(v);
+      }
+      if (s.length > maxLen) {
+        return s.slice(0, maxLen - 3) + '...';
+      }
+      return s;
+    }
+
+    function renderResult(data) {
+      const summaryEl = document.getElementById('summary');
+      const resultsEl = document.getElementById('results');
+      const colSelect = document.getElementById('filterColumn');
+      const rows = data.rows || [];
+
+      const byType = { added: [], removed: [], changed: [] };
+      for (const r of rows) {
+        if (r.type === 'added') byType.added.push(r);
+        else if (r.type === 'removed') byType.removed.push(r);
+        else byType.changed.push(r);
+      }
+      const s = data.summary || {};
+      const same = s.same_count ?? 0;
+      const added = s.added_count ?? byType.added.length;
+      const removed = s.removed_count ?? byType.removed.length;
+      const changed = s.changed_count ?? byType.changed.length;
+      const totalKeys = s.keys_total ?? (same + added + removed + changed);
+
+      // Resumo por coluna: em quantos registros cada coluna mudou
+      const colDiffCounts = {};
+      for (const r of byType.changed) {
+        for (const c of data.compare_columns || []) {
+          if (!valuesDifferent(r.a[c], r.b[c])) continue;
+          colDiffCounts[c] = (colDiffCounts[c] || 0) + 1;
+        }
+      }
+      const colDiffList = Object.entries(colDiffCounts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([col, cnt]) => `${col}: ${cnt}`)
+        .join(', ');
+
+      summaryEl.innerHTML = `
+        <div style="font-size:13px; margin-bottom:8px; line-height:1.5;">
+          <div><strong>Tabela analisada:</strong> ${data.table}</div>
+          <div><strong>Chaves (K):</strong> ${(data.key_columns || []).join(', ')}</div>
+          <div>
+            <strong>Visão geral:</strong>
+            ${totalKeys} registros (chaves) analisados ·
+            <span class="badge" style="background:#022c22;color:#6ee7b7;">${same} mantidos (iguais em A e B)</span>
+            <span class="badge added">+${added} novos (existem só em B)</span>
+            <span class="badge removed">-${removed} removidos (existiam só em A)</span>
+            <span class="badge changed">±${changed} alterados (chave existe em ambos, mas com diferença)</span>
+          </div>
+          ${colDiffList ? `<div style="margin-top:4px;"><strong>Colunas com diferença (qtd. de registros alterados):</strong> ${colDiffList}</div>` : ''}
+        </div>
+      `;
+
+      renderPaginationControls(data);
+
+      // atualiza as opções de filtro de coluna com base nas colunas realmente comparadas
+      if (colSelect) {
+        const prev = colSelect.value;
+        colSelect.innerHTML = '<option value="">-- todas as colunas --</option>';
+        for (const c of data.compare_columns || []) {
+          const opt = document.createElement('option');
+          opt.value = c;
+          opt.textContent = c;
+          colSelect.appendChild(opt);
+        }
+        // tenta restaurar a seleção anterior, se ainda existir
+        if (prev && Array.from(colSelect.options).some(o => o.value === prev)) {
+          colSelect.value = prev;
+        }
+      }
+
+      const sections = [
+        { type: 'changed', title: 'Alteradas (existem em A e B, mas com diferenças)', rows: byType.changed },
+        { type: 'added', title: 'Adicionadas (existem só em B)', rows: byType.added },
+        { type: 'removed', title: 'Removidas (existiam só em A)', rows: byType.removed }
+      ];
+
+      resultsEl.innerHTML = '';
+      const maxPerSection = 50;
+      for (const section of sections) {
+        if (!section.rows.length) continue;
+        const details = document.createElement('details');
+        // por padrão, deixamos "Alteradas" abertas e as demais recolhidas
+        if (section.type === 'changed') {
+          details.open = true;
+        }
+        const extraInfo = section.rows.length > maxPerSection
+          ? ` · mostrando primeiras ${maxPerSection} chaves`
+          : '';
+        const summary = document.createElement('summary');
+        summary.innerHTML = `<span style="font-size:14px;">${section.title} (${section.rows.length})${extraInfo}</span>`;
+        details.appendChild(summary);
+
+        const rowsToShow = section.rows.slice(0, maxPerSection);
+        const listContainer = document.createElement('div');
+        listContainer.style.marginTop = '6px';
+
+        for (const r of rowsToShow) {
+          const rowDetails = document.createElement('details');
+          rowDetails.style.marginTop = '4px';
+
+          const keyParts = [];
+          for (const k of data.key_columns || []) {
+            keyParts.push(`${k}=${JSON.stringify(r.key[k])}`);
+          }
+
+          const rowSummary = document.createElement('summary');
+          rowSummary.innerHTML = `
+            <span class="badge ${r.type}" style="margin-right:6px;">${r.type}</span>
+            <span style="font-size:12px;">${keyParts.join(', ')}</span>
+          `;
+          rowDetails.appendChild(rowSummary);
+
+          const body = document.createElement('div');
+          body.style.fontSize = '12px';
+          body.style.marginTop = '4px';
+
+          if (section.type === 'changed') {
+            for (const c of data.compare_columns || []) {
+              const av = r.a[c];
+              const bv = r.b[c];
+              if (!valuesDifferent(av, bv)) continue;
+              const line = document.createElement('div');
+              line.innerHTML = `<strong>${c}:</strong> ${shortValue(av)} → ${shortValue(bv)}`;
+              body.appendChild(line);
+            }
+          } else if (section.type === 'added') {
+            for (const c of data.compare_columns || []) {
+              const bv = r.b[c];
+              const line = document.createElement('div');
+              line.innerHTML = `<strong>${c}:</strong> ${shortValue(bv)}`;
+              body.appendChild(line);
+            }
+          } else if (section.type === 'removed') {
+            for (const c of data.compare_columns || []) {
+              const av = r.a[c];
+              const line = document.createElement('div');
+              line.innerHTML = `<strong>${c}:</strong> ${shortValue(av)}`;
+              body.appendChild(line);
+            }
+          }
+
+          if (!body.childElementCount) {
+            const none = document.createElement('div');
+            none.style.color = '#9ca3af';
+            none.textContent = 'Nenhuma diferença relevante nas colunas selecionadas.';
+            body.appendChild(none);
+          }
+
+          rowDetails.appendChild(body);
+          listContainer.appendChild(rowDetails);
+        }
+
+        details.appendChild(listContainer);
+
+        if (section.rows.length > maxPerSection) {
+          const note = document.createElement('div');
+          note.style.fontSize = '11px';
+          note.style.color = '#9ca3af';
+          note.style.marginTop = '4px';
+          note.textContent = `Existem mais ${section.rows.length - maxPerSection} registros nesta categoria não exibidos aqui para manter a visualização enxuta.`;
+          details.appendChild(note);
+        }
+
+        resultsEl.appendChild(details);
+      }
+
+      if (!rows.length) {
+        resultsEl.innerHTML = '<div style="font-size:13px; color:#9ca3af;">Nenhuma diferença encontrada (dentro do limite configurado).</div>';
+      }
+    }
+
+    function renderPaginationControls(data) {
+      const pagEl = document.getElementById('pagination');
+      if (!pagEl) return;
+
+      const totalRows = typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0);
+      const page = data.page || 1;
+      const totalPages = data.total_pages || 1;
+
+      pagEl.innerHTML = '';
+
+      if (!totalRows) {
+        return;
+      }
+
+      const info = document.createElement('span');
+      info.textContent = `Total de ${totalRows} registros com diferença` + (totalPages > 1 ? ` · página ${page} de ${totalPages}` : '');
+      pagEl.appendChild(info);
+
+      if (totalPages > 1) {
+        const controls = document.createElement('span');
+        controls.style.marginLeft = '12px';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.textContent = 'Anterior';
+        prevBtn.className = 'secondary';
+        prevBtn.disabled = page <= 1;
+        prevBtn.style.marginRight = '4px';
+        prevBtn.onclick = () => changePage(page - 1);
+
+        const nextBtn = document.createElement('button');
+        nextBtn.textContent = 'Próxima';
+        nextBtn.className = 'secondary';
+        nextBtn.disabled = page >= totalPages;
+
+        controls.appendChild(prevBtn);
+        controls.appendChild(nextBtn);
+        pagEl.appendChild(controls);
+      }
+    }
+
+    async function changePage(newPage) {
+      if (!lastComparePayload) return;
+      const statusEl = document.getElementById('statusCompare');
+      const summaryEl = document.getElementById('summary');
+      const resultsEl = document.getElementById('results');
+      const btn = document.querySelector('button.primary[onclick="runCompare()"]');
+
+      const payload = { ...lastComparePayload, page: newPage };
+      lastComparePayload = payload;
+
+      let compareTimeout = null;
+
+      statusEl.textContent = `Carregando página ${newPage}...`;
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Comparando...';
+      }
+
+      compareTimeout = setTimeout(() => {
+        statusEl.textContent = 'A troca de página está levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso é esperado.';
+      }, 60000);
+
+      try {
+        const resp = await fetch('/api/compare_db_rows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        let data = null;
+        try {
+          data = await resp.json();
+        } catch (e) {
+          data = null;
+        }
+
+        if (!resp.ok) {
+          const apiMsg = data && (data.message || data.error);
+          if (apiMsg) {
+            statusEl.textContent = 'Erro ao comparar: ' + apiMsg;
+          } else {
+            statusEl.textContent = 'Erro ao comparar: resposta HTTP ' + resp.status;
+          }
+          return;
+        }
+
+        renderResult(data);
+        statusEl.textContent = 'Comparação concluída.';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Erro inesperado ao comparar: ' + (err && err.message ? err.message : String(err));
+      } finally {
+        if (compareTimeout) {
+          clearTimeout(compareTimeout);
+          compareTimeout = null;
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Comparar tabela completa';
+        }
+      }
+    }
+  </script>
+</body>
+</html>

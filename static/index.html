@@ -9,6 +9,9 @@
     body{ font-family: Inter, Roboto, Arial, sans-serif; margin:0; background:var(--bg); color:#111; }
     header{ background: linear-gradient(90deg,#fff 0%, #f2f6ff 100%); padding:12px 18px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #e6e9ef; }
     header h1{ font-size:18px; margin:0; }
+    nav.tabs{ margin-left:32px; display:flex; gap:6px; align-items:center; }
+    nav.tabs a{ padding:6px 10px; border-radius:999px; font-size:13px; text-decoration:none; color:var(--muted); border:1px solid transparent; background:transparent; }
+    nav.tabs a.active{ background:#e0ecff; color:#0b63d6; border-color:#c1d7ff; font-weight:500; }
     .top-right{ margin-left:auto; display:flex; gap:10px; align-items:center; }
     .badge{ font-size:13px; color:var(--muted); }
     .btn{ background:var(--primary); color:#fff; border:none; padding:8px 12px; border-radius:6px; cursor:pointer; }
@@ -36,6 +39,11 @@
 <body>
   <header>
     <h1>Busca DuckDB — Painel</h1>
+    <nav class="tabs">
+      <a href="/" class="active">Busca</a>
+      <a href="/track_record">Rastrear registro</a>
+      <a href="/compare_dbs">Comparar bancos</a>
+    </nav>
     <div class="small">Ferramenta local para buscas tolerantes (fuzzy)</div>
     <div class="top-right">
       <div id="currentDb" class="badge">DB: carregando...</div>
@@ -329,6 +337,12 @@ $('q').addEventListener('keydown', (e)=> { if(e.key==='Enter') doSearch(); });
 $('refreshBtn').addEventListener('click', ()=> refreshUiState());
 $('filterTables').addEventListener('input', ()=> refreshTables());
 $('min_score').addEventListener('input', ()=> $('minScoreVal').textContent = $('min_score').value);
+const openTrackBtn = $('openTrackRecord');
+if(openTrackBtn){
+  openTrackBtn.addEventListener('click', ()=>{
+    window.location.href = '/track_record';
+  });
+}
 const clearTablesBtn = $('clearTablesFilter');
 if(clearTablesBtn){
   clearTablesBtn.addEventListener('click', ()=>{

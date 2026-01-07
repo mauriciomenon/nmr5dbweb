@@ -1,5 +1,5 @@
 {
-  "db_path": "C:\\mdb2sql_fork\\interface\\uploads\\2025-11-05_DB4.duckdb",
+  "db_path": "C:\\mdb2sql_fork\\interface\\uploads\\2025-04-29_db1.duckdb",
   "priority_tables": [
     "RANGER_SOSTAT"
   ],

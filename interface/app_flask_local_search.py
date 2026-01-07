@@ -35,6 +35,9 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+from find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
+from compare_dbs import list_common_tables, list_table_columns, compare_table_duckdb
+
 # Optional modules
 try:
     import pyodbc
@@ -89,6 +92,24 @@ convert_thread = None
 index_lock = threading.Lock()
 index_thread = None
 
+
+# Diretórios "seguros" para varrer bancos ao rastrear registros.
+# A interface usa os IDs abaixo para não expor caminhos arbitrários.
+RECORD_DIRS = {
+    "bancos_atuais": {
+        "label": "Bancos atuais (.accdb)",
+        "path": PROJECT_ROOT / "import_folder" / "Bancos atuais",
+    },
+    "bancos_historicos": {
+        "label": "Bancos históricos (.accdb)",
+        "path": PROJECT_ROOT / "import_folder" / "bancos",
+    },
+    "uploads_duckdb": {
+        "label": "Uploads convertidos (.duckdb)",
+        "path": BASE_DIR / "uploads",
+    },
+}
+
 def load_config():
     if CONFIG_FILE.exists():
         try:
@@ -141,6 +162,24 @@ app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_pat
 @app.route("/")
 def index():
     return app.send_static_file("index.html")
+
+
+@app.route("/track_record")
+def track_record():
+    """Página dedicada para rastrear um registro em vários bancos.
+
+    O HTML correspondente fica em static/track_record.html.
+    """
+    return app.send_static_file("track_record.html")
+
+
+@app.route("/compare_dbs")
+def compare_dbs_page():
+    """Página para comparar diferenças entre dois bancos DuckDB.
+
+    O HTML correspondente fica em static/compare_dbs.html.
+    """
+    return app.send_static_file("compare_dbs.html")
 
 @app.route("/uploads/<path:filename>")
 def uploaded_file(filename):
@@ -247,6 +286,81 @@ def admin_status():
     status["priority_tables"] = cfg.get("priority_tables", [])
     status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
     return jsonify(status)
+
+
+@app.route("/api/record_dirs", methods=["GET"])
+def api_record_dirs():
+    """Lista diretórios pré-configurados para rastrear registros em vários bancos.
+
+    Apenas diretórios existentes são retornados, para evitar opções quebradas na UI.
+    """
+    items = []
+    for key, meta in RECORD_DIRS.items():
+        path = Path(meta["path"]).resolve()
+        if path.exists() and path.is_dir():
+            items.append({
+                "id": key,
+                "label": meta.get("label", key),
+                "path": str(path),
+            })
+    return jsonify({"dirs": items})
+
+
+@app.route("/api/browse_dirs", methods=["GET"])
+def api_browse_dirs():
+    """Explorador simples de diretórios para escolha de pasta de bancos.
+
+    Semelhante a um file picker, mas rodando no backend. Quando
+    `path` não é informado, em Windows lista as unidades disponíveis
+    (C:\\, D:\\, ...). Quando `path` é um diretório válido, lista
+    os subdiretórios imediatos e indica se cada um contém arquivos
+    com extensões suportadas (SUPPORTED_EXTS).
+    """
+    base = (request.args.get("path") or "").strip()
+    entries = []
+    parent = None
+
+    # Sem caminho: listar unidades no Windows ou raiz em outros SOs
+    if not base:
+        roots = []
+        if os.name == "nt":  # Windows
+            for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                drive = f"{c}:\\"
+                if os.path.exists(drive):
+                    roots.append(drive)
+        else:
+            roots.append(str(Path("/")))
+        for r in roots:
+            entries.append({"name": r, "path": r, "has_db": False})
+    else:
+        p = Path(base)
+        if not p.exists() or not p.is_dir():
+            return jsonify({"error": f"diretorio invalido: {base}"}), 400
+        # calcula pasta pai (se existir)
+        if p.parent != p:
+            parent = str(p.parent)
+        # lista subdiretórios
+        try:
+            for child in sorted(p.iterdir(), key=lambda x: x.name.lower()):
+                if not child.is_dir():
+                    continue
+                has_db = False
+                try:
+                    for sub in child.iterdir():
+                        if sub.is_file() and sub.suffix.lower() in SUPPORTED_EXTS:
+                            has_db = True
+                            break
+                except Exception:
+                    has_db = False
+                entries.append({
+                    "name": child.name,
+                    "path": str(child),
+                    "has_db": has_db,
+                })
+        except Exception as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    return jsonify({"entries": entries, "parent": parent, "path": base or None})
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
@@ -402,6 +516,239 @@ def admin_start_index():
         index_thread = threading.Thread(target=run_index, daemon=True)
         index_thread.start()
     return jsonify({"ok": True, "started": True, "db": get_db_path()})
+
+
+@app.route("/api/find_record_across_dbs", methods=["POST"])
+def api_find_record_across_dbs():
+    """Endpoint que usa find_record_across_dbs para rastrear um registro.
+
+    Espera JSON com pelo menos:
+      - custom_path: caminho absoluto de um diretório a varrer (obrigatório)
+      - filters: string no formato "COL1=VAL1,COL2=VAL2"
+      - table (opcional): restringe a busca a uma tabela específica
+    """
+    data = request.get_json() or {}
+    custom_path = (data.get("custom_path") or "").strip() or None
+    filters_str = (data.get("filters") or "").strip()
+    table = (data.get("table") or "").strip() or None
+    max_files = int(data.get("max_files", 500))
+
+    if not filters_str:
+        return jsonify({"error": "filters obrigatorio"}), 400
+
+    if not custom_path:
+        return jsonify({"error": "custom_path obrigatorio"}), 400
+
+    base_dir = Path(custom_path).expanduser().resolve()
+    if not base_dir.exists() or not base_dir.is_dir():
+        return jsonify({"error": f"diretorio invalido: {base_dir}"}), 400
+
+    res = find_record_across_dbs(base_dir, filters_str, table=table, max_files=max_files)
+    if isinstance(res, dict) and res.get("error"):
+        return jsonify(res), 400
+    return jsonify(res)
+
+
+@app.route("/api/compare_db_tables", methods=["POST"])
+def api_compare_db_tables():
+    """Retorna tabelas em comum e colunas para cada uma.
+
+    Payload esperado:
+    {
+      "db1_path": "C:/caminho/para/a.duckdb",
+      "db2_path": "C:/caminho/para/b.duckdb"
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+
+    if not db1_path or not db2_path:
+        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
+
+    try:
+        db1 = Path(db1_path)
+        db2 = Path(db2_path)
+        tables = list_common_tables(db1, db2)
+        detailed = []
+        for t in tables:
+            cols = list_table_columns(db1, t)
+            detailed.append({"name": t, "columns": cols})
+        return jsonify({"tables": detailed})
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Erro em api_compare_db_tables")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/compare_db_rows", methods=["POST"])
+def api_compare_db_rows():
+    """Compara linhas de uma tabela entre dois bancos DuckDB.
+
+    Payload esperado:
+    {
+      "db1_path": "...",
+      "db2_path": "...",
+      "table": "NOME_TABELA",
+    "key_columns": ["COL1", "COL2"],
+    "compare_columns": ["COL3", "COL4"]   # opcional
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+    table = (data.get("table") or "").strip()
+    key_columns = data.get("key_columns") or []
+    compare_columns = data.get("compare_columns")
+    row_limit = data.get("row_limit")
+    key_filter_str = (data.get("key_filter") or "").strip()
+    change_types = data.get("change_types")
+    changed_column = (data.get("changed_column") or "").strip() or None
+    page = data.get("page") or 1
+    page_size = data.get("page_size")
+
+    if not db1_path or not db2_path:
+        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
+    if not table:
+        return jsonify({"error": "table é obrigatório"}), 400
+    if not isinstance(key_columns, list) or not key_columns:
+        return jsonify({"error": "key_columns deve ser uma lista não vazia"}), 400
+
+    # row_limit é opcional; quando informado deve ser inteiro >= 0
+    if row_limit is not None:
+        try:
+            row_limit = int(row_limit)
+        except (TypeError, ValueError):
+            return jsonify({"error": "row_limit deve ser um inteiro"}), 400
+        if row_limit < 0:
+            return jsonify({"error": "row_limit deve ser maior ou igual a zero"}), 400
+
+    # paginação opcional: página (>=1) e tamanho da página (>=1)
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    if page < 1:
+        page = 1
+
+    if page_size is not None:
+        try:
+            page_size = int(page_size)
+        except (TypeError, ValueError):
+            return jsonify({"error": "page_size deve ser um inteiro"}), 400
+        if page_size < 1:
+            return jsonify({"error": "page_size deve ser maior ou igual a 1"}), 400
+    else:
+        # se não informado, usamos row_limit (quando houver) ou um padrão seguro
+        if isinstance(row_limit, int) and row_limit > 0:
+            page_size = row_limit
+        else:
+            page_size = 100
+
+    # valida opcionalmente a lista de tipos de mudança
+    valid_types = {"added", "removed", "changed"}
+    if change_types is not None:
+        if not isinstance(change_types, list):
+            return jsonify({"error": "change_types deve ser uma lista"}), 400
+        change_types = [str(t) for t in change_types if str(t) in valid_types]
+        if not change_types:
+            # se nada sobrou, consideramos que nenhum tipo foi selecionado
+            change_types = []
+
+    try:
+        db1 = Path(db1_path)
+        db2 = Path(db2_path)
+        result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=row_limit)
+
+        rows = result.get("rows") or []
+
+        # aplica, no backend, o filtro opcional por chave (K), no formato "COL=VAL,COL2=VAL2"
+        key_filter = {}
+        if key_filter_str:
+            try:
+                for part in key_filter_str.split(","):
+                    p = part.strip()
+                    if not p:
+                        continue
+                    if "=" not in p:
+                        continue
+                    k, v = p.split("=", 1)
+                    k = k.strip()
+                    v = v.strip()
+                    if k:
+                        key_filter[k] = v
+            except Exception:
+                key_filter = {}
+
+        def _row_matches_filters(row: dict) -> bool:
+            # filtro por chave
+            if key_filter:
+                key = row.get("key") or {}
+                for col, val in key_filter.items():
+                    got = key.get(col)
+                    if str(got) != str(val):
+                        return False
+
+            # filtro por tipo de mudança
+            if change_types is not None and len(change_types) > 0:
+                if row.get("type") not in change_types:
+                    return False
+
+            # filtro por coluna alterada (apenas para linhas "changed")
+            if changed_column and row.get("type") == "changed":
+                a_vals = row.get("a") or {}
+                b_vals = row.get("b") or {}
+                av = a_vals.get(changed_column)
+                bv = b_vals.get(changed_column)
+                # tratamos None/"vazio" de forma semelhante ao frontend: se ambos iguais, não conta
+                if (av is None and bv is None) or (av == bv):
+                    return False
+
+            return True
+
+        if key_filter or (change_types is not None and len(change_types) > 0) or changed_column:
+            filtered_rows = [r for r in rows if _row_matches_filters(r)]
+        else:
+            filtered_rows = rows
+
+        total_filtered = len(filtered_rows)
+
+        if page_size:
+            total_pages = max(1, (total_filtered + page_size - 1) // page_size)
+            if page > total_pages:
+                page = total_pages
+            start = (page - 1) * page_size
+            end = start + page_size
+            page_rows = filtered_rows[start:end]
+        else:
+            total_pages = 1
+            page = 1
+            page_rows = filtered_rows
+
+        result["rows"] = page_rows
+        result["row_count"] = len(page_rows)
+        result["page"] = page
+        result["page_size"] = page_size
+        result["total_filtered_rows"] = int(total_filtered)
+        result["total_pages"] = int(total_pages)
+
+        return jsonify(result)
+    except duckdb.IOException as exc:  # erros específicos de acesso ao arquivo DuckDB
+        msg = str(exc)
+        # Caso mais comum em Windows: arquivo já aberto por outro processo
+        if "File is already open" in msg or "já está sendo usado" in msg:
+            friendly = (
+                "Não foi possível abrir um dos bancos DuckDB porque o arquivo "
+                "já está em uso por outro processo. Feche a outra janela/instância "
+                "que está usando o arquivo e tente novamente. Detalhes técnicos: "
+                f"{msg}"
+            )
+            app.logger.warning("Banco em uso em api_compare_db_rows: %s", msg)
+            return jsonify({"error": "banco_em_uso", "message": friendly}), 409
+        app.logger.exception("DuckDB IOException em api_compare_db_rows")
+        return jsonify({"error": "duckdb_io", "message": msg}), 500
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Erro em api_compare_db_rows")
+        return jsonify({"error": "erro_interno", "message": str(exc)}), 500
 
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
