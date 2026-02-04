@@ -24,6 +24,70 @@ def _attach_db(conn: duckdb.DuckDBPyConnection, alias: str, path: Path) -> None:
     conn.execute(f"ATTACH '{path.as_posix()}' AS {alias}")
 
 
+def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
+    """Compara o conteúdo de uma tabela entre dois bancos DuckDB sem usar chave.
+
+    Abre cada banco em modo somente leitura e compara o conjunto de linhas da
+    tabela, considerando apenas as colunas em comum entre A e B. Isso evita
+    manter os arquivos abertos em múltiplas conexões de escrita ao mesmo tempo,
+    o que em Windows costuma gerar erros de "arquivo já está sendo usado".
+
+    Retorna um dicionário no formato::
+
+        {
+            "table": str,
+            "row_count_a": int,
+            "row_count_b": int,
+            "diff_count": int,  # número de linhas diferentes (ignorando ordem)
+        }
+    """
+
+    db1 = db1.resolve()
+    db2 = db2.resolve()
+    if not db1.exists():
+        raise FileNotFoundError(db1)
+    if not db2.exists():
+        raise FileNotFoundError(db2)
+
+    # Conexões em modo somente leitura para minimizar conflitos de lock em Windows.
+    conn1 = duckdb.connect(str(db1), read_only=True)
+    conn2 = duckdb.connect(str(db2), read_only=True)
+    try:
+        # Descobre colunas em comum via PRAGMA table_info em cada banco, sem
+        # depender de helpers que abririam novas conexões.
+        info_a = conn1.execute(f"PRAGMA table_info('{table}')").fetchall()
+        info_b = conn2.execute(f"PRAGMA table_info('{table}')").fetchall()
+        cols_a = {r[1] for r in info_a}
+        cols_b = {r[1] for r in info_b}
+        common_cols = sorted(cols_a & cols_b)
+
+        if not common_cols:
+            return {"table": table, "row_count_a": 0, "row_count_b": 0, "diff_count": -1}
+
+        cols_sql = ", ".join(f'"{c}"' for c in common_cols)
+
+        # Busca todas as linhas das colunas em comum em cada banco.
+        rows_a_list = conn1.execute(f'SELECT {cols_sql} FROM "{table}"').fetchall()
+        rows_b_list = conn2.execute(f'SELECT {cols_sql} FROM "{table}"').fetchall()
+
+        rows_a = set(tuple(row) for row in rows_a_list)
+        rows_b = set(tuple(row) for row in rows_b_list)
+
+        only_a = rows_a - rows_b
+        only_b = rows_b - rows_a
+        diff_count = len(only_a) + len(only_b)
+
+        return {
+            "table": table,
+            "row_count_a": len(rows_a_list),
+            "row_count_b": len(rows_b_list),
+            "diff_count": diff_count,
+        }
+    finally:
+        conn1.close()
+        conn2.close()
+
+
 def list_tables(db_path: Path) -> List[str]:
     """Lista tabelas de um arquivo DuckDB."""
     db_path = db_path.resolve()

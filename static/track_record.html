@@ -1,120 +1,383 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
   <title>Rastrear registro em vários bancos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 0; background: #0f172a; color: #e5e7eb; }
-    header { background: #020617; border-bottom: 1px solid #1f2937; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
-    header h1 { font-size: 18px; margin: 0; color: #f9fafb; }
-    nav.tabs { display: flex; gap: 8px; align-items: center; }
-    nav.tabs a { padding: 6px 10px; border-radius: 999px; font-size: 13px; text-decoration: none; color: #9ca3af; border: 1px solid transparent; }
-    nav.tabs a.active { background: #0b1120; color: #bfdbfe; border-color: #1d4ed8; }
-    main { padding: 16px 20px 32px; max-width: 1200px; margin: 0 auto; }
-    .card { background: #020617; border-radius: 10px; border: 1px solid #1f2937; padding: 16px 18px 20px; box-shadow: 0 18px 40px rgba(15,23,42,0.9); }
-    .card h2 { margin: 0 0 12px; font-size: 17px; }
-    .field-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
-    .field { flex: 1 1 220px; min-width: 220px; }
-    label { display: block; font-size: 13px; margin-bottom: 4px; color: #9ca3af; }
-    select, input[type="text"], textarea { width: 100%; box-sizing: border-box; background: #020617; border-radius: 6px; border: 1px solid #374151; color: #e5e7eb; padding: 6px 8px; font-size: 14px; resize: vertical; }
-    textarea { min-height: 52px; }
-    button { background: #2563eb; border: none; color: white; border-radius: 6px; padding: 8px 14px; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    button.secondary { background: #111827; border: 1px solid #374151; color: #e5e7eb; }
-    .actions { margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-    .status { font-size: 12px; color: #9ca3af; }
-    table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 13px; }
-    th, td { padding: 6px 8px; border-bottom: 1px solid #111827; text-align: left; }
-    th { background: #020617; position: sticky; top: 0; z-index: 1; }
+    :root {
+      --bg: #171a1f;
+      --bg-accent: #1e222a;
+      --card: #232a34;
+      --ink: #eef2f8;
+      --muted: #a7b0bf;
+      --primary: #1f4ed8;
+      --primary-ink: #e9efff;
+      --accent: #3e7bff;
+      --danger: #d75a4a;
+      --border: #2f3642;
+      --shadow: 0 18px 36px rgba(9, 12, 17, 0.4);
+      --shadow-soft: 0 6px 16px rgba(9, 12, 17, 0.3);
+      --radius: 14px;
+      --radius-sm: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
+      margin: 0;
+      background: radial-gradient(900px 600px at 10% 10%, #1c2330 0%, transparent 55%),
+        radial-gradient(700px 500px at 90% 0%, #1b2130 0%, transparent 50%),
+        linear-gradient(180deg, #14171c 0%, #171a1f 70%, #171a1f 100%);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(transparent 70%, rgba(255, 255, 255, 0.04) 72%) 0 0/26px 26px,
+        radial-gradient(transparent 72%, rgba(255, 255, 255, 0.03) 74%) 13px 13px/26px 26px;
+      pointer-events: none;
+      opacity: 0.25;
+      z-index: 0;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: linear-gradient(90deg, rgba(26, 32, 42, 0.96) 0%, rgba(24, 30, 40, 0.96) 100%);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 8px 18px rgba(8, 12, 18, 0.35);
+      backdrop-filter: blur(8px);
+    }
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: conic-gradient(from 45deg, #2b5cff, #79a0ff, #2b5cff);
+      box-shadow: 0 0 0 4px rgba(43, 92, 255, 0.2);
+    }
+    header h1 { font-size: 20px; margin: 0; letter-spacing: 0.4px; }
+    header .subtitle { font-size: 13px; color: var(--muted); max-width: 380px; }
+    .top-right { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .tabs { display: flex; gap: 8px; }
+    .tab-btn {
+      background: #1f2630;
+      color: var(--ink);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .tab-btn.active { background: #1f4ed8; color: #fff; border-color: #1f4ed8; }
+    .container { position: relative; z-index: 1; padding: 20px 24px 40px; }
+    main { max-width: 1100px; margin: 0 auto; }
+    .workflow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      background: #1f2630;
+    }
+    .workflow-step { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; }
+    .step-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #111827;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .workflow-step-label { font-size: 12px; color: var(--muted); }
+    .flow-hint {
+      background: rgba(43, 92, 255, 0.12);
+      border: 1px solid rgba(43, 92, 255, 0.35);
+      color: #dbe6ff;
+      padding: 10px 12px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .flow-hint.info { background: rgba(43, 92, 255, 0.12); border-color: rgba(43, 92, 255, 0.4); color: #dbe6ff; }
+    .flow-hint.warn { background: rgba(255, 196, 77, 0.12); border-color: rgba(255, 196, 77, 0.4); color: #ffe4b3; }
+    .flow-hint.error { background: rgba(215, 90, 74, 0.18); border-color: rgba(215, 90, 74, 0.5); color: #ffd3cc; }
+    input[type="text"], textarea, select {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 14px;
+      background: #1f2630;
+      color: var(--ink);
+      width: 100%;
+      box-sizing: border-box;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+    label { display: block; font-size: 13px; margin-bottom: 4px; color: var(--muted); }
+    .card {
+      background: var(--card);
+      padding: 14px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+    }
+    .card-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .card-title-main { font-size: 15px; font-weight: 600; margin: 0; }
+    .card-title-sub { font-size: 12px; color: var(--muted); margin: 0; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .col { flex: 1 1 260px; }
+    .inline-row { display:flex; gap:8px; align-items:center; }
+    .primary {
+      padding: 8px 16px;
+      border-radius: 999px;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-ink);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .primary:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+    .secondary {
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #1f2630;
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .secondary:disabled { opacity: 0.6; cursor: default; }
+    .actions { margin-top: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .status { font-size: 12px; color: var(--muted); }
+    .help-text { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .table-wrapper { max-height: 420px; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 6px 8px; border-bottom: 1px solid #1f2937; text-align: left; }
+    th { background: #111827; position: sticky; top: 0; z-index: 1; }
     tr:nth-child(even) td { background: #020617; }
-    tr:nth-child(odd) td { background: #020617; }
-    .pill { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 999px; font-size: 11px; border: 1px solid #4b5563; background: #020617; color: #e5e7eb; }
-    .pill.ok { border-color: #16a34a; color: #bbf7d0; }
-    .pill.err { border-color: #b91c1c; color: #fecaca; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+    tr:nth-child(odd) td { background: #030712; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      border: 1px solid #4b5563;
+      background: #020617;
+      color: var(--ink);
+    }
+    .pill.ok { border-color: #16a34a; background: rgba(22, 163, 74, 0.16); color: #bbf7d0; }
+    .pill.err { border-color: #b91c1c; background: rgba(185, 28, 28, 0.18); color: #fecaca; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Courier New", monospace; font-size: 12px; }
     .sample { white-space: nowrap; max-width: 420px; overflow: hidden; text-overflow: ellipsis; }
-    .help { font-size: 12px; color: #6b7280; margin-top: 2px; }
-    .inline-row { display:flex; gap:6px; align-items:center; }
-    .overlay { position:fixed; inset:0; background:rgba(15,23,42,0.75); display:none; align-items:center; justify-content:center; z-index:40; }
-    .overlay.visible { display:flex; }
-    .dir-modal { background:#020617; border-radius:10px; border:1px solid #1f2937; padding:14px 16px 16px; max-width:720px; width:96%; max-height:80vh; box-shadow:0 18px 40px rgba(0,0,0,0.7); display:flex; flex-direction:column; }
-    .dir-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
-    .dir-list { border:1px solid #111827; border-radius:6px; margin-top:6px; overflow:auto; max-height:50vh; }
-    .dir-item { padding:6px 10px; border-bottom:1px solid #111827; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px; }
-    .dir-item:hover { background:#0b1120; }
-    .dir-flag { font-size:11px; padding:2px 6px; border-radius:999px; border:1px solid #22c55e33; color:#bbf7d0; }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+    }
+    .overlay.visible { display: flex; }
+    .dir-modal {
+      background: #020617;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 14px 16px 16px;
+      max-width: 720px;
+      width: 96%;
+      max-height: 80vh;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.65);
+      display: flex;
+      flex-direction: column;
+    }
+    .dir-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .dir-modal-actions { margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .dir-list {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 6px;
+      overflow: auto;
+      max-height: 50vh;
+      background: #020617;
+    }
+    .dir-item {
+      padding: 6px 10px;
+      border-bottom: 1px solid #111827;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: var(--ink);
+    }
+    .dir-item:hover { background: #0b1120; }
+    .dir-flag {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      border: 1px solid rgba(34, 197, 94, 0.5);
+      color: #bbf7d0;
+      background: rgba(34, 197, 94, 0.15);
+    }
     @media (max-width: 720px) {
-      main { padding: 12px 10px 24px; }
-      header { padding: 10px 12px; }
+      header { padding: 12px 16px; flex-wrap: wrap; }
+      .tabs { margin-left: 0; }
+      .container { padding: 16px 12px 28px; }
       .card { padding: 12px 12px 16px; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Ferramentas DuckDB</h1>
-    <nav class="tabs">
-      <a href="/">Busca</a>
-      <a href="/track_record" class="active">Rastrear registro</a>
-      <a href="/compare_dbs">Comparar bancos</a>
-    </nav>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="brand-dot"></div>
+      <div>
+        <h1>Busca DuckDB — Rastrear registro</h1>
+        <div class="subtitle">Localiza um mesmo registro em várias versões de banco.</div>
+      </div>
+    </div>
+    <div class="top-right tabs">
+      <a href="/" class="tab-btn">Busca</a>
+      <a href="/track_record" class="tab-btn active">Rastrear registro</a>
+      <a href="/compare_dbs" class="tab-btn">Comparar bancos</a>
+    </div>
   </header>
-  <main>
-    <div class="card">
-      <h2>Parâmetros da análise</h2>
-      <div class="field-row">
-        <div class="field">
-          <label for="customDirInput">Diretório dos bancos</label>
-          <div class="inline-row">
-            <input id="customDirInput" type="text" placeholder="Ex.: C:\\dados\\bancos\\versoes" style="flex:1;" />
-            <button id="browseDirBtn" type="button" class="secondary">Navegar...</button>
+  <div class="container">
+    <main>
+      <section class="workflow">
+        <div class="workflow-step">
+          <div class="step-badge">1</div>
+          <div>
+            <div class="workflow-step-label">Escolha o diretório base</div>
+            <div style="font-size:13px;">Pasta que contém as diferentes versões de banco (.accdb/.mdb/.duckdb).</div>
           </div>
-          <div class="help">Escolha a pasta base onde estão os bancos (.accdb/.mdb/.duckdb). Você pode digitar o caminho ou usar o botão "Navegar".</div>
         </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="tableInput">Tabela (opcional)</label>
-          <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" />
-          <div class="help">Se vazio, o backend tenta encontrar o registro em qualquer tabela de cada banco.</div>
+        <div class="workflow-step">
+          <div class="step-badge">2</div>
+          <div>
+            <div class="workflow-step-label">Defina tabela e filtros</div>
+            <div style="font-size:13px;">Informe a tabela (opcional) e os filtros obrigatórios (COL=VAL,...).</div>
+          </div>
         </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="filtersInput">Filtros (obrigatório)</label>
-          <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304"></textarea>
-          <div class="help">Formato: COL1=VAL1,COL2=VAL2,...  Valores numéricos são detectados automaticamente; use aspas para strings com vírgula.</div>
+        <div class="workflow-step">
+          <div class="step-badge">3</div>
+          <div>
+            <div class="workflow-step-label">Revise os resultados</div>
+            <div style="font-size:13px;">Veja em quais bancos o registro foi encontrado e um resumo do registro.</div>
+          </div>
         </div>
-      </div>
-      <div class="actions">
-        <button id="runBtn" type="button">▶ Executar análise</button>
-        <span id="statusText" class="status"></span>
-      </div>
-    </div>
+      </section>
 
-    <div id="resultsCard" class="card" style="margin-top:16px; display:none;">
-      <h2>Resultados</h2>
-      <div id="summary" class="status"></div>
-      <div style="max-height: 420px; overflow: auto; margin-top: 8px;">
-        <table id="resultsTable">
-          <thead>
-            <tr>
-              <th>Arquivo</th>
-              <th>Data</th>
-              <th>Tamanho</th>
-              <th>Engine</th>
-              <th>Encontrado</th>
-              <th>Tabela</th>
-              <th>Amostra do registro</th>
-              <th>Erro</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
+      <div id="flowHint" class="flow-hint info">
+        Preencha o diretório e os filtros obrigatórios, depois clique em "Executar análise".
       </div>
-    </div>
-  </main>
+
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <p class="card-title-main">1. Diretório dos bancos</p>
+            <p class="card-title-sub">Defina a pasta base onde estão as versões de banco que serão analisadas.</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col">
+            <label for="customDirInput">Diretório dos bancos</label>
+            <div class="inline-row">
+              <input id="customDirInput" type="text" placeholder="Ex.: C:\\dados\\bancos\\versoes" />
+              <button id="browseDirBtn" type="button" class="secondary">Navegar...</button>
+            </div>
+            <div class="help-text">Escolha a pasta base onde estão os bancos (.accdb/.mdb/.duckdb). Você pode digitar o caminho ou usar o botão "Navegar".</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header-row">
+          <div>
+            <p class="card-title-main">2. Escopo e filtros da busca</p>
+            <p class="card-title-sub">Especifique a tabela (opcional) e o conjunto de filtros obrigatórios.</p>
+          </div>
+        </div>
+        <div class="row">
+          <div class="col">
+            <label for="tableInput">Tabela (opcional)</label>
+            <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" />
+            <div class="help-text">Se vazio, o backend tenta encontrar o registro em qualquer tabela de cada banco.</div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div class="col">
+            <label for="filtersInput">Filtros (obrigatório)</label>
+            <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304"></textarea>
+            <div class="help-text">Formato: COL1=VAL1,COL2=VAL2,... Valores numéricos são detectados automaticamente; use aspas para strings com vírgula.</div>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="runBtn" type="button" class="primary">▶ Executar análise</button>
+          <span id="statusText" class="status"></span>
+        </div>
+      </div>
+
+      <div id="resultsCard" class="card" style="margin-top:16px; display:none;">
+        <div class="card-header-row">
+          <div>
+            <p class="card-title-main">3. Resultado da busca</p>
+            <p class="card-title-sub">Cada linha representa uma versão de banco analisada.</p>
+          </div>
+        </div>
+        <div id="summary" class="status"></div>
+        <div class="table-wrapper">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th>Arquivo</th>
+                <th>Data</th>
+                <th>Tamanho</th>
+                <th>Engine</th>
+                <th>Encontrado</th>
+                <th>Tabela</th>
+                <th>Amostra do registro</th>
+                <th>Erro</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <div id="dirModal" class="overlay">
     <div class="dir-modal">
@@ -125,9 +388,9 @@
         </div>
         <button id="closeDirModal" type="button" class="secondary">Fechar</button>
       </div>
-      <div class="actions" style="margin-top:2px;">
+      <div class="dir-modal-actions">
         <button id="dirUpBtn" type="button" class="secondary">Subir nível</button>
-        <button id="dirSelectBtn" type="button">Selecionar esta pasta</button>
+        <button id="dirSelectBtn" type="button" class="primary">Selecionar esta pasta</button>
         <span id="dirModalStatus" class="status"></span>
       </div>
       <div id="dirList" class="dir-list"></div>
@@ -136,8 +399,18 @@
 
   <script>
     let currentBrowsePath = '';
+    function setFlowHint(message, variant = 'info') {
+      const hintEl = document.getElementById('flowHint');
+      if (!hintEl) return;
+      hintEl.textContent = message || '';
+      hintEl.className = 'flow-hint';
+      if (['info', 'warn', 'error'].includes(variant)) {
+        hintEl.classList.add(variant);
+      }
+    }
     async function loadDirs() {
       const sel = document.getElementById('dirSelect');
+      if (!sel) return;
       sel.innerHTML = '';
       try {
         const res = await fetch('/api/record_dirs');
@@ -208,14 +481,17 @@
       const status = document.getElementById('statusText');
       if (!filters) {
         alert('Preencha os filtros (COL=VAL,...)');
+        setFlowHint('Informe os filtros obrigatórios (COL=VAL,...) antes de executar.', 'warn');
         return;
       }
       if (!customPath) {
         alert('Escolha a pasta onde estão os bancos (diretório personalizado).');
+        setFlowHint('Informe ou selecione o diretório onde estão os bancos.', 'warn');
         return;
       }
       btn.disabled = true;
       status.textContent = 'Executando análise...';
+       setFlowHint('Executando análise nos bancos selecionados...', 'info');
       try {
         const res = await fetch('/api/find_record_across_dbs', {
           method: 'POST',
@@ -223,15 +499,26 @@
           body: JSON.stringify({ custom_path: customPath, filters, table: table || null })
         });
         const data = await res.json();
+        const results = Array.isArray(data && data.results) ? data.results : [];
+        const foundCount = results.filter(r => r.found).length;
         if (!res.ok) {
           status.textContent = 'Erro: ' + (data && data.error ? data.error : res.statusText);
+          setFlowHint(data && data.error ? 'Erro: ' + data.error : 'Erro ao executar a análise.', 'error');
         } else {
           status.textContent = 'Análise concluída.';
+          if (!results.length) {
+            setFlowHint('Nenhum arquivo analisado retornou resultados para esse filtro.', 'warn');
+          } else if (foundCount > 0) {
+            setFlowHint(`Registro encontrado em ${foundCount} arquivo(s).`, 'info');
+          } else {
+            setFlowHint('Registro não encontrado em nenhum dos bancos analisados.', 'warn');
+          }
         }
         renderResults(data);
       } catch (e) {
         console.error(e);
         status.textContent = 'Erro durante a requisição.';
+        setFlowHint('Erro de rede ou servidor ao executar a análise.', 'error');
       } finally {
         btn.disabled = false;
       }

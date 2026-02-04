@@ -1,4 +1,4 @@
-# app_flask_local_search.py
+﻿# app_flask_local_search.py
 # Complete Flask app for local fuzzy search over DuckDB (and optional Access fallback).
 # Features:
 # - Upload / list / select / delete uploaded DB files (.duckdb, .mdb, .accdb)
@@ -19,6 +19,7 @@ import os
 import json
 import threading
 from pathlib import Path
+from datetime import datetime
 import sys
 from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
@@ -36,7 +37,12 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
-from compare_dbs import list_common_tables, list_table_columns, compare_table_duckdb
+from compare_dbs import (
+    list_common_tables,
+    list_table_columns,
+    compare_table_duckdb,
+    compare_table_content_duckdb,
+)
 
 # Optional modules
 try:
@@ -69,6 +75,8 @@ except Exception:
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+# Pasta de uploads da interface web (interface/uploads),
+# onde o endpoint /admin/upload grava os arquivos usados na pesquisa.
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 CONFIG_FILE = BASE_DIR / "config.json"
@@ -158,6 +166,10 @@ def set_db_path(p):
 
 app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 
+# Simple in-memory logs for UI status modal
+_CLIENT_LOGS = []
+_SERVER_LOGS = []
+
 # ---------------- Static files ----------------
 @app.route("/")
 def index():
@@ -180,6 +192,59 @@ def compare_dbs_page():
     O HTML correspondente fica em static/compare_dbs.html.
     """
     return app.send_static_file("compare_dbs.html")
+
+
+@app.route("/client/log", methods=["POST"])
+def client_log():
+    """Recebe logs da UI (nivel + mensagem) e guarda em memoria.
+
+    Usado apenas pelo modal "Alertas e logs" da tela principal.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        level = str(data.get("level", "info")).lower()
+        msg = str(data.get("msg", "")).strip()
+        if not msg:
+            return jsonify({"ok": False, "error": "mensagem vazia"}), 400
+
+        entry = {
+            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "level": level,
+            "message": msg,
+        }
+
+        _CLIENT_LOGS.append(entry)
+        if len(_CLIENT_LOGS) > 500:
+            del _CLIENT_LOGS[: len(_CLIENT_LOGS) - 500]
+
+        # espelha em _SERVER_LOGS para aparecer junto no modal
+        _SERVER_LOGS.append(entry)
+        if len(_SERVER_LOGS) > 500:
+            del _SERVER_LOGS[: len(_SERVER_LOGS) - 500]
+
+        # também registra no log do Flask
+        if level == "error":
+            app.logger.error("CLIENT: %s", msg)
+        elif level in ("warn", "warning"):
+            app.logger.warning("CLIENT: %s", msg)
+        else:
+            app.logger.info("CLIENT: %s", msg)
+
+        return jsonify({"ok": True})
+    except Exception as exc:  # pragma: no cover
+        app.logger.exception("Erro em /client/log: %s", exc)
+        return jsonify({"ok": False, "error": "exception"}), 500
+
+
+@app.route("/admin/logs", methods=["GET"])
+def admin_logs():
+    """Snapshot simples de logs para o modal de status."""
+    try:
+        return jsonify({"ok": True, "logs": list(_SERVER_LOGS[-500:])})
+    except Exception as exc:  # pragma: no cover
+        app.logger.exception("Erro em /admin/logs: %s", exc)
+        return jsonify({"ok": False, "error": "exception"}), 500
+
 
 @app.route("/uploads/<path:filename>")
 def uploaded_file(filename):
@@ -577,6 +642,35 @@ def api_compare_db_tables():
         return jsonify({"tables": detailed})
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_tables")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/compare_db_table_content", methods=["POST"])
+def api_compare_db_table_content():
+    """Compara o conteúdo de uma tabela entre dois bancos DuckDB sem usar chave.
+
+    Payload esperado:
+    {
+      "db1_path": "...",
+      "db2_path": "...",
+      "table": "NOME_TABELA"
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+    table = (data.get("table") or "").strip()
+    if not db1_path or not db2_path:
+        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
+    if not table:
+        return jsonify({"error": "table é obrigatório"}), 400
+    try:
+        db1 = Path(db1_path)
+        db2 = Path(db2_path)
+        result = compare_table_content_duckdb(db1, db2, table)
+        return jsonify(result)
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Erro em api_compare_db_table_content")
         return jsonify({"error": str(exc)}), 500
 
 
