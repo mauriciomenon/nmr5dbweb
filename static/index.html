@@ -21,6 +21,74 @@
       --radius: 14px;
       --radius-sm: 10px;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f5f7fb;
+        --bg-accent: #e7ecf7;
+        --card: #ffffff;
+        --ink: #111827;
+        --muted: #4b5563;
+        --primary: #1f4ed8;
+        --primary-ink: #ffffff;
+        --accent: #2563eb;
+        --danger: #b91c1c;
+        --border: #d1d5db;
+        --shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
+        --shadow-soft: 0 6px 14px rgba(15, 23, 42, 0.12);
+      }
+      body {
+        background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
+          radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
+          linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
+        color: var(--ink);
+      }
+      header {
+        background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+      }
+      .badge {
+        background: rgba(37, 99, 235, 0.06);
+        border-color: rgba(37, 99, 235, 0.45);
+      }
+      .card {
+        background: var(--card);
+      }
+      aside {
+        background: var(--card);
+      }
+      input[type=text], input[type=number], select {
+        background: #f9fafb;
+        color: var(--ink);
+      }
+    }
+    :root[data-theme="light"] {
+      --bg: #f5f7fb;
+      --bg-accent: #e7ecf7;
+      --card: #ffffff;
+      --ink: #111827;
+      --muted: #4b5563;
+      --primary: #1f4ed8;
+      --primary-ink: #ffffff;
+      --accent: #2563eb;
+      --danger: #b91c1c;
+      --border: #d1d5db;
+      --shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
+      --shadow-soft: 0 6px 14px rgba(15, 23, 42, 0.12);
+    }
+    :root[data-theme="dark"] {
+      --bg: #171a1f;
+      --bg-accent: #1e222a;
+      --card: #232a34;
+      --ink: #eef2f8;
+      --muted: #a7b0bf;
+      --primary: #1f4ed8;
+      --primary-ink: #e9efff;
+      --accent: #3e7bff;
+      --danger: #d75a4a;
+      --border: #2f3642;
+      --shadow: 0 18px 36px rgba(9, 12, 17, 0.4);
+      --shadow-soft: 0 6px 16px rgba(9, 12, 17, 0.3);
+    }
     * { box-sizing: border-box; }
     body {
       font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
@@ -30,6 +98,12 @@
         linear-gradient(180deg, #14171c 0%, #171a1f 70%, #171a1f 100%);
       color: var(--ink);
       min-height: 100vh;
+    }
+    html[data-theme="light"] body {
+      background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
+        radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
+        linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
+      color: var(--ink);
     }
     body::before {
       content: "";
@@ -55,6 +129,10 @@
       box-shadow: 0 8px 18px rgba(8, 12, 18, 0.35);
       backdrop-filter: blur(8px);
     }
+    html[data-theme="light"] header {
+      background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    }
     .brand-dot {
       width: 12px;
       height: 12px;
@@ -72,6 +150,10 @@
       border: 1px solid rgba(43, 92, 255, 0.35);
       padding: 4px 8px;
       border-radius: 999px;
+    }
+    html[data-theme="light"] .badge {
+      background: rgba(37, 99, 235, 0.06);
+      border-color: rgba(37, 99, 235, 0.45);
     }
     .badge.clickable { cursor: pointer; }
     .btn {
@@ -120,6 +202,12 @@
       background: #1f2630;
       color: var(--ink);
     }
+    html[data-theme="light"] input[type=text],
+    html[data-theme="light"] input[type=number],
+    html[data-theme="light"] select {
+      background: #f9fafb;
+      color: var(--ink);
+    }
     .card {
       background: var(--card);
       padding: 14px;
@@ -146,6 +234,11 @@
       margin-bottom: 12px;
       font-weight: 600;
     }
+    html[data-theme="light"] .flow-hint {
+      color: #1f2933;
+      background: rgba(37, 99, 235, 0.06);
+      border-color: rgba(37, 99, 235, 0.35);
+    }
     .flow-hint.info { background: rgba(43, 92, 255, 0.12); border-color: rgba(43, 92, 255, 0.4); color: #dbe6ff; }
     .flow-hint.warn { background: rgba(255, 196, 77, 0.12); border-color: rgba(255, 196, 77, 0.4); color: #ffe4b3; }
     .flow-hint.error { background: rgba(215, 90, 74, 0.18); border-color: rgba(215, 90, 74, 0.5); color: #ffd3cc; }
@@ -167,6 +260,9 @@
       padding: 12px 14px;
       box-shadow: var(--shadow-soft);
     }
+    html[data-theme="light"] .status-tile {
+      background: #ffffff;
+    }
     .status-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
     .status-value { font-size: 16px; font-weight: 700; margin-top: 6px; }
     .status-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
@@ -183,6 +279,7 @@
       background: #1f2630;
       font-size: 13px;
     }
+    html[data-theme="light"] .step { background: #f9fafb; }
     .step.done { border-style: solid; border-color: rgba(43, 92, 255, 0.4); background: rgba(43, 92, 255, 0.12); }
     .step.active { border-style: solid; border-color: rgba(255, 196, 77, 0.6); background: rgba(255, 196, 77, 0.12); }
     .step.warn { border-style: solid; border-color: rgba(215, 90, 74, 0.5); background: rgba(215, 90, 74, 0.12); }
@@ -203,6 +300,10 @@
       white-space: nowrap;
     }
     .db-tab.active { background: #1f4ed8; border-color: #1f4ed8; color: #fff; }
+    html[data-theme="light"] .db-tab {
+      background: #e5e7eb;
+      color: #111827;
+    }
     .db-tab-help { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
     .config-modal, .overlay { display: none; }
     .modal-open .overlay { display: block; position: fixed; inset: 0; background: rgba(6, 8, 12, 0.6); z-index: 50; }
@@ -224,11 +325,15 @@
       border: 1px solid var(--border);
     }
     .progress-wrapper { background: #1c222b; border-radius: 10px; padding: 8px; margin-top: 8px; }
+    html[data-theme="light"] .progress-wrapper {
+      background: #e5e7eb;
+    }
     .progress-bar { height: 12px; background: linear-gradient(90deg, #1f4ed8, #3e7bff); border-radius: 999px; width: 0%; }
     table.results { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
     table.results th, table.results td { border: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
     mark { background: rgba(62, 123, 255, 0.35); padding: 0 2px; border-radius: 3px; color: #e9efff; }
     .tabs { display: flex; gap: 8px; margin: 10px 0 12px 0; flex-wrap: wrap; }
+    .options-container { position: relative; }
     .tab-btn {
       background: #1f2630;
       color: var(--ink);
@@ -241,7 +346,45 @@
       text-decoration: none;
     }
     .tab-btn.active { background: #1f4ed8; color: #fff; border-color: #1f4ed8; }
+    html[data-theme="light"] .tab-btn {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    html[data-theme="light"] .tab-btn.active {
+      background: #1f4ed8;
+      color: #ffffff;
+    }
+    .options-wrapper { position: relative; }
+    .options-menu {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow-soft);
+      padding: 4px;
+      min-width: 130px;
+      z-index: 40;
+    }
+    html[data-theme="light"] .options-menu { background: #f9fafb; }
+    .options-item {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--ink);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .options-item:hover { background: #1f2630; }
+    html[data-theme="light"] .options-item:hover { background: #e5e7eb; }
     .flow-panel { display: none; background: #1f2630; border: 1px solid var(--border); padding: 10px 12px; border-radius: 10px; margin-bottom: 10px; }
+    html[data-theme="light"] .flow-panel { background: #f9fafb; }
     #indexPanel { display: none; }
     body.db-duckdb #indexPanel { display: block; }
     body.flow-duckdb #flowDuckdb { display: block; }
@@ -297,8 +440,8 @@
   <header>
     <div class="brand-dot"></div>
     <div>
-      <h1>Busca DuckDB — Painel</h1>
-      <div class="subtitle">Ferramenta local para busca tolerante, conversao e indexacao de bases Access e DuckDB.</div>
+      <h1>Busca em bancos - Painel</h1>
+      <div class="subtitle">Busque, converta e indexe bases Access (.mdb/.accdb) e DuckDB (.duckdb).</div>
     </div>
     <div class="top-right">
       <div id="currentDb" class="badge">DB: carregando...</div>
@@ -312,10 +455,17 @@
       <button id="openFilesBtn" class="btn ghost">Arquivos</button>
       <button id="refreshBtn" class="btn ghost">Atualizar</button>
     </div>
-    <div class="top-right tabs">
+    <div class="top-right tabs options-container">
       <a href="/" class="tab-btn active">Busca</a>
       <a href="/track_record" class="tab-btn">Rastrear registro</a>
       <a href="/compare_dbs" class="tab-btn">Comparar bancos</a>
+      <div class="options-wrapper">
+        <button type="button" id="optionsBtn" class="tab-btn">Opções ▾</button>
+        <div id="optionsMenu" class="options-menu" hidden>
+          <button type="button" id="openHelpBusca" class="options-item">Ajuda</button>
+          <button type="button" id="themeToggle" class="options-item" title="Alternar tema (sistema, escuro, claro)">Tema</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -333,6 +483,20 @@
     </aside>
 
     <main>
+      <div id="helpBuscaBox" class="card small" style="display:none;margin-bottom:12px;">
+        <div style="font-weight:600;margin-bottom:6px;">Como usar esta aba</div>
+        <div class="muted" style="font-size:13px;">
+          1) Use <strong>Selecionar DB</strong> ou o painel <strong>Arquivos</strong> para escolher o banco que quer buscar.<br/>
+          2) Se for Access (.mdb/.accdb), espere a <strong>conversao</strong> terminar e, em seguida, crie o indice <strong>_fulltext</strong> (passo 3).<br/>
+          3) Quando o passo 4 estiver liberado, clique em <strong>Ir</strong> para abrir a tela de busca, digite o termo e rode a pesquisa.
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">
+          Dicas rapidas:<br/>
+          • Os <strong>badges do topo</strong> mostram o DB ativo, modo (Access/DuckDB), status do indice e alertas.<br/>
+          • A coluna <strong>Tabelas</strong> lista as tabelas do DB e permite abrir a visualizacao completa de uma tabela.<br/>
+          • No modal de busca, voce pode filtrar por tabelas, ajustar limites e exportar o resultado em CSV.
+        </div>
+      </div>
       <div class="card" style="--stagger:2">
         <div id="flowHint" class="flow-hint" style="display:none"></div>
         <div id="flowBanner" class="flow-hint" style="display:none"></div>
@@ -583,5 +747,61 @@
 
   <script src="/ui_utils.js"></script>
   <script src="/app.js"></script>
+  <script>
+    (function () {
+      var STORAGE_KEY = 'mdb_theme';
+      function applyTheme(pref) {
+        var root = document.documentElement;
+        if (!pref || pref === 'system') {
+          root.removeAttribute('data-theme');
+        } else {
+          root.setAttribute('data-theme', pref === 'light' ? 'light' : 'dark');
+        }
+      }
+      function initThemeAndOptions() {
+        var themeBtn = document.getElementById('themeToggle');
+        var saved = localStorage.getItem(STORAGE_KEY) || 'system';
+        if (['system', 'light', 'dark'].indexOf(saved) === -1) saved = 'system';
+        applyTheme(saved);
+        if (themeBtn) {
+          themeBtn.addEventListener('click', function () {
+            var current = localStorage.getItem(STORAGE_KEY) || saved || 'system';
+            if (['system', 'light', 'dark'].indexOf(current) === -1) current = 'system';
+            var order = ['system', 'dark', 'light'];
+            var idx = order.indexOf(current);
+            var next = order[(idx + 1) % order.length];
+            localStorage.setItem(STORAGE_KEY, next);
+            applyTheme(next);
+          });
+        }
+
+        var optionsBtn = document.getElementById('optionsBtn');
+        var optionsMenu = document.getElementById('optionsMenu');
+        if (optionsBtn && optionsMenu) {
+          function closeMenu() {
+            optionsMenu.setAttribute('hidden', 'hidden');
+          }
+          optionsBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var isHidden = optionsMenu.hasAttribute('hidden');
+            if (isHidden) {
+              optionsMenu.removeAttribute('hidden');
+            } else {
+              closeMenu();
+            }
+          });
+          document.addEventListener('click', function () {
+            closeMenu();
+          });
+          if (optionsMenu) {
+            optionsMenu.addEventListener('click', function (e) {
+              e.stopPropagation();
+            });
+          }
+        }
+      }
+      document.addEventListener('DOMContentLoaded', initThemeAndOptions);
+    })();
+  </script>
 </body>
 </html>

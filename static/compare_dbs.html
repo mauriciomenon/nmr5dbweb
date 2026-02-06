@@ -27,6 +27,90 @@
       --badge-changed: #78350f;
       --badge-changed-text: #fed7aa;
     }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f5f7fb;
+        --bg-accent: #e7ecf7;
+        --card: #ffffff;
+        --ink: #111827;
+        --muted: #4b5563;
+        --primary: #1f4ed8;
+        --primary-ink: #ffffff;
+        --accent: #2563eb;
+        --danger: #b91c1c;
+        --border: #d1d5db;
+        --shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
+        --shadow-soft: 0 6px 14px rgba(15, 23, 42, 0.12);
+        --badge-added: #bbf7d0;
+        --badge-added-text: #14532d;
+        --badge-removed: #fee2e2;
+        --badge-removed-text: #7f1d1d;
+        --badge-changed: #fef3c7;
+        --badge-changed-text: #78350f;
+      }
+      body {
+        background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
+          radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
+          linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
+        color: var(--ink);
+      }
+      header {
+        background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+      }
+      .card {
+        background: var(--card);
+      }
+      .result-summary-card,
+      .diff-section,
+      .diff-row {
+        background: #f9fafb;
+      }
+      input[type="text"], input[type="number"], select, textarea {
+        background: #f9fafb;
+        color: var(--ink);
+      }
+    }
+    :root[data-theme="light"] {
+      --bg: #f5f7fb;
+      --bg-accent: #e7ecf7;
+      --card: #ffffff;
+      --ink: #111827;
+      --muted: #4b5563;
+      --primary: #1f4ed8;
+      --primary-ink: #ffffff;
+      --accent: #2563eb;
+      --danger: #b91c1c;
+      --border: #d1d5db;
+      --shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
+      --shadow-soft: 0 6px 14px rgba(15, 23, 42, 0.12);
+      --badge-added: #bbf7d0;
+      --badge-added-text: #14532d;
+      --badge-removed: #fee2e2;
+      --badge-removed-text: #7f1d1d;
+      --badge-changed: #fef3c7;
+      --badge-changed-text: #78350f;
+    }
+    :root[data-theme="dark"] {
+      --bg: #171a1f;
+      --bg-accent: #1e222a;
+      --card: #232a34;
+      --ink: #eef2f8;
+      --muted: #a7b0bf;
+      --primary: #1f4ed8;
+      --primary-ink: #e9efff;
+      --accent: #3e7bff;
+      --danger: #d75a4a;
+      --border: #2f3642;
+      --shadow: 0 18px 36px rgba(9, 12, 17, 0.4);
+      --shadow-soft: 0 6px 16px rgba(9, 12, 17, 0.3);
+      --badge-added: #14532d;
+      --badge-added-text: #bbf7d0;
+      --badge-removed: #7f1d1d;
+      --badge-removed-text: #fecaca;
+      --badge-changed: #78350f;
+      --badge-changed-text: #fed7aa;
+    }
     * { box-sizing: border-box; }
     body {
       font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
@@ -36,6 +120,12 @@
         linear-gradient(180deg, #14171c 0%, #171a1f 70%, #171a1f 100%);
       color: var(--ink);
       min-height: 100vh;
+    }
+    html[data-theme="light"] body {
+      background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
+        radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
+        linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
+      color: var(--ink);
     }
     body::before {
       content: "";
@@ -61,6 +151,10 @@
       box-shadow: 0 8px 18px rgba(8, 12, 18, 0.35);
       backdrop-filter: blur(8px);
     }
+    html[data-theme="light"] header {
+      background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+    }
     .brand-dot {
       width: 12px;
       height: 12px;
@@ -79,14 +173,64 @@
       padding: 4px 8px;
       border-radius: 999px;
     }
+    .options-container { position: relative; }
+    .options-wrapper { position: relative; }
+    .options-menu {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow-soft);
+      padding: 4px;
+      min-width: 130px;
+      z-index: 40;
+    }
+    html[data-theme="light"] .options-menu { background: #f9fafb; }
+    .options-item {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      text-align: left;
+      padding: 6px 10px;
+      font-size: 12px;
+      color: var(--ink);
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .options-item:hover { background: #1f2630; }
+    html[data-theme="light"] .options-item:hover { background: #e5e7eb; }
     .badge.same {
       background: #022c22;
       color: #6ee7b7;
       border-color: rgba(16, 185, 129, 0.6);
     }
+    html[data-theme="light"] .badge.same {
+      background: #dcfce7;
+      color: #166534;
+      border-color: rgba(34, 197, 94, 0.6);
+    }
     .badge.added { background: var(--badge-added); color: var(--badge-added-text); border-color: transparent; }
     .badge.removed { background: var(--badge-removed); color: var(--badge-removed-text); border-color: transparent; }
     .badge.changed { background: var(--badge-changed); color: var(--badge-changed-text); border-color: transparent; }
+    html[data-theme="light"] .badge.added {
+      background: #bbf7d0;
+      border-color: rgba(34, 197, 94, 0.7);
+      color: #166534;
+    }
+    html[data-theme="light"] .badge.removed {
+      background: #fee2e2;
+      border-color: rgba(239, 68, 68, 0.7);
+      color: #7f1d1d;
+    }
+    html[data-theme="light"] .badge.changed {
+      background: #fef3c7;
+      border-color: rgba(234, 179, 8, 0.7);
+      color: #92400e;
+    }
     .result-summary-card {
       margin-top: 4px;
       margin-bottom: 10px;
@@ -149,6 +293,11 @@
       background: #020617;
       padding: 6px 8px;
     }
+    html[data-theme="light"] .result-summary-card,
+    html[data-theme="light"] .diff-section,
+    html[data-theme="light"] .diff-row {
+      background: #f9fafb;
+    }
     .diff-row > summary {
       list-style: none;
       cursor: pointer;
@@ -178,6 +327,10 @@
       margin-bottom: 4px;
       font-size: 11px;
       line-height: 1.3;
+    }
+    html[data-theme="light"] .diff-field-line {
+      background: #f9fafb;
+      border-color: #e5e7eb;
     }
     .diff-row-actions {
       display: flex;
@@ -218,6 +371,9 @@
       border: 1px dashed var(--border);
       background: #020617;
       font-size: 12px;
+    }
+    html[data-theme="light"] .tables-overview-card {
+      background: #f9fafb;
     }
     .tables-overview-grid {
       margin-top: 6px;
@@ -261,6 +417,13 @@
       color: var(--ink);
       width: 100%;
       box-sizing: border-box;
+    }
+    html[data-theme="light"] input[type="text"],
+    html[data-theme="light"] input[type="number"],
+    html[data-theme="light"] select,
+    html[data-theme="light"] textarea {
+      background: #f9fafb;
+      color: var(--ink);
     }
     textarea { resize: vertical; min-height: 60px; }
     .card {
@@ -312,6 +475,10 @@
       font-size: 12px;
     }
     button.secondary:hover { background: #262e3b; }
+    html[data-theme="light"] button.secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
     .status {
       font-size: 13px;
       margin-top: 8px;
@@ -332,6 +499,7 @@
       text-align: left;
     }
     th { background: #1f2630; }
+    html[data-theme="light"] th { background: #e5e7eb; }
     .workflow {
       display: flex;
       flex-wrap: wrap;
@@ -342,8 +510,26 @@
       border: 1px dashed var(--border);
       background: #1f2630;
     }
+    html[data-theme="light"] .workflow { background: #f3f4ff; }
     .workflow-step { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; }
     .workflow-step-label { font-size: 12px; color: var(--muted); }
+    .step-badge {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #111827;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    html[data-theme="light"] .step-badge {
+      background: #e5e7eb;
+      border-color: #cbd5f5;
+      color: #111827;
+    }
     .flow-hint {
       background: rgba(43, 92, 255, 0.12);
       border: 1px solid rgba(43, 92, 255, 0.35);
@@ -353,6 +539,11 @@
       margin-bottom: 12px;
       font-weight: 600;
       font-size: 13px;
+    }
+    html[data-theme="light"] .flow-hint {
+      color: #1f2933;
+      background: rgba(37, 99, 235, 0.06);
+      border-color: rgba(37, 99, 235, 0.35);
     }
     .flow-hint.info { background: rgba(43, 92, 255, 0.12); border-color: rgba(43, 92, 255, 0.4); color: #dbe6ff; }
     .flow-hint.warn { background: rgba(255, 196, 77, 0.12); border-color: rgba(255, 196, 77, 0.4); color: #ffe4b3; }
@@ -370,6 +561,7 @@
       background: #1f2630;
       font-size: 13px;
     }
+    html[data-theme="light"] .step { background: #f9fafb; }
     .step.done { border-style: solid; border-color: rgba(43, 92, 255, 0.4); background: rgba(43, 92, 255, 0.12); }
     .step.active { border-style: solid; border-color: rgba(255, 196, 77, 0.6); background: rgba(255, 196, 77, 0.12); }
     .step.warn { border-style: solid; border-color: rgba(215, 90, 74, 0.5); background: rgba(215, 90, 74, 0.12); }
@@ -383,22 +575,38 @@
       color: var(--muted);
       white-space: nowrap;
     }
+    html[data-theme="light"] .step-status-pill { background: #f9fafb; }
+
+    html[data-theme="light"] .tables-overview-card { background: #f9fafb; }
+    html[data-theme="light"] .diff-field-line {
+      background: #f9fafb;
+      border-color: #e5e7eb;
+    }
+    html[data-theme="light"] .pill-btn {
+      background: #f9fafb;
+    }
+    html[data-theme="light"] .pill-btn:hover {
+      background: #e5e7eb;
+    }
     .step-card-body { margin-top: 8px; }
     .step-card:not(.step-open) .step-card-body { display: none; }
     .step-card.step-active .step-status-pill {
-      border-color: rgba(255, 196, 77, 0.7);
-      background: rgba(255, 196, 77, 0.12);
-      color: #fde68a;
+      border-color: currentColor;
+      background: var(--badge-changed);
+      color: var(--badge-changed-text);
+      font-weight: 600;
     }
     .step-card.step-done .step-status-pill {
-      border-color: rgba(34, 197, 94, 0.7);
-      background: rgba(34, 197, 94, 0.12);
-      color: #bbf7d0;
+      border-color: currentColor;
+      background: var(--badge-added);
+      color: var(--badge-added-text);
+      font-weight: 600;
     }
     .step-card.step-warn .step-status-pill {
-      border-color: rgba(239, 68, 68, 0.7);
-      background: rgba(239, 68, 68, 0.12);
-      color: #fecaca;
+      border-color: currentColor;
+      background: var(--badge-removed);
+      color: var(--badge-removed-text);
+      font-weight: 600;
     }
     .tabs { display: flex; gap: 8px; }
     .tab-btn {
@@ -413,6 +621,14 @@
       text-decoration: none;
     }
     .tab-btn.active { background: #1f4ed8; color: #fff; border-color: #1f4ed8; }
+    html[data-theme="light"] .tab-btn {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    html[data-theme="light"] .tab-btn.active {
+      background: #1f4ed8;
+      color: #ffffff;
+    }
     @media (max-width: 720px) {
       header { padding: 12px 16px; flex-wrap: wrap; }
       .tabs { margin-left: 0; }
@@ -425,14 +641,21 @@
     <div style="display:flex;align-items:center;gap:12px;">
       <div class="brand-dot"></div>
       <div>
-        <h1>Busca DuckDB — Comparar bancos</h1>
-        <div class="subtitle">Compare visualmente duas versões de banco DuckDB, linha a linha.</div>
+        <h1>Busca em bancos - Comparar bancos</h1>
+        <div class="subtitle">Compare duas versões de banco DuckDB (.duckdb), linha a linha (conversão necessária para outros formatos).</div>
       </div>
     </div>
-    <div class="top-right tabs">
+    <div class="top-right tabs options-container">
       <a href="/" class="tab-btn">Busca</a>
       <a href="/track_record" class="tab-btn">Rastrear registro</a>
       <a href="/compare_dbs" class="tab-btn active">Comparar bancos</a>
+      <div class="options-wrapper">
+        <button type="button" id="optionsBtn" class="tab-btn">Opções ▾</button>
+        <div id="optionsMenu" class="options-menu" hidden>
+          <button type="button" id="openHelpCompare" class="options-item">Ajuda</button>
+          <button type="button" id="themeToggle" class="options-item" title="Alternar tema (sistema, escuro, claro)">Tema</button>
+        </div>
+      </div>
     </div>
   </header>
   <div class="container">
@@ -463,6 +686,27 @@
 
     <div id="flowHint" class="flow-hint info">
       Comece escolhendo os arquivos A e B em .duckdb.
+    </div>
+
+    <div id="helpCompareBox" class="card" style="display:none;margin-bottom:12px;">
+      <div class="card-header-row">
+        <div>
+          <p class="card-title-main">Como usar esta aba</p>
+          <p class="card-title-sub">Guia rapido para comparar dois bancos DuckDB.</p>
+        </div>
+      </div>
+      <div class="help-text">
+        1) Informe os caminhos dos bancos <strong>A</strong> (antigo) e <strong>B</strong> (novo) ou use os botoes de upload.<br/>
+        2) Clique em <strong>Carregar tabelas em comum</strong> para listar as tabelas presentes nos dois bancos.<br/>
+        3) Escolha a tabela, defina a <strong>chave K</strong> (colunas que identificam o registro) e ajuste filtros se quiser
+        focar apenas em alteracoes, inclusoes ou exclusoes.<br/>
+        4) Clique em <strong>Comparar tabela completa</strong> para ver as diferencas linha a linha.
+      </div>
+      <div class="help-text">
+        O resumo inicial mostra quantos registros sao iguais, adicionados, removidos ou alterados.
+        Abaixo, voce pode expandir linhas para ver os campos que mudaram e usar o botao de
+        <strong>exportacao CSV</strong> para analisar tudo em planilha.
+      </div>
     </div>
 
     <div class="card step-card" id="step1Card" style="--stagger:0;">
@@ -943,6 +1187,16 @@ Ex: COL1,COL2,COL3"></textarea>
       }
 
       restoreFromSavedState();
+
+      const helpBtn = document.getElementById('openHelpCompare');
+      if (helpBtn) {
+        helpBtn.addEventListener('click', () => {
+          const box = document.getElementById('helpCompareBox');
+          if (!box) return;
+          const isHidden = box.style.display === 'none' || box.style.display === '';
+          box.style.display = isHidden ? 'block' : 'none';
+        });
+      }
     });
 
     async function loadTables() {
@@ -1465,8 +1719,11 @@ Ex: COL1,COL2,COL3"></textarea>
           }
 
           const rowSummary = document.createElement('summary');
+          const typeLabel = r.type === 'added' ? 'Adicionada'
+            : r.type === 'removed' ? 'Removida'
+            : 'Alterada';
           rowSummary.innerHTML = `
-            <span class="badge ${r.type}" style="margin-right:6px;">${r.type}</span>
+            <span class="badge ${r.type}" style="margin-right:6px;">${typeLabel}</span>
             <span style="font-size:12px;">
               ${keyParts.join(', ')}
               ${isRangerSostat && extraParts.length ? ' · ' + extraParts.join(' · ') : ''}
@@ -1939,6 +2196,58 @@ Ex: COL1,COL2,COL3"></textarea>
       html += '</div></div>';
       container.innerHTML = html;
     }
+    (function () {
+      var STORAGE_KEY = 'mdb_theme';
+      function applyTheme(pref) {
+        var root = document.documentElement;
+        if (!pref || pref === 'system') {
+          root.removeAttribute('data-theme');
+        } else {
+          root.setAttribute('data-theme', pref === 'light' ? 'light' : 'dark');
+        }
+      }
+      function initThemeAndOptions() {
+        var themeBtn = document.getElementById('themeToggle');
+        var saved = localStorage.getItem(STORAGE_KEY) || 'system';
+        if (['system', 'light', 'dark'].indexOf(saved) === -1) saved = 'system';
+        applyTheme(saved);
+        if (themeBtn) {
+          themeBtn.addEventListener('click', function () {
+            var current = localStorage.getItem(STORAGE_KEY) || saved || 'system';
+            if (['system', 'light', 'dark'].indexOf(current) === -1) current = 'system';
+            var order = ['system', 'dark', 'light'];
+            var idx = order.indexOf(current);
+            var next = order[(idx + 1) % order.length];
+            localStorage.setItem(STORAGE_KEY, next);
+            applyTheme(next);
+          });
+        }
+
+        var optionsBtn = document.getElementById('optionsBtn');
+        var optionsMenu = document.getElementById('optionsMenu');
+        if (optionsBtn && optionsMenu) {
+          function closeMenu() {
+            optionsMenu.setAttribute('hidden', 'hidden');
+          }
+          optionsBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var isHidden = optionsMenu.hasAttribute('hidden');
+            if (isHidden) {
+              optionsMenu.removeAttribute('hidden');
+            } else {
+              closeMenu();
+            }
+          });
+          document.addEventListener('click', function () {
+            closeMenu();
+          });
+          optionsMenu.addEventListener('click', function (e) {
+            e.stopPropagation();
+          });
+        }
+      }
+      document.addEventListener('DOMContentLoaded', initThemeAndOptions);
+    })();
   </script>
 </body>
 </html>

@@ -2316,6 +2316,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const openHelpBuscaBtn = $('openHelpBusca');
+  if (openHelpBuscaBtn) {
+    openHelpBuscaBtn.addEventListener('click', () => {
+      const box = $('helpBuscaBox');
+      if (!box) return;
+      const isHidden = box.style.display === 'none' || box.style.display === '';
+      box.style.display = isHidden ? 'block' : 'none';
+    });
+  }
+
   const closeStatusBtn = $('closeStatus');
   if (closeStatusBtn) closeStatusBtn.addEventListener('click', () => closeModal());
   const closeConfigBtn = $('closeConfig');
