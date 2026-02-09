@@ -1,33 +1,85 @@
-# MDB to DuckDB Converter
+# MDB2SQL – Toolkit para Access/ACCDB → DuckDB
 
-Converts Microsoft Access database files (MDB/ACCDB) to DuckDB format.
+Converte arquivos de banco de dados Microsoft Access (MDB/ACCDB) para DuckDB e
+fornece uma interface web para busca e comparação de dados.
 
-## Features
+Pensado para cenários de auditoria, análise histórica e migração de bases.
 
-- Extracts date from filename automatically
-- Preserves table structure
-- Creates timestamped tables for historical tracking
-- Metadata tracking for all imports
-- Batch processing support
-- Four implementation options
+## Funcionalidades principais
 
-## Implementation Options
+- Extrai automaticamente a data a partir do nome do arquivo
+- Preserva a estrutura das tabelas
+- Cria tabelas “carimbadas” com data (histórico por dia/mês/ano)
+- Mantém tabela de metadados com todos os imports
+- Suporta processamento em lote (vários arquivos de uma vez)
+- Interface web para busca e comparação em DuckDB
+- Quatro estratégias de conversão (scripts de linha de comando em `converters/`)
 
-### 1. convert_mdbtools.py (Recommended for Linux/Mac)
+---
 
-Uses mdbtools CLI utility.
+## Visão geral da estrutura do projeto
 
-**Pros:**
-- Easy installation
-- Works on Linux/Mac without additional setup
-- No Java required
+- `main.py` – ponto de entrada da **interface web** (Flask)
+- `interface/` – backend Flask (upload, conversão, busca, índice `_fulltext`)
+- `static/` – arquivos estáticos da interface (HTML/JS/CSS)
+- `access_convert.py` – conversão Access → DuckDB usada pela interface
+- `converters/` – **conversores de linha de comando** (uso direto no terminal)
+- `artifacts/` – arquivos gerados em tempo de execução (bancos `.duckdb`, logs, JSONs)
+- `tools/` – scripts auxiliares (análises, organização de artefatos etc.)
+- `tests/` – testes automatizados
 
-**Cons:**
-- Text-based (CSV intermediate)
-- Encoding issues possible
-- Slower for large files
+Os conversores de CLI ficam em `converters/` para manter a raiz focada na
+aplicação web e na documentação principal.
 
-**Installation:**
+---
+
+## Interface web (busca e comparação)
+
+### Início rápido – interface web
+
+No diretório do projeto:
+
+```bash
+python main.py  # inicia a interface Flask
+```
+
+Depois acesse no navegador:
+
+- http://127.0.0.1:5000/
+
+Fluxo típico na interface:
+
+- Fazer upload de um banco (`.mdb`, `.accdb` ou `.duckdb`)
+- Se for Access, o sistema converte para DuckDB
+- O índice `_fulltext` é criado/atualizado
+- Você pode buscar termos, ver contagens por tabela e comparar bases
+
+Os detalhes da interface estão descritos em mais profundidade em
+`interface/README.md`.
+
+---
+
+## Conversores de linha de comando (`converters/`)
+
+Todos os conversores de linha de comando ficam em `converters/`.
+Eles **não** dependem da interface web: são scripts que você pode chamar
+diretamente no terminal.
+
+### 1. converters/convert_mdbtools.py (recomendado em Linux/macOS)
+
+Usa o utilitário de linha de comando **mdbtools**.
+
+**Vantagens:**
+- Instalação simples
+- Funciona bem em Linux/macOS
+- Não precisa de Java
+
+**Desvantagens:**
+- Usa CSV intermediário (texto)
+- Pode ter problemas de codificação em alguns arquivos
+- Pode ser mais lento em bases muito grandes
+
+**Instalação:**
 ```bash
 # macOS
 brew install mdbtools
@@ -36,217 +88,257 @@ brew install mdbtools
 sudo apt install mdbtools
 ```
 
-### 2. convert_jackcess.py (Recommended for reliability)
+### 2. converters/convert_jackcess.py (recomendado pela robustez)
 
-Uses Jackcess Java library.
+Usa a biblioteca Java **Jackcess**.
 
-**Pros:**
-- Most reliable
-- Direct binary reading
-- Better encoding handling
-- Cross-platform
+**Vantagens:**
+- Mais robusto (melhor compatibilidade em muitos casos)
+- Leitura binária direta do arquivo Access
+- Lida melhor com questões de encoding
+- Funciona em múltiplas plataformas
 
-**Cons:**
-- Requires Java JDK
-- Slightly more complex setup
+**Desvantagens:**
+- Requer Java (JDK)
+- Setup um pouco mais trabalhoso
 
-**Installation:**
+**Instalação:**
 ```bash
-# Requires Java JDK
+# Requer Java JDK
 # macOS
 brew install openjdk
 
 # Linux
 sudo apt install default-jdk
 
-# JARs are downloaded automatically to temp/ folder
+# Os JARs são baixados automaticamente para a pasta temp/
 ```
 
-### 3. convert_pyaccess_parser.py (Pure Python)
+### 3. converters/convert_pyaccess_parser.py (100% Python)
 
-Uses access-parser library (pure Python).
+Usa a biblioteca **access-parser** (implementação pura em Python).
 
-**Pros:**
-- No external dependencies
-- Pure Python implementation
-- Easy installation
-- Cross-platform
+**Vantagens:**
+- Sem dependências nativas externas
+- 100% Python
+- Instalação simples via pip
+- Portável entre sistemas
 
-**Cons:**
-- Slower than native implementations
-- May have compatibility issues with some MDB formats
+**Desvantagens:**
+- Mais lento do que implementações nativas
+- Pode ter incompatibilidades com alguns formatos de MDB/ACCDB
 
-**Installation:**
+**Instalação:**
 ```bash
 pip install access-parser
 ```
 
-### 4. convert_pyodbc.py (Windows only)
+### 4. converters/convert_pyodbc.py (Windows somente)
 
-Uses pypyodbc with ODBC driver.
+Usa **pypyodbc** + driver ODBC do Microsoft Access.
 
-**Pros:**
-- Native Windows support
-- Fast on Windows
+**Vantagens:**
+- Nativo no Windows
+- Em geral é rápido quando o driver está bem instalado
 
-**Cons:**
-- Requires Microsoft Access Database Engine
-- Windows only (or Wine on Linux/Mac)
-- Complex setup on non-Windows
+**Desvantagens:**
+- Depende do **Microsoft Access Database Engine**
+- Restrito a Windows (ou Wine em Linux/macOS)
+- Setup complicado fora do Windows
 
-**Installation (Windows):**
-1. Install Microsoft Access Database Engine:
-   https://www.microsoft.com/en-us/download/details.aspx?id=54920
-2. Install Python package:
-   ```bash
-   pip install pypyodbc
-   ```
+**Instalação (Windows):**
+1. Instalar Microsoft Access Database Engine:
+     https://www.microsoft.com/en-us/download/details.aspx?id=54920
+2. Instalar o pacote Python:
+     ```bash
+     pip install pypyodbc
+     ```
 
-## Performance Comparison
+---
 
-Based on benchmark tests with 5 files (~90MB each) on macOS:
+## Comparativo de desempenho (benchmarks)
 
-| Implementation | Success Rate | Avg Time/File | Total Time | Notes |
-|---------------|--------------|---------------|------------|-------|
-| **mdbtools** | 100% (5/5) | 53.80s | 268.98s | Fastest |
-| **pyaccess_parser** | 100% (5/5) | 165.08s | 825.41s | Pure Python |
-| **jackcess** | 100% (5/5) | 252.80s | 1264.01s | Most reliable |
-| **pypyodbc** | 0% (0/5) | N/A | N/A | Windows-only |
+Baseado em testes com 5 arquivos (~90 MB cada) em macOS:
 
-**Recommendations:**
-- **macOS/Linux:** Use `convert_mdbtools.py` (fastest) or `convert_pyaccess_parser.py` (pure Python)
-- **Windows:** Use `convert_pyodbc.py` (native) or `convert_jackcess.py` (cross-platform)
-- **Maximum reliability:** Use `convert_jackcess.py` (works everywhere with Java)
+| Implementação        | Sucesso | Tempo médio/arquivo | Tempo total | Observações       |
+|----------------------|---------|---------------------|------------|-------------------|
+| **mdbtools**         | 100%    | 53,80s              | 268,98s    | Mais rápida       |
+| **pyaccess_parser**  | 100%    | 165,08s             | 825,41s    | Puro Python       |
+| **jackcess**         | 100%    | 252,80s             | 1264,01s   | Mais robusta      |
+| **pypyodbc**         | 0%      | N/A                 | N/A        | Windows‑only      |
 
-## Quick Start
+**Recomendações gerais:**
+- **macOS / Linux:**
+    - Preferir `convert_mdbtools.py` (mais rápido) ou
+    - `convert_pyaccess_parser.py` (100% Python, sem binários externos)
+- **Windows:**
+    - Preferir `convert_pyodbc.py` (nativo) ou
+    - `convert_jackcess.py` (multiplataforma com Java)
+- **Máxima robustez:**
+    - `convert_jackcess.py` (funciona em vários cenários com menor chance de erro)
+
+---
+
+## Início rápido – conversores (CLI)
 
 ```bash
-# Clone repository
+# Clonar repositório
 git clone <repository-url>
-cd mdb2sql
+cd mdb2sql_fork
 
-# Create virtual environment
-python3 -m venv venv
+# Criar ambiente virtual (recomendado)
+python -m venv venv
 
-# Activate virtual environment
+# Ativar ambiente virtual
 # macOS/Linux:
 source venv/bin/activate
-# Windows:
+# Windows (PowerShell ou Prompt):
 venv\Scripts\activate
 
-# Install dependencies
+# Instalar dependências Python
 pip install -r requirements.txt
 
-# Install system dependencies (choose one)
-brew install mdbtools            # For convert_mdbtools.py
-brew install openjdk             # For convert_jackcess.py
-# Or install Access Engine        # For convert_pyodbc.py
+# Instalar dependências de sistema (escolha a que você for usar)
+brew install mdbtools            # Para convert_mdbtools.py (macOS)
+brew install openjdk             # Para convert_jackcess.py (macOS)
+# Ou instale o Access Engine     # Para convert_pyodbc.py no Windows
 ```
 
-## Usage
+---
 
-### Single File
+## Uso (CLI)
+
+### Arquivo único
 
 ```bash
-# Using mdbtools
-python convert_mdbtools.py --input file.mdb --output database.duckdb
+# Usando mdbtools
+python converters/convert_mdbtools.py --input file.mdb --output database.duckdb
 
-# Using Jackcess
-python convert_jackcess.py --input file.mdb --output database.duckdb
+# Usando Jackcess
+python converters/convert_jackcess.py --input file.mdb --output database.duckdb
 
-# Using pyaccess_parser
-python convert_pyaccess_parser.py --input file.mdb --output database.duckdb
+# Usando pyaccess_parser
+python converters/convert_pyaccess_parser.py --input file.mdb --output database.duckdb
 
-# Using pypyodbc (Windows)
-python convert_pyodbc.py --input file.mdb --output database.duckdb
+# Usando pypyodbc (Windows)
+python converters/convert_pyodbc.py --input file.mdb --output database.duckdb
 ```
 
-### Batch Processing
+### Processamento em lote
 
 ```bash
-# Process all MDB/ACCDB files in directory
-python convert_mdbtools.py --input import_folder --output database.duckdb --batch
+# Processar todos os arquivos MDB/ACCDB de um diretório
+python converters/convert_mdbtools.py --input import_folder --output database.duckdb --batch
 ```
 
-## File Naming Convention
+---
 
-Files should contain date in one of these formats:
-- DD_MM_YYYY or DD-MM-YYYY
-- YYYY_MM_DD or YYYY-MM-DD
-- DDMMYYYY
-- YYYYMMDD
+## Convenção de nomes de arquivos
 
-Examples:
-- DB3_04_09_2013.mdb -> 2013-09-04
-- database_20190801.accdb -> 2019-08-01
+Os arquivos devem conter uma data em algum destes formatos:
+- `DD_MM_YYYY` ou `DD-MM-YYYY`
+- `YYYY_MM_DD` ou `YYYY-MM-DD`
+- `DDMMYYYY`
+- `YYYYMMDD`
 
-## Database Structure
+Exemplos:
+- `DB3_04_09_2013.mdb` → `2013-09-04`
+- `database_20190801.accdb` → `2019-08-01`
 
-### Tables
+---
 
-Each imported table is named: `{original_table_name}_{YYYYMMDD}`
+## Estrutura do banco DuckDB gerado
 
-Example:
-- Original: RANGER_SOACCU
-- Imported: RANGER_SOACCU_20130904
+### Tabelas de dados
 
-### Metadata Table
+Cada tabela importada recebe o nome: `{nome_original}_{YYYYMMDD}`
+
+Exemplo:
+- Original: `RANGER_SOACCU`
+- Importada: `RANGER_SOACCU_20130904`
+
+### Tabela de metadados
 
 ```sql
 CREATE TABLE _metadata (
-    import_id INTEGER PRIMARY KEY,
-    source_file VARCHAR,
-    file_date DATE,
-    import_timestamp TIMESTAMP,
-    table_name VARCHAR,
-    row_count INTEGER
+        import_id INTEGER PRIMARY KEY,
+        source_file VARCHAR,
+        file_date DATE,
+        import_timestamp TIMESTAMP,
+        table_name VARCHAR,
+        row_count INTEGER
 );
 ```
 
-### Query Examples
+### Exemplos de consultas
 
 ```sql
--- View all imports
+-- Ver todos os imports
 SELECT * FROM _metadata ORDER BY import_timestamp DESC;
 
--- Find tables from specific date
+-- Encontrar tabelas de uma data específica
 SELECT * FROM _metadata WHERE file_date = '2013-09-04';
 
--- List all table versions
+-- Listar versões de cada tabela
 SELECT 
-    SUBSTRING(table_name, 1, POSITION('_2' IN table_name)-1) as base_table,
-    file_date,
-    row_count
+        SUBSTRING(table_name, 1, POSITION('_2' IN table_name)-1) AS base_table,
+        file_date,
+        row_count
 FROM _metadata
 ORDER BY base_table, file_date;
 
--- Query specific table version
+-- Consultar uma versão específica da tabela
 SELECT * FROM RANGER_SOACCU_20130904 LIMIT 10;
 ```
 
-## Platform-Specific Notes
+---
+
+## Pasta artifacts/ (artefatos gerados)
+
+A pasta `artifacts/` é o local padrão para arquivos **gerados** em tempo de
+execução, por exemplo:
+
+- Bancos DuckDB criados por conversões ou pela interface (`*.duckdb`)
+- Resultados de benchmark (`benchmark_results_*.json`)
+- Logs de benchmark (`benchmark_run*.log`)
+
+Esses arquivos podem ser apagados e gerados novamente.
+
+Para mover artefatos antigos que estejam na raiz do projeto para `artifacts/`,
+você pode rodar:
+
+```bash
+python -m tools.organize_artifacts
+```
+
+---
+
+## Notas específicas por plataforma
 
 ### macOS
-- Use convert_mdbtools.py or convert_jackcess.py
+- Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
 - mdbtools: `brew install mdbtools`
 - Java: `brew install openjdk`
 
 ### Linux
-- Use convert_mdbtools.py or convert_jackcess.py
+- Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
 - mdbtools: `sudo apt install mdbtools`
 - Java: `sudo apt install default-jdk`
 
 ### Windows
-- Use convert_pyodbc.py (recommended)
-- Or use convert_jackcess.py with Java
-- Install Access Database Engine or ODBC
+- Usar preferencialmente `convert_pyodbc.py`
+- Alternativa: `convert_jackcess.py` com Java instalado
+- Necessário instalar o Access Database Engine / driver ODBC de Access
 
-## Troubleshooting
+---
 
-### mdbtools encoding errors
-Files may have encoding issues. Try convert_jackcess.py instead.
+## Solução de problemas (troubleshooting)
 
-### Java not found
+### Erros de encoding com mdbtools
+- Alguns arquivos podem ter problemas de codificação.
+- Tente `convert_jackcess.py` ou `convert_pyaccess_parser.py` como alternativa.
+
+### Java não encontrado
 ```bash
 # macOS
 brew install openjdk
@@ -256,25 +348,31 @@ export PATH="/usr/local/opt/openjdk/bin:$PATH"
 sudo apt install default-jdk
 ```
 
-### ODBC driver not found
-- Windows: Install Access Database Engine
-- Linux/Mac: Install mdbtools ODBC driver or use different method
+### Driver ODBC não encontrado (Windows)
+- Verifique se o **Microsoft Access Database Engine** está instalado.
+- Confira se o driver `Microsoft Access Driver (*.mdb, *.accdb)` aparece em `pyodbc.drivers()`.
 
-## Development
+---
+
+## Desenvolvimento
 
 ```bash
-# Run tests
+# Rodar testes
 python -m pytest tests/
 
-# Check code
-python -m pylint convert*.py
+# (Opcional) checar estilo de código para conversores
+python -m pylint converters/convert_*.py
 ```
 
-## License
+---
+
+## Licença
 
 MIT
 
-## Version History
+---
 
-- v0.1.0-mdbtools: Initial release with mdbtools
-- v0.2.0: Added Jackcess, pyaccess_parser, and pypyodbc implementations
+## Histórico de versões (simplificado)
+
+- v0.1.0-mdbtools: primeira versão com mdbtools
+- v0.2.0: adicionados conversores Jackcess, pyaccess_parser e pypyodbc

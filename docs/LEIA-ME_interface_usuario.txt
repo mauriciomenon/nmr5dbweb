@@ -1,0 +1,140 @@
+COOKBOOK - INTERFACE DE BUSCA DUCKDB (NOVO USUARIO)
+
+Este guia explica como usar apenas a interface de pesquisa no navegador.
+
+------------------------------------------------------------
+1. REQUISITOS
+------------------------------------------------------------
+- Windows 10 ou 11
+- Python 3.10 ou superior
+  (na instalacao do Python, marcar "Add python.exe to PATH")
+- Navegador: Chrome, Edge ou Firefox
+
+Voce NAO precisa ter Microsoft Access instalado, apenas os arquivos de banco
+(.duckdb, .mdb, .accdb) que serao usados na busca.
+
+2. RECEBENDO OS ARQUIVOS
+------------------------------------------------------------
+Voce pode obter a aplicacao de duas formas:
+- Baixando direto do GitHub
+- Recebendo um arquivo ZIP pronto do responsavel pelo sistema
+
+2.1. Baixar direto do GitHub (para quem preferir)
+- Repositorio: https://github.com/allysonalmeidaa/mdb2sql_fork
+- Branch da interface: minha-alteracao
+
+OPCAO A - ZIP pelo navegador:
+- Acesse o link do repositorio no navegador
+- No seletor de branches, escolha a branch "minha-alteracao"
+- Clique em "Code" -> "Download ZIP"
+- Salve o ZIP e siga os passos da secao 2.2 (Extrair o ZIP)
+
+OPCAO B - Clonar usando Git (se tiver Git instalado):
+   cd C:\
+   git clone -b minha-alteracao --single-branch https://github.com/allysonalmeidaa/mdb2sql_fork.git
+   cd mdb2sql_fork
+
+2.2. Extrair o ZIP
+- Escolha uma pasta, por exemplo: C:\busca_duckdb
+- Clique com o botao direito no ZIP -> "Extrair tudo..."
+- Aponte para C:\busca_duckdb
+
+Apos extrair, voce tera arquivos como:
+- C:\busca_duckdb\interface\...
+- C:\busca_duckdb\static\...
+- C:\busca_duckdb\requirements.txt
+
+------------------------------------------------------------
+3. PRIMEIRA EXECUCAO (SOMENTE UMA VEZ)
+------------------------------------------------------------
+Use o Windows PowerShell.
+
+1) Abra o Windows PowerShell.
+2) Entre na pasta do projeto:
+   cd C:\busca_duckdb
+3) Crie o ambiente virtual Python:
+   python -m venv .venv
+4) Ative o ambiente virtual:
+   .\.venv\Scripts\Activate.ps1
+   (o prompt deve mostrar algo como "(.venv)" no inicio da linha)
+5) Instale as dependencias da aplicacao:
+   pip install -r requirements.txt
+
+Quando o passo 5 terminar sem erros, a instalacao inicial esta pronta.
+
+------------------------------------------------------------
+4. INICIAR A INTERFACE DE PESQUISA (USO DO DIA A DIA)
+------------------------------------------------------------
+Sempre que quiser usar o sistema:
+
+1) Abra o Windows PowerShell.
+2) Entre na pasta do projeto:
+   cd C:\busca_duckdb
+3) Ative o ambiente virtual:
+   .\.venv\Scripts\Activate.ps1
+4) Inicie o servidor da aplicacao (forma recomendada):
+   python main.py
+
+Quando aparecer uma mensagem parecida com:
+   * Running on http://127.0.0.1:5000
+
+5) Abra o navegador e acesse:
+   http://127.0.0.1:5000/
+
+A tela "Busca em bancos - Painel" deve aparecer.
+
+IMPORTANTE: deixe a janela do PowerShell aberta enquanto estiver usando a interface.
+Se fechar ou apertar Ctrl + C, o sistema para.
+
+------------------------------------------------------------
+5. USO BASICO - ABA "BUSCA"
+------------------------------------------------------------
+1) Clique em "Selecionar DB" (no topo da tela).
+2) Escolha um arquivo de banco para trabalhar:
+   - .duckdb, .db, .sqlite, .sqlite3 (recomendado)
+   - ou .mdb / .accdb (se combinado com o responsavel)
+3) Confirme a selecao. O nome do banco ativo aparece nos cards do topo.
+
+Se o sistema avisar que o indice _fulltext ainda nao existe ou esta incompleto:
+4) Clique no botao "Indice _fulltext".
+5) Na janela que abrir, clique em "Iniciar indexacao".
+6) Aguarde ate o status indicar que o indice esta PRONTO.
+
+Para fazer uma busca:
+7) No fluxo "4. Buscar resultados", clique em "Ir".
+8) Digite o termo desejado (parte de nome, codigo, etc.).
+9) Clique em "Pesquisar".
+10) Veja os resultados na parte de baixo da tela.
+
+------------------------------------------------------------
+6. OUTRAS ABAS
+------------------------------------------------------------
+RASTREAR REGISTRO:
+- Clique em "Rastrear registro" no topo.
+- Informe o diretorio dos bancos, a tabela (opcional) e os filtros
+  (exemplo: RTUNO=1,PNTNO=2304).
+- Clique em "Executar analise" para ver em quais bancos o registro aparece.
+
+COMPARAR BANCOS:
+- Clique em "Comparar bancos" no topo.
+- Escolha dois arquivos de banco .duckdb.
+- Defina a tabela, a chave (ex.: RTUNO,PNTNO) e, se quiser, filtros.
+- Rode a comparacao para ver diferencas entre as versoes.
+
+------------------------------------------------------------
+7. COMO PARAR E INICIAR DE NOVO
+------------------------------------------------------------
+PARAR:
+- Volte ao PowerShell onde o sistema esta rodando e aperte Ctrl + C.
+
+INICIAR EM OUTRO DIA:
+1) Abrir o Windows PowerShell.
+2) cd C:\busca_duckdb
+3) .\.venv\Scripts\Activate.ps1
+4) python main.py
+
+Depois disso, abra o navegador em:
+   http://127.0.0.1:5000/
+
+Se aparecer qualquer mensagem de erro estranha no PowerShell,
+tire um print e envie para o responsavel pelo sistema.

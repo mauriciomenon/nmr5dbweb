@@ -7,11 +7,11 @@ from pathlib import Path
 from datetime import datetime, date
 import decimal
 
-# Caminho padrão para o arquivo DuckDB gerado pelo conversor
-DB_PATH = r"C:\mdb2sql_fork\minha.duckdb"
-
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
+
+# Caminho padrão para o arquivo DuckDB gerado pelo conversor
+DB_PATH = str(PROJECT_ROOT / "artifacts" / "minha.duckdb")
 
 app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 

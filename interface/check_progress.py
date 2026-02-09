@@ -1,7 +1,7 @@
 import duckdb
 from pathlib import Path
 
-DB = r"C:\mdb2sql_fork\minha.duckdb"
+DB = str(Path(__file__).resolve().parent.parent / "artifacts" / "minha.duckdb")
 
 def main():
     dbfile = Path(DB)
