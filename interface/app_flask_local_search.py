@@ -317,12 +317,18 @@ def admin_list_uploads():
     files = []
     for p in sorted(UPLOAD_DIR.iterdir(), key=lambda x: x.name):
         if p.is_file():
-            files.append({"name": p.name, "path": str(p), "size": p.stat().st_size})
+            st = p.stat()
+            files.append({
+                "name": p.name,
+                "path": str(p),
+                "size": st.st_size,
+                "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            })
     return jsonify({
         "uploads": files,
         "current_db": cfg.get("db_path"),
         "priority_tables": cfg.get("priority_tables", []),
-        "auto_index_after_convert": cfg.get("auto_index_after_convert", True)
+        "auto_index_after_convert": cfg.get("auto_index_after_convert", True),
     })
 
 @app.route("/admin/status", methods=["GET"])
@@ -537,6 +543,19 @@ def admin_delete():
     except Exception as e:
         return jsonify({"error": f"falha ao apagar: {e}"}), 500
 
+
+@app.route("/admin/set_auto_index", methods=["POST"])
+def admin_set_auto_index():
+    """Ativa ou desativa a indexacao automatica apos conversao de Access.
+
+    Usado pelo toggle "Auto indexacao apos conversao (Access)" na interface.
+    """
+    data = request.get_json() or {}
+    enabled = bool(data.get("enabled", False))
+    cfg["auto_index_after_convert"] = enabled
+    save_config(cfg)
+    return jsonify({"ok": True, "auto_index_after_convert": enabled})
+
 @app.route("/admin/set_priority", methods=["POST"])
 def admin_set_priority():
     data = request.get_json() or {}
@@ -634,6 +653,17 @@ def api_compare_db_tables():
     try:
         db1 = Path(db1_path)
         db2 = Path(db2_path)
+
+        missing = []
+        if not db1.exists():
+            missing.append(str(db1))
+        if not db2.exists():
+            missing.append(str(db2))
+        if missing:
+            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
+            app.logger.warning("compare_db_tables: %s", msg)
+            return jsonify({"error": msg}), 400
+
         tables = list_common_tables(db1, db2)
         detailed = []
         for t in tables:
@@ -667,6 +697,17 @@ def api_compare_db_table_content():
     try:
         db1 = Path(db1_path)
         db2 = Path(db2_path)
+
+        missing = []
+        if not db1.exists():
+            missing.append(str(db1))
+        if not db2.exists():
+            missing.append(str(db2))
+        if missing:
+            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
+            app.logger.warning("compare_db_table_content: %s", msg)
+            return jsonify({"error": msg}), 400
+
         result = compare_table_content_duckdb(db1, db2, table)
         return jsonify(result)
     except Exception as exc:  # noqa: BLE001
@@ -751,6 +792,17 @@ def api_compare_db_rows():
     try:
         db1 = Path(db1_path)
         db2 = Path(db2_path)
+
+        missing = []
+        if not db1.exists():
+            missing.append(str(db1))
+        if not db2.exists():
+            missing.append(str(db2))
+        if missing:
+            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
+            app.logger.warning("compare_db_rows: %s", msg)
+            return jsonify({"error": msg}), 400
+
         result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=row_limit)
 
         rows = result.get("rows") or []

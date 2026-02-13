@@ -471,9 +471,16 @@
 
   <div class="container">
     <aside class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">
         <strong>Tabelas</strong>
-        <button id="refreshTables" class="btn ghost">Atualizar</button>
+        <button id="refreshTables" class="btn ghost small">Atualizar</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <label for="dbSort" class="small">Ordenar:</label>
+        <select id="dbSort" style="flex:1;min-width:0;">
+          <option value="name_asc">Nome A-Z</option>
+          <option value="name_desc">Nome Z-A</option>
+        </select>
       </div>
       <div id="dbTabs" class="db-tabs"></div>
       <div id="dbTabHelp" class="db-tab-help">Selecione um banco para ver as tabelas.</div>
@@ -540,8 +547,6 @@
               <select id="filesSort">
                 <option value="name_asc">Nome A-Z</option>
                 <option value="name_desc">Nome Z-A</option>
-                <option value="date_desc">Data recente</option>
-                <option value="date_asc">Data antiga</option>
               </select>
               <button id="refreshFilesBtn" class="btn ghost">Atualizar lista</button>
               <button id="closeFilesBtn" class="btn ghost small" type="button">Fechar</button>
@@ -608,6 +613,9 @@
     <div class="flow-access-only" style="margin-top:8px">
       <label class="muted"><input id="autoIndexToggle" type="checkbox" /> Auto indexacao apos conversao (Access)</label>
       <span id="autoIndexMsg" class="muted" style="margin-left:8px"></span>
+    </div>
+    <div class="flow-access-only small" style="margin-top:4px;color:var(--muted)">
+      Arquivos <code>.duckdb</code> gerados pela conversao sao salvos em <code>interface/uploads/</code>.
     </div>
 
   </div>

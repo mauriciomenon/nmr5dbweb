@@ -39,6 +39,17 @@
       .replace(/\.(mdb|accdb)$/, '')
       .replace(/\.(duckdb|db|sqlite|sqlite3)$/, '');
   };
+  window.getDateKeyFromFileName = function (name) {
+    if (!name) return null;
+    var m = String(name).match(/(\d{4})[-_]?(\d{2})[-_]?(\d{2})/);
+    if (!m) return null;
+    var y = Number(m[1]);
+    var mo = Number(m[2]);
+    var d = Number(m[3]);
+    if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return null;
+    var t = Date.UTC(y, mo - 1, d);
+    return Number.isFinite(t) ? t : null;
+  };
   window.buildAccessStemSet = function (list) {
     var stems = new Set();
     (list || []).forEach(function (f) {
@@ -91,6 +102,7 @@ var isConvertedDuckdb = window.isConvertedDuckdb;
 var isFileAllowedForFlow = window.isFileAllowedForFlow;
 var formatBytes = window.formatBytes;
 var formatDate = window.formatDate;
+var getDateKeyFromFileName = window.getDateKeyFromFileName;
 const $ = id => document.getElementById(id);
 function shortName(pathValue){
   if(!pathValue) return '';
@@ -862,11 +874,7 @@ function getSortedUploads(list){
   items.sort((a,b) => {
     const nameA = (a && a.name ? a.name.toLowerCase() : '');
     const nameB = (b && b.name ? b.name.toLowerCase() : '');
-    const dateA = a && a.modified ? new Date(a.modified).getTime() : 0;
-    const dateB = b && b.modified ? new Date(b.modified).getTime() : 0;
     if(sortKey === 'name_desc') return nameA < nameB ? 1 : (nameA > nameB ? -1 : 0);
-    if(sortKey === 'date_asc') return dateA - dateB;
-    if(sortKey === 'date_desc') return dateB - dateA;
     return nameA > nameB ? 1 : (nameA < nameB ? -1 : 0);
   });
   return items;
@@ -998,7 +1006,7 @@ async function refreshUiState(opts){
       $('cfgCurrentDb').title = hasDb ? currentDb : '';
     }
     const autoIndexToggle = $('autoIndexToggle');
-    if(autoIndexToggle && typeof uploads.auto_index_after_convert !== 'undefined'){
+    if (autoIndexToggle && typeof uploads.auto_index_after_convert !== 'undefined') {
       autoIndexToggle.checked = !!uploads.auto_index_after_convert;
     }
     renderFilesMain();
@@ -1006,7 +1014,12 @@ async function refreshUiState(opts){
   }catch(e){
     const filesList = $('filesList');
     if(filesList) filesList.textContent = 'Erro ao listar arquivos';
-    logUi('ERROR', 'list uploads falhou');
+    try{
+      const msg = e && e.message ? e.message : String(e || 'erro');
+      logUi('ERROR', 'list uploads falhou: ' + msg);
+    }catch(_){
+      logUi('ERROR', 'list uploads falhou');
+    }
   }
   await refreshStatus();
   renderFilesSelect();
@@ -1033,10 +1046,13 @@ function renderDbTabs(){
     if(help) help.textContent = 'Nenhum banco enviado ainda.';
     return;
   }
+  const sortEl = $('dbSort');
+  const sortKey = sortEl ? sortEl.value : 'name_asc';
   const sorted = items.slice().sort((a, b) => {
-    const da = a && a.modified ? new Date(a.modified).getTime() : 0;
-    const db = b && b.modified ? new Date(b.modified).getTime() : 0;
-    return db - da;
+    const nameA = a && a.name ? String(a.name).toLowerCase() : '';
+    const nameB = b && b.name ? String(b.name).toLowerCase() : '';
+    if (sortKey === 'name_desc') return nameA < nameB ? 1 : (nameA > nameB ? -1 : 0);
+    return nameA > nameB ? 1 : (nameA < nameB ? -1 : 0);
   });
   const currentName = shortName(currentDb || '').toLowerCase();
   el.innerHTML = sorted.map(f => {
@@ -1054,7 +1070,12 @@ async function refreshStatus(){
   try{
     const s = await apiJSON('/admin/status');
     lastStatus = s;
+    const prevDb = String(currentDb || '');
     const db = s.db || '';
+    if (db) {
+      currentDb = db;
+    }
+    const dbChanged = prevDb !== String(db || '');
     const dbName = shortName(db);
     const conversionRunning = !!(s.conversion && s.conversion.running);
     const dbType = getFlowFromName(db);
@@ -1301,6 +1322,14 @@ async function refreshStatus(){
         const nextModal = ok && (s.indexing || (s.fulltext_count === 0)) ? 'indexModal' : '';
         scheduleModalClose(nextModal || '');
       }
+
+      // Dispara um refresh completo de UI apos conversao, em paralelo,
+      // para atualizar lista de uploads, abas de DB e tabelas.
+      if(ok){
+        try{
+          setTimeout(() => { try { refreshUiState(); } catch(e){} }, 0);
+        }catch(e){ /* ignored */ }
+      }
     } else if(!conversionRunning){
       setModalBanner('convModalBanner', '', '');
     }
@@ -1331,6 +1360,10 @@ async function refreshStatus(){
     if(document.body.classList.contains('modal-open')){
       renderFilesSelect();
       renderSelectedInfo();
+    }
+    // Atualiza lista de tabelas/abas quando o DB muda ou apos conversao
+    if (dbChanged || conversionJustFinished) {
+      refreshTables();
     }
   }catch(e){
     const adminStatus = $('adminStatus');
@@ -2379,60 +2412,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Upload / select / delete
-  const uploadBtn = $('uploadBtn');
-  if (uploadBtn) uploadBtn.addEventListener('click', async () => {
-    const fi = $('fileInput');
-    if (!fi.files.length) {
-      $('uploadMsg').textContent = 'Selecione um arquivo.';
-      return;
-    }
-    const f = fi.files[0];
-    if (!isFileAllowedForFlow(f.name, currentFlow)) {
-      const msg =
-        currentFlow === 'access'
-          ? 'Use .mdb ou .accdb neste fluxo.'
-          : 'Use .duckdb, .db, .sqlite, .sqlite3 neste fluxo.';
-      $('uploadMsg').textContent = msg;
-      setFlowBanner(msg + ' Voce pode alternar o fluxo acima.', 'warn');
-      return;
-    }
-    const sizeText = formatBytes(f.size || 0);
-    const fd = new FormData();
-    fd.append('file', f);
-    $('uploadMsg').textContent = 'Enviando...';
-    try {
-      const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-      const j = await res.json();
-      const msg = $('uploadMsg');
-      const nameHint = shortName(
-        (j && (j.db_path || j.db || j.output || j.input)) || f.name || ''
-      );
-      if (j && j.ok) {
-        if (j.status === 'converting') {
-          msg.textContent = 'Conversao iniciada: ' + (nameHint || f.name) + ' (' + sizeText + ')';
-        } else {
-          msg.textContent = 'Upload ok: ' + (nameHint || f.name) + ' (' + sizeText + ')';
-        }
-        setFlowBanner('', '');
-      } else if (j && j.error) {
-        msg.textContent = 'Erro: ' + j.error;
-        setFlowBanner('Falha no upload. Verifique o arquivo e tente novamente.', 'error');
-      } else {
-        msg.textContent = 'Falha no upload';
-        setFlowBanner('Falha ao enviar arquivo. Tente novamente.', 'error');
-      }
-      await refreshUiState();
-    } catch (e) {
-      $('uploadMsg').textContent = 'Erro no upload';
-      setFlowBanner('Erro no upload. Verifique o servidor e tente novamente.', 'error');
-      logUi('ERROR', 'upload falhou');
-    }
-  });
-
   const refreshFilesBtn = $('refreshFilesBtn');
   if (refreshFilesBtn) refreshFilesBtn.addEventListener('click', () => refreshUiState());
   const filesSort = $('filesSort');
   if (filesSort) filesSort.addEventListener('change', () => renderFilesMain());
+
+  const dbSort = $('dbSort');
+  if (dbSort) dbSort.addEventListener('change', () => renderDbTabs());
 
   // Flow tabs
   const flowTabButtons = document.querySelectorAll('#flowTabs .tab-btn');
@@ -2542,6 +2528,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   const refreshBtn = $('refreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', () => refreshUiState());
+  const refreshTablesBtn = $('refreshTables');
+  if (refreshTablesBtn) refreshTablesBtn.addEventListener('click', () => refreshTables());
   const filterTablesInput = $('filterTables');
   if (filterTablesInput) filterTablesInput.addEventListener('input', () => refreshTables());
   const exportAllBtn = $('exportAllBtn');

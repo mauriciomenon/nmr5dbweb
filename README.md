@@ -5,6 +5,13 @@ fornece uma interface web para busca e comparação de dados.
 
 Pensado para cenários de auditoria, análise histórica e migração de bases.
 
+## Requisitos
+
+- Python **3.12.8** (recomendado; testado em 3.12.x)
+- `pip` e suporte a ambientes virtuais (`venv`)
+- Acesso à internet para baixar dependências Python e, opcionalmente, JARs/SDKs
+![alt text](image.png)
+
 ## Funcionalidades principais
 
 - Extrai automaticamente a data a partir do nome do arquivo
@@ -37,10 +44,33 @@ aplicação web e na documentação principal.
 
 ### Início rápido – interface web
 
-No diretório do projeto:
+No diretório do projeto (primeira vez):
 
 ```bash
-python main.py  # inicia a interface Flask
+# 1) criar ambiente virtual (recomendado)
+python -m venv .venv
+
+# 2) ativar o ambiente virtual
+# Windows (PowerShell)
+./.venv/Scripts/Activate.ps1
+# Windows (Prompt de Comando)
+./.venv/Scripts/activate.bat
+# macOS / Linux
+source .venv/bin/activate
+
+# 3) instalar dependências Python
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+# 4) iniciar a interface Flask
+python main.py
+```
+
+Nas execuções seguintes, basta reativar o ambiente virtual e rodar o `main.py`:
+
+```bash
+./.venv/Scripts/Activate.ps1  # ou equivalente para seu sistema
+python main.py
 ```
 
 Depois acesse no navegador:
@@ -186,7 +216,7 @@ Baseado em testes com 5 arquivos (~90 MB cada) em macOS:
 git clone <repository-url>
 cd mdb2sql_fork
 
-# Criar ambiente virtual (recomendado)
+# Criar ambiente virtual (recomendado) – usar Python 3.12.x
 python -m venv venv
 
 # Ativar ambiente virtual

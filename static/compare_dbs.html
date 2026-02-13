@@ -1041,14 +1041,31 @@ Ex: COL1,COL2,COL3"></textarea>
         setStepOpen(1);
       }
 
-      // se já havia caminhos de bancos e as tabelas foram carregadas antes, recarrega automaticamente
+      // se já havia caminhos de bancos e as tabelas foram carregadas antes, podemos
+      // tentar recarregar automaticamente, mas apenas se os arquivos ainda existirem.
       if (saved.tablesLoadedOnce && db1Input && db2Input && db1Input.value && db2Input.value) {
         try {
-          await loadTables();
-          // restaura seleção de tabela após carregar
-          if (tableSelect && typeof saved.table === 'string' && saved.table) {
-            tableSelect.value = saved.table;
-            onTableChange();
+          const headResp = await fetch('/api/compare_db_tables', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ db1_path: db1Input.value, db2_path: db2Input.value }),
+          });
+          const headData = await headResp.json();
+          if (!headResp.ok) {
+            console.warn('Arquivos anteriores nao encontrados ao restaurar estado:', headData && headData.error);
+          } else {
+            tablesMeta = headData.tables || [];
+            if (!tablesMeta.length) {
+              console.warn('Nenhuma tabela em comum ao restaurar estado salvo.');
+            } else {
+              tableSelect.innerHTML = '';
+              for (const t of tablesMeta) {
+                const opt = document.createElement('option');
+                opt.value = t.name;
+                opt.textContent = t.name;
+                tableSelect.appendChild(opt);
+              }
+            }
           }
         } catch (e) {
           console.warn('Falha ao recarregar tabelas em comum a partir do estado salvo.', e);
