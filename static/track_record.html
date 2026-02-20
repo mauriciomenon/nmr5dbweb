@@ -537,14 +537,14 @@
         <div class="row">
           <div class="col">
             <label for="tableInput">Tabela (opcional)</label>
-            <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" />
+            <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" value="RANGER_SOSTAT" />
             <div class="help-text">Exemplo de tabela: RANGER_SOSTAT. Se vazio, o backend tenta encontrar o registro em qualquer tabela de cada banco.</div>
           </div>
         </div>
         <div class="row" style="margin-top:8px;">
           <div class="col">
             <label for="filtersInput">Filtros (obrigatório)</label>
-            <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304"></textarea>
+            <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304">RTUNO=1,PNTNO=2304</textarea>
             <div class="help-text">Exemplo de filtros: RTUNO=1,PNTNO=2304. Formato: COL1=VAL1,COL2=VAL2,... Valores numéricos são detectados automaticamente; use aspas para strings com vírgula.</div>
           </div>
         </div>
@@ -612,37 +612,6 @@
         hintEl.classList.add(variant);
       }
     }
-    async function loadDirs() {
-      const sel = document.getElementById('dirSelect');
-      if (!sel) return;
-      sel.innerHTML = '';
-      try {
-        const res = await fetch('/api/record_dirs');
-        const data = await res.json();
-        const dirs = data.dirs || [];
-        if (!dirs.length) {
-          const opt = document.createElement('option');
-          opt.value = '';
-          opt.textContent = 'Nenhum diretório configurado';
-          sel.appendChild(opt);
-          sel.disabled = true;
-          return;
-        }
-        dirs.forEach(d => {
-          const opt = document.createElement('option');
-          opt.value = d.id;
-          opt.textContent = d.label + ' — ' + d.path;
-          sel.appendChild(opt);
-        });
-      } catch (e) {
-        console.error(e);
-        const opt = document.createElement('option');
-        opt.value = '';
-        opt.textContent = 'Erro ao carregar diretórios';
-        sel.appendChild(opt);
-        sel.disabled = true;
-      }
-    }
 
     function renderResults(payload) {
       const card = document.getElementById('resultsCard');
@@ -693,6 +662,12 @@
         setFlowHint('Informe ou selecione o diretório onde estão os bancos.', 'warn');
         return;
       }
+      // persiste o ultimo diretorio usado, para reabrir mais rapido depois
+      try {
+        if (window.localStorage) {
+          localStorage.setItem('track_last_dir', customPath);
+        }
+      } catch (e) {}
       btn.disabled = true;
       status.textContent = 'Executando análise...';
        setFlowHint('Executando análise nos bancos selecionados...', 'info');
@@ -739,6 +714,18 @@
         });
       }
 
+      // restaura ultimo diretorio usado, se existir
+      try {
+        if (window.localStorage) {
+          const lastDir = localStorage.getItem('track_last_dir') || '';
+          if (lastDir) {
+            const input = document.getElementById('customDirInput');
+            if (input) input.value = lastDir;
+            currentBrowsePath = lastDir;
+          }
+        }
+      } catch (e) {}
+
       document.getElementById('runBtn').addEventListener('click', runAnalysis);
       const browseBtn = document.getElementById('browseDirBtn');
       if (browseBtn) {
@@ -756,6 +743,11 @@
       if (selectBtn) selectBtn.addEventListener('click', () => {
         if (!currentBrowsePath) return;
         document.getElementById('customDirInput').value = currentBrowsePath;
+        try {
+          if (window.localStorage) {
+            localStorage.setItem('track_last_dir', currentBrowsePath);
+          }
+        } catch (e) {}
         closeDirModal();
       });
     });
@@ -767,7 +759,17 @@
       if (!modal) return;
       modal.classList.add('visible');
       document.getElementById('dirModalStatus').textContent = '';
-      loadDirEntries('');
+      let startPath = currentBrowsePath || '';
+      if (!startPath) {
+        try {
+          if (window.localStorage) {
+            startPath = localStorage.getItem('track_last_dir') || '';
+          }
+        } catch (e) {
+          startPath = '';
+        }
+      }
+      loadDirEntries(startPath || '');
     }
 
     function closeDirModal() {

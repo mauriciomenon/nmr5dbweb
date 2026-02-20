@@ -1040,7 +1040,9 @@ function renderDbTabs(){
   const el = $('dbTabs');
   const help = $('dbTabHelp');
   if(!el) return;
-  const items = (lastUploads || []).filter(f => f && f.name && isSupportedFileName(f.name));
+  // Na coluna "Tabelas" queremos mostrar apenas bancos utilizáveis na busca,
+  // ou seja, arquivos DuckDB (resultado final da conversão ou nativos).
+  const items = (lastUploads || []).filter(f => f && f.name && isDuckdbFile(f.name));
   if(!items.length){
     el.innerHTML = '';
     if(help) help.textContent = 'Nenhum banco enviado ainda.';
@@ -1225,6 +1227,23 @@ async function refreshStatus(){
       setStepState('stepSearch','done');
     } else {
       setStepState('stepSearch','active');
+    }
+
+    // Atualiza hint/botao de busca direto na coluna Tabelas
+    const dbSearchHint = $('dbSearchHint');
+    const dbSearchBtn = $('dbSearchBtn');
+    const dbSearchText = $('dbSearchText');
+    if(dbSearchHint){
+      if(searchEnabled && db){
+        const label = shortName(db) || 'este DB';
+        if(dbSearchText){
+          dbSearchText.textContent = 'Pronto para buscar em ' + label + '.';
+        }
+        dbSearchHint.style.display = '';
+        if(dbSearchBtn) dbSearchBtn.disabled = false;
+      } else {
+        dbSearchHint.style.display = 'none';
+      }
     }
 
     if($('searchMeta')){
@@ -1514,6 +1533,19 @@ const stepSearch = $('stepSearch');
 if(stepSearch){
   stepSearch.addEventListener('click', (ev)=>{
     if(ev && ev.target && ev.target.tagName === 'BUTTON') return;
+    openModalById('searchModal');
+    refreshStatus();
+    const q = $('q');
+    if(q && !q.disabled){
+      q.focus();
+      q.select();
+    }
+  });
+}
+const dbSearchBtn = $('dbSearchBtn');
+if(dbSearchBtn){
+  dbSearchBtn.addEventListener('click', (ev)=>{
+    ev.preventDefault();
     openModalById('searchModal');
     refreshStatus();
     const q = $('q');

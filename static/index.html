@@ -471,22 +471,36 @@
 
   <div class="container">
     <aside class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">
-        <strong>Tabelas</strong>
-        <button id="refreshTables" class="btn ghost small">Atualizar</button>
+      <!-- Bloco 1: Bancos -->
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">
+          <strong>Bancos</strong>
+          <button id="refreshTables" class="btn ghost small">Atualizar</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <label for="dbSort" class="small">Ordenar:</label>
+          <select id="dbSort" style="flex:1;min-width:0;">
+            <option value="name_asc">Nome A-Z</option>
+            <option value="name_desc">Nome Z-A</option>
+          </select>
+        </div>
+        <div id="dbTabs" class="db-tabs"></div>
+        <div id="dbTabHelp" class="db-tab-help">Selecione um banco para ver as tabelas.</div>
+        <div id="dbSearchHint" class="small" style="margin:6px 0 0 0;display:none;">
+          <span id="dbSearchText">Pronto para buscar neste banco.</span>
+          <button id="dbSearchBtn" class="btn ghost small" type="button" style="margin-left:4px;">Abrir busca</button>
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-        <label for="dbSort" class="small">Ordenar:</label>
-        <select id="dbSort" style="flex:1;min-width:0;">
-          <option value="name_asc">Nome A-Z</option>
-          <option value="name_desc">Nome Z-A</option>
-        </select>
+
+      <!-- Bloco 2: Tabelas -->
+      <div style="border-top:1px solid var(--border); padding-top:8px; margin-top:2px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;gap:8px;">
+          <strong>Tabelas</strong>
+        </div>
+        <input id="filterTables" placeholder="Filtrar tabelas..." style="width:100%; margin-bottom:8px;" />
+        <ul id="tableList" class="table-list"></ul>
+        <div style="margin-top:10px" class="small">Clique em uma tabela para abri-la na visualizacao completa.</div>
       </div>
-      <div id="dbTabs" class="db-tabs"></div>
-      <div id="dbTabHelp" class="db-tab-help">Selecione um banco para ver as tabelas.</div>
-      <input id="filterTables" placeholder="Filtrar tabelas..." style="width:100%; margin-bottom:8px;" />
-      <ul id="tableList" class="table-list"></ul>
-      <div style="margin-top:10px" class="small">Clique em uma tabela para abri-la na visualizacao completa.</div>
     </aside>
 
     <main>
@@ -500,7 +514,7 @@
         <div class="muted" style="font-size:13px;margin-top:8px;">
           Dicas rapidas:<br/>
           • Os <strong>badges do topo</strong> mostram o DB ativo, modo (Access/DuckDB), status do indice e alertas.<br/>
-          • A coluna <strong>Tabelas</strong> lista as tabelas do DB e permite abrir a visualizacao completa de uma tabela.<br/>
+          • A coluna da esquerda tem dois blocos: <strong>Bancos</strong> (em cima, para escolher o arquivo .duckdb) e <strong>Tabelas</strong> (embaixo, com a lista de tabelas do banco selecionado).<br/>
           • No modal de busca, voce pode filtrar por tabelas, ajustar limites e exportar o resultado em CSV.
         </div>
       </div>

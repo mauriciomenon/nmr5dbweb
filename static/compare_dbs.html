@@ -713,15 +713,15 @@
       <div class="card-header-row step-card-header" onclick="toggleStep(1)">
         <div>
           <p class="card-title-main">1. Escolher bancos DuckDB</p>
-          <p class="card-title-sub">Defina os arquivos que serão comparados (A = antigo, B = novo).</p>
+          <p class="card-title-sub">Defina os arquivos que serão comparados (A = novo, B = antigo).</p>
         </div>
         <span class="step-status-pill" id="step1Status">Em aberto</span>
       </div>
       <div class="step-card-body" id="stepBody1">
         <div class="row">
           <div class="col">
-            <label for="db1Path">Banco A (.duckdb)</label>
-            <input id="db1Path" type="text" placeholder="Ex: C:/caminho/para/ANTIGO.duckdb" />
+            <label for="db1Path">Banco A (.duckdb) — NOVO</label>
+            <input id="db1Path" type="text" placeholder="Ex: C:/caminho/para/NOVO.duckdb" />
             <div style="margin-top:4px; display:flex; align-items:center; gap:8px; font-size:12px; color:#9ca3af;">
               <input id="fileInputA" type="file" accept=".duckdb" style="display:none" />
               <button type="button" id="btnUploadA" class="secondary" onclick="document.getElementById('fileInputA').click()">Escolher arquivo...</button>
@@ -729,8 +729,8 @@
             </div>
           </div>
           <div class="col">
-            <label for="db2Path">Banco B (.duckdb)</label>
-            <input id="db2Path" type="text" placeholder="Ex: C:/caminho/para/NOVO.duckdb" />
+            <label for="db2Path">Banco B (.duckdb) — ANTIGO</label>
+            <input id="db2Path" type="text" placeholder="Ex: C:/caminho/para/ANTIGO.duckdb" />
             <div style="margin-top:4px; display:flex; align-items:center; gap:8px; font-size:12px; color:#9ca3af;">
               <input id="fileInputB" type="file" accept=".duckdb" style="display:none" />
               <button type="button" id="btnUploadB" class="secondary" onclick="document.getElementById('fileInputB').click()">Escolher arquivo...</button>
@@ -790,8 +790,8 @@ Ex: COL1,COL2,COL3"></textarea>
         <div style="margin-top:8px; font-size:13px;">
           <div style="margin-bottom:2px;">Filtrar por tipo de diferença (somente na visualização):</div>
           <label style="margin-right:8px;"><input type="checkbox" id="filterChanged" checked /> Alteradas</label>
-          <label style="margin-right:8px;"><input type="checkbox" id="filterAdded" checked /> Novas</label>
-          <label><input type="checkbox" id="filterRemoved" checked /> Removidas</label>
+          <label style="margin-right:8px;"><input type="checkbox" id="filterAdded" checked /> Novas (só em A / banco NOVO)</label>
+          <label><input type="checkbox" id="filterRemoved" checked /> Removidas (só em B / banco ANTIGO)</label>
         </div>
         <div style="margin-top:4px; font-size:13px;">
           <label for="filterColumn">Filtrar por coluna alterada (opcional)</label>
@@ -837,11 +837,11 @@ Ex: COL1,COL2,COL3"></textarea>
         <div class="export-row">
           <span>Os resultados abaixo respeitam os filtros e limites configurados.</span>
           <span style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="button" class="secondary" onclick="generateTablesOverview()">Mapa geral das tabelas</button>
+            <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Mapa geral das tabelas</button>
             <button type="button" class="secondary" onclick="exportComparison()">Exportar para Excel (CSV)</button>
           </span>
         </div>
-        <div id="tablesOverview"></div>
+        <div id="tablesOverview" style="display:none;"></div>
         <div id="summary"></div>
         <div id="results"></div>
         <div id="pagination" style="margin-top:8px; font-size:12px;"></div>
@@ -860,6 +860,7 @@ Ex: COL1,COL2,COL3"></textarea>
     let tablesLoadedOnce = false;
     const compareStateKey = 'duckdb_compare_dbs_state_v1';
     let tablesOverviewCache = null;
+    let tablesOverviewVisible = false;
 
     function setFlowHint(message, variant = 'info') {
       const hintEl = document.getElementById('flowHint');
@@ -1406,10 +1407,14 @@ Ex: COL1,COL2,COL3"></textarea>
       }
 
       // monta parâmetros de filtro para o backend
+      // No backend, "added" = só em B (ANTIGO) e "removed" = só em A (NOVO).
+      // Como na UI as caixas estão rotuladas como "Novas" (A) e "Removidas" (B),
+      // aqui invertemos o mapeamento para que o filtro faça sentido para quem
+      // pensa A = novo e B = antigo.
       const change_types = [];
       if (!cbChanged || cbChanged.checked) change_types.push('changed');
-      if (!cbAdded || cbAdded.checked) change_types.push('added');
-      if (!cbRemoved || cbRemoved.checked) change_types.push('removed');
+      if (!cbAdded || cbAdded.checked) change_types.push('removed');   // Novas = só em A
+      if (!cbRemoved || cbRemoved.checked) change_types.push('added'); // Removidas = só em B
 
       const changed_column = (colSelect && colSelect.value) ? colSelect.value : null;
 
@@ -1571,10 +1576,13 @@ Ex: COL1,COL2,COL3"></textarea>
       }
       const s = data.summary || {};
       const same = s.same_count ?? 0;
-      const added = s.added_count ?? byType.added.length;
-      const removed = s.removed_count ?? byType.removed.length;
+      // Atenção: no backend, "added" = existe só em B e "removed" = existe só em A.
+      // Como na UI o Banco A é o NOVO e o B é o ANTIGO, aqui invertemos os rótulos
+      // para que "novos" signifique "só em A" e "removidos" signifique "só em B".
+      const onlyInB = s.added_count ?? byType.added.length;   // só no B (ANTIGO)
+      const onlyInA = s.removed_count ?? byType.removed.length; // só no A (NOVO)
       const changed = s.changed_count ?? byType.changed.length;
-      const totalKeys = s.keys_total ?? (same + added + removed + changed);
+      const totalKeys = s.keys_total ?? (same + onlyInA + onlyInB + changed);
 
       // Resumo por coluna: em quantos registros cada coluna mudou
       const colDiffCounts = {};
@@ -1598,8 +1606,8 @@ Ex: COL1,COL2,COL3"></textarea>
               <strong>Visão geral:</strong> ${totalKeys} registros (chaves) analisados
               <div class="result-badges-row">
                 <span class="badge same">${same} mantidos (iguais em A e B)</span>
-                <span class="badge added">+${added} novos (existem só em B)</span>
-                <span class="badge removed">-${removed} removidos (existiam só em A)</span>
+                <span class="badge added">+${onlyInA} novos (existem só em A — banco NOVO)</span>
+                <span class="badge removed">-${onlyInB} removidos (existiam só em B — banco ANTIGO)</span>
                 <span class="badge changed">±${changed} alterados (chave existe em ambos, mas com diferença)</span>
               </div>
             </div>
@@ -1680,8 +1688,11 @@ Ex: COL1,COL2,COL3"></textarea>
 
       const sections = [
         { type: 'changed', title: 'Alteradas (existem em A e B, mas com diferenças)', rows: byType.changed },
-        { type: 'added', title: 'Adicionadas (existem só em B)', rows: byType.added },
-        { type: 'removed', title: 'Removidas (existiam só em A)', rows: byType.removed }
+        // Para cores: "Novas" devem usar o estilo verde (added) e
+        // "Removidas" o estilo vermelho (removed), independentemente
+        // dos nomes internos do backend.
+        { type: 'added', title: 'Novas — só em A (banco NOVO)', rows: byType.removed },
+        { type: 'removed', title: 'Removidas — só em B (banco ANTIGO)', rows: byType.added }
       ];
 
       resultsEl.innerHTML = '';
@@ -1736,11 +1747,17 @@ Ex: COL1,COL2,COL3"></textarea>
           }
 
           const rowSummary = document.createElement('summary');
-          const typeLabel = r.type === 'added' ? 'Adicionada'
-            : r.type === 'removed' ? 'Removida'
+          // Backend: "added" = só em B (ANTIGO), "removed" = só em A (NOVO).
+          // Para o usuário: queremos ver "Nova" quando existe só no banco NOVO (A)
+          // e "Removida" quando existia só no banco ANTIGO (B).
+          const visualType = r.type === 'removed' ? 'added'   // só em A => Nova
+            : r.type === 'added' ? 'removed'                  // só em B => Removida
+            : 'changed';
+          const typeLabel = r.type === 'removed' ? 'Nova'
+            : r.type === 'added' ? 'Removida'
             : 'Alterada';
           rowSummary.innerHTML = `
-            <span class="badge ${r.type}" style="margin-right:6px;">${typeLabel}</span>
+            <span class="badge ${visualType}" style="margin-right:6px;">${typeLabel}</span>
             <span style="font-size:12px;">
               ${keyParts.join(', ')}
               ${isRangerSostat && extraParts.length ? ' · ' + extraParts.join(' · ') : ''}
@@ -2103,6 +2120,14 @@ Ex: COL1,COL2,COL3"></textarea>
       }
     }
 
+    function updateTablesOverviewVisibility() {
+      const container = document.getElementById('tablesOverview');
+      const btn = document.getElementById('btnTablesOverview');
+      if (!container || !btn) return;
+      container.style.display = tablesOverviewVisible ? 'block' : 'none';
+      btn.textContent = tablesOverviewVisible ? 'Ocultar mapa das tabelas' : 'Mapa geral das tabelas';
+    }
+
     async function generateTablesOverview() {
       const container = document.getElementById('tablesOverview');
       const db1Input = document.getElementById('db1Path');
@@ -2163,6 +2188,23 @@ Ex: COL1,COL2,COL3"></textarea>
 
       tablesOverviewCache = { db1: db1, db2: db2, result: overview };
       renderTablesOverview(overview);
+    }
+
+    async function toggleTablesOverview() {
+      // se já estiver visível, apenas oculta
+      if (tablesOverviewVisible) {
+        tablesOverviewVisible = false;
+        updateTablesOverviewVisibility();
+        return;
+      }
+
+      // se ainda não geramos nada para este par de bancos, gera agora
+      const container = document.getElementById('tablesOverview');
+      if (container && (!tablesOverviewCache)) {
+        await generateTablesOverview();
+      }
+      tablesOverviewVisible = true;
+      updateTablesOverviewVisibility();
     }
 
     function renderTablesOverview(overview) {
