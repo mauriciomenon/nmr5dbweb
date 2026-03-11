@@ -26,6 +26,14 @@ The first stabilization slice is intentionally narrow:
 - Search and compare use different models and are hard to reason about together
 - Test environment is not yet reproducible from a clean machine
 
+## Setup Status
+
+- Clean Python setup now uses `uv`
+- Use `requirements.txt` for runtime
+- Use `requirements-dev.txt` for runtime plus validation tools
+- Focused compare tests pass in a clean `uv` venv
+- `ruff` and `ty` still expose broad existing debt outside the setup slice
+
 ## Operator Notes For Next Conversation
 
 - Read `PROJECT_STRUCTURE.md` first

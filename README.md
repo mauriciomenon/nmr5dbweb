@@ -8,7 +8,7 @@ Pensado para cenários de auditoria, análise histórica e migração de bases.
 ## Requisitos
 
 - Python **3.12.8** (recomendado; testado em 3.12.x)
-- `pip` e suporte a ambientes virtuais (`venv`)
+- `uv` para criar o ambiente e sincronizar dependências
 - Acesso à internet para baixar dependências Python e, opcionalmente, JARs/SDKs
 ![alt text](image.png)
 
@@ -48,7 +48,7 @@ No diretório do projeto (primeira vez):
 
 ```bash
 # 1) criar ambiente virtual (recomendado)
-python -m venv .venv
+uv venv --python 3.12.8 .venv
 
 # 2) ativar o ambiente virtual
 # Windows (PowerShell)
@@ -58,9 +58,8 @@ python -m venv .venv
 # macOS / Linux
 source .venv/bin/activate
 
-# 3) instalar dependências Python
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+# 3) instalar dependências de runtime
+uv pip sync requirements.txt
 
 # 4) iniciar a interface Flask
 python main.py
@@ -214,19 +213,19 @@ Baseado em testes com 5 arquivos (~90 MB cada) em macOS:
 ```bash
 # Clonar repositório
 git clone <repository-url>
-cd mdb2sql_fork
+cd nmr5dbweb
 
 # Criar ambiente virtual (recomendado) – usar Python 3.12.x
-python -m venv venv
+uv venv --python 3.12.8 .venv
 
 # Ativar ambiente virtual
 # macOS/Linux:
-source venv/bin/activate
+source .venv/bin/activate
 # Windows (PowerShell ou Prompt):
-venv\Scripts\activate
+.venv\Scripts\activate
 
 # Instalar dependências Python
-pip install -r requirements.txt
+uv pip sync requirements.txt
 
 # Instalar dependências de sistema (escolha a que você for usar)
 brew install mdbtools            # Para convert_mdbtools.py (macOS)
@@ -387,8 +386,20 @@ sudo apt install default-jdk
 ## Desenvolvimento
 
 ```bash
-# Rodar testes
-python -m pytest tests/
+# Criar/atualizar ambiente de desenvolvimento
+uv venv --python 3.12.8 .venv
+
+# Ativar o ambiente
+source .venv/bin/activate
+
+# Instalar dependências de runtime + ferramentas de validacao
+uv pip sync requirements-dev.txt
+
+# Validacoes principais
+python -m py_compile $(find . -name "*.py" -type f)
+ruff check .
+ty check .
+pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py
 
 # (Opcional) checar estilo de código para conversores
 python -m pylint converters/convert_*.py

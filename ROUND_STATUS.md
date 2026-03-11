@@ -63,6 +63,45 @@ Slice 1: repo zero-state and control files
 - `ruff check .`: still failing with pre-existing repo debt outside this slice
 - `uv run pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: blocked by missing `duckdb` in the uv runtime
 
+## Follow-up Slice: Clean Setup And Test Environment
+
+### Goal
+
+Make the project boot and validate from a clean `uv`-managed Python environment.
+
+### Applied
+
+1. Added `requirements-dev.txt` with:
+   - `-r requirements.txt`
+   - `pytest`
+   - `ruff`
+   - `ty`
+   - explicit `pluggy`, `iniconfig`, `pygments`
+2. Updated `README.md` to document:
+   - `uv venv --python 3.12.8 .venv`
+   - `uv pip sync requirements.txt`
+   - `uv pip sync requirements-dev.txt`
+   - main validation commands
+
+### What Was Proved
+
+- A clean `uv` venv with Python 3.12.8 can be created successfully.
+- `uv pip sync requirements-dev.txt` installs the runtime and validation stack.
+- Focused tests now pass in a clean environment.
+
+### Validation In Clean Venv
+
+- `python -m py_compile $(rg --files -g "*.py")`: passed
+- `pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: 8 passed
+- `ruff check .`: still failing with existing repo-wide debt
+- `ty check .`: still failing with existing repo-wide debt
+
+### Findings From This Slice
+
+- The repo still has no `pyproject.toml` or `uv.lock`.
+- `uv run ...` alone is not enough here because the repo is requirements-based, not project-metadata-based.
+- `pytest` needed explicit `pluggy`, `iniconfig`, and `pygments` to become stable in the clean synced environment used in this repo.
+
 ## Next Expected Step
 
 After this slice:
