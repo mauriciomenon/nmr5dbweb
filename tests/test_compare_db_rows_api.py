@@ -8,7 +8,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from interface.app_flask_local_search import app  # noqa: E402
+import interface.app_flask_local_search as local_search  # noqa: E402
+
+
+app = local_search.app
 
 
 def _make_db(path: Path, rows):
@@ -251,3 +254,242 @@ def test_api_compare_changed_column_outside_compare_columns_returns_400(tmp_path
 
     assert resp.status_code == 400
     assert "changed_column" in resp.get_json()["error"]
+
+
+def test_api_compare_row_limit_does_not_truncate_key_filter(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+
+    seen_limits = []
+
+    def fake_compare(_db1, _db2, _table, _keys, _compare, limit=None):
+        seen_limits.append(limit)
+        rows = [
+            {"type": "changed", "key": {"id": 1}, "a": {"valor": "a"}, "b": {"valor": "b"}},
+            {"type": "removed", "key": {"id": 2}, "a": {"valor": "x"}, "b": {"valor": None}},
+            {"type": "changed", "key": {"id": 3}, "a": {"valor": "m"}, "b": {"valor": "n"}},
+        ]
+        return {
+            "table": "T",
+            "db1": str(db1),
+            "db2": str(db2),
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "row_count": len(rows),
+            "rows": rows,
+            "summary": {
+                "rows_a": 3,
+                "rows_b": 3,
+                "keys_total": 3,
+                "same_count": 0,
+                "added_count": 0,
+                "removed_count": 1,
+                "changed_count": 2,
+            },
+        }
+
+    monkeypatch.setattr(local_search, "compare_table_duckdb", fake_compare)
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "key_filter": "id=3",
+            "row_limit": 1,
+            "page_size": 1,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert seen_limits == [None]
+    assert data["total_filtered_rows"] == 1
+    assert data["row_count"] == 1
+    assert data["rows"][0]["key"]["id"] == 3
+
+
+def test_api_compare_row_limit_does_not_truncate_changed_column_filter(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+
+    seen_limits = []
+
+    def fake_compare(_db1, _db2, _table, _keys, _compare, limit=None):
+        seen_limits.append(limit)
+        rows = [
+            {"type": "changed", "key": {"id": 1}, "a": {"v1": "a", "v2": "x"}, "b": {"v1": "a", "v2": "y"}},
+            {"type": "changed", "key": {"id": 2}, "a": {"v1": "c", "v2": "z"}, "b": {"v1": "d", "v2": "z"}},
+        ]
+        return {
+            "table": "T",
+            "db1": str(db1),
+            "db2": str(db2),
+            "key_columns": ["id"],
+            "compare_columns": ["v1", "v2"],
+            "row_count": len(rows),
+            "rows": rows,
+            "summary": {
+                "rows_a": 2,
+                "rows_b": 2,
+                "keys_total": 2,
+                "same_count": 0,
+                "added_count": 0,
+                "removed_count": 0,
+                "changed_count": 2,
+            },
+        }
+
+    monkeypatch.setattr(local_search, "compare_table_duckdb", fake_compare)
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["v1", "v2"],
+            "changed_column": "v1",
+            "row_limit": 1,
+            "page_size": 1,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert seen_limits == [None]
+    assert data["total_filtered_rows"] == 1
+    assert data["rows"][0]["key"]["id"] == 2
+
+
+def test_api_compare_row_limit_does_not_truncate_change_types_filter(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+
+    seen_limits = []
+
+    def fake_compare(_db1, _db2, _table, _keys, _compare, limit=None):
+        seen_limits.append(limit)
+        rows = [
+            {"type": "changed", "key": {"id": 1}, "a": {"valor": "a"}, "b": {"valor": "b"}},
+            {"type": "removed", "key": {"id": 2}, "a": {"valor": "x"}, "b": {"valor": None}},
+            {"type": "added", "key": {"id": 3}, "a": {"valor": None}, "b": {"valor": "z"}},
+        ]
+        return {
+            "table": "T",
+            "db1": str(db1),
+            "db2": str(db2),
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "row_count": len(rows),
+            "rows": rows,
+            "summary": {
+                "rows_a": 2,
+                "rows_b": 2,
+                "keys_total": 3,
+                "same_count": 0,
+                "added_count": 1,
+                "removed_count": 1,
+                "changed_count": 1,
+            },
+        }
+
+    monkeypatch.setattr(local_search, "compare_table_duckdb", fake_compare)
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "change_types": ["added"],
+            "row_limit": 1,
+            "page_size": 1,
+        },
+    )
+
+    assert resp.status_code == 200
+    data = resp.get_json()
+    assert seen_limits == [None]
+    assert data["total_filtered_rows"] == 1
+    assert data["rows"][0]["type"] == "added"
+    assert data["rows"][0]["key"]["id"] == 3
+
+
+def test_api_compare_pagination_uses_full_diff_set(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+
+    seen_limits = []
+
+    def fake_compare(_db1, _db2, _table, _keys, _compare, limit=None):
+        seen_limits.append(limit)
+        rows = [
+            {"type": "changed", "key": {"id": 1}, "a": {"valor": "a"}, "b": {"valor": "b"}},
+            {"type": "removed", "key": {"id": 2}, "a": {"valor": "x"}, "b": {"valor": None}},
+            {"type": "added", "key": {"id": 3}, "a": {"valor": None}, "b": {"valor": "z"}},
+        ]
+        return {
+            "table": "T",
+            "db1": str(db1),
+            "db2": str(db2),
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "row_count": len(rows),
+            "rows": rows,
+            "summary": {
+                "rows_a": 2,
+                "rows_b": 2,
+                "keys_total": 3,
+                "same_count": 0,
+                "added_count": 1,
+                "removed_count": 1,
+                "changed_count": 1,
+            },
+        }
+
+    monkeypatch.setattr(local_search, "compare_table_duckdb", fake_compare)
+
+    payload = {
+        "db1_path": str(db1),
+        "db2_path": str(db2),
+        "table": "T",
+        "key_columns": ["id"],
+        "compare_columns": ["valor"],
+        "row_limit": 1,
+        "page_size": 1,
+    }
+    resp_page_1 = client.post("/api/compare_db_rows", json=payload | {"page": 1})
+    resp_page_2 = client.post("/api/compare_db_rows", json=payload | {"page": 2})
+
+    assert resp_page_1.status_code == 200
+    assert resp_page_2.status_code == 200
+    data_page_1 = resp_page_1.get_json()
+    data_page_2 = resp_page_2.get_json()
+
+    assert seen_limits == [None, None]
+    assert data_page_1["total_filtered_rows"] == 3
+    assert data_page_1["total_pages"] == 3
+    assert data_page_1["page"] == 1
+    assert data_page_2["total_filtered_rows"] == 3
+    assert data_page_2["total_pages"] == 3
+    assert data_page_2["page"] == 2
+    assert data_page_1["rows"][0]["key"]["id"] != data_page_2["rows"][0]["key"]["id"]

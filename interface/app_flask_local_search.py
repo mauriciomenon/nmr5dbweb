@@ -850,7 +850,10 @@ def api_compare_db_rows():
             app.logger.warning("compare_db_rows: %s", msg)
             return jsonify({"error": msg}), 400
 
-        result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=row_limit)
+        # Nesta rota, row_limit/page_size controla a saída paginada.
+        # Se aplicarmos LIMIT antes, filtros backend e paginação em páginas > 1
+        # passam a operar sobre um universo truncado e podem perder diferenças reais.
+        result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=None)
 
         rows = result.get("rows") or []
         result_compare_columns = result.get("compare_columns") or []

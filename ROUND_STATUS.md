@@ -331,3 +331,38 @@ Harden the compare stack around SQL identifiers, client-side filter validation, 
 
 - The compare backend is now less permissive on malformed payloads; callers that relied on silent coercion will now receive `400`.
 - The next unresolved compare decision is semantic, not structural: whether compare-without-key should keep ignoring duplicate-only differences or move to true multiset comparison.
+
+## Follow-up Slice: Compare Pagination Correctness
+
+### Goal
+
+Stop `/api/compare_db_rows` from truncating the compare result before backend filters and pagination are applied.
+
+### Applied
+
+1. Updated `interface/app_flask_local_search.py` so this route no longer passes `row_limit` into `compare_table_duckdb(...)`.
+2. Kept `row_limit` and `page_size` strictly as output pagination controls for the route.
+3. Added focused API regression coverage in `tests/test_compare_db_rows_api.py` for:
+   - `key_filter` with `row_limit=1`
+   - `change_types` with `row_limit=1`
+   - `changed_column` with `row_limit=1`
+   - page 2 with `row_limit=1`
+4. Used `monkeypatch` in the new tests to prove the route now calls the compare layer with `limit=None` and paginates only after filtering.
+
+### What Was Proved
+
+- Backend filters no longer operate on a prematurely truncated diff set.
+- Pagination across page 2 and later no longer collapses back to page 1 because of an upstream SQL limit.
+- The route now matches the frontend contract, where `row_limit` is effectively the requested page size.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_db_rows_api.py tests/test_compare_dbs.py`: `22 passed`
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_compare_db_rows_api.py`: passed
+
+### Findings From This Slice
+
+- The compare route is now correct for filtering and pagination, but it still paginates in Python after loading the full diff set returned by `compare_table_duckdb(...)`.
+- If very large compare outputs become a real performance bottleneck, the next measured optimization should move filter/pagination deeper into the SQL layer instead of reintroducing truncation before filtering.

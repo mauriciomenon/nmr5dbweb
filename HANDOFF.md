@@ -49,6 +49,8 @@ The first stabilization slice is intentionally narrow:
 - Keyed compare in `interface/compare_dbs.py` now quotes table and column identifiers consistently
 - `interface/compare_dbs.py` now validates missing tables, `key_columns`, and `compare_columns` before building SQL
 - `/api/compare_db_rows` now rejects malformed `key_filter`, invalid `change_types`, and `changed_column` outside the resolved compare columns
+- `/api/compare_db_rows` no longer truncates the compare result before backend filtering and pagination
+- `row_limit` now behaves as page-size/output control in this route, which matches the current frontend payload
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -66,3 +68,4 @@ The first stabilization slice is intentionally narrow:
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today
+  - if needed by real data volume, push compare filtering/pagination from Python into SQL
