@@ -24,18 +24,21 @@ The first stabilization slice is intentionally narrow:
 - `static/app.js` is still a large monolithic frontend file even after removing the six most critical duplicated functions
 - Backend responsibilities are concentrated in one large Flask file
 - Search and compare use different models and are hard to reason about together
-- Direct validation on this machine can still drift because `uv run` is picking an ambient environment outside a clean repo-synced venv
+- `tools/encontrar_registro_em_bds.py` still has heavy style debt even after the generic-search repair
 
 ## Setup Status
 
 - Clean Python setup now uses `uv`
 - Use `requirements.txt` for runtime
 - Use `requirements-dev.txt` for runtime plus validation tools
-- Focused compare tests pass in a clean `uv` venv
+- Project-local venv is now `/Users/menon/git/nmr5dbweb/.venv`
+- Project-local Python is now `3.13.12`
+- Focused compare and generic-search tests pass in the project-local venv
 - `ruff` and `ty` still expose broad existing debt outside the setup slice
 - This round removed six duplicated hot-path functions from `static/app.js`
 - `node --check static/app.js` passes after the JS cleanup
-- Re-running focused `pytest` in the current machine state is still blocked by ambient environment drift, not by this JS patch
+- Avoid `uv run` in this repo for now; prefer direct `./.venv/bin/...` validation commands
+- `tools/encontrar_registro_em_bds.py` now has `buscar_generico_em_tabela(...)` implemented and covered by focused tests
 
 ## Operator Notes For Next Conversation
 
@@ -43,4 +46,5 @@ The first stabilization slice is intentionally narrow:
 - Read `ROUND_STATUS.md` second
 - Read `RECOVERY_BACKLOG.md` for deferred work
 - Keep changes minimal and behavior-preserving
+- Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Do not start broad frontend refactors before deciding whether the next slice is `static/app.js` structure cleanup or Python debt baseline reduction

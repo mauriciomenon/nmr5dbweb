@@ -21,22 +21,35 @@ import datetime
 import re
 import csv
 import hashlib
+from typing import Any
 
 # libs opcionais
+duckdb: Any | None = None
 try:
-    import duckdb
+    import duckdb as _duckdb
 except Exception:
-    duckdb = None
+    pass
+else:
+    duckdb = _duckdb
 
+pyodbc: Any | None = None
 try:
-    import pyodbc
+    import pyodbc as _pyodbc
 except Exception:
-    pyodbc = None
+    pass
+else:
+    pyodbc = _pyodbc
 
 import sqlite3
 
 EXTS_PADRAO = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
 DATE_RE = re.compile(r'(?P<y>\d{4})[-_]? ?(?P<m>\d{2})[-_]? ?(?P<d>\d{2})')
+
+
+def require_duckdb():
+    if duckdb is None:
+        raise RuntimeError("duckdb nao esta instalado")
+    return duckdb
 
 # ---------- utilitários ----------
 def to_json_serializable(obj):
@@ -128,7 +141,7 @@ def parse_filters_string(s: str):
 
 # ---------- funções para listar/colunas (por engine) ----------
 def listar_tabelas_duckdb(path):
-    conn = duckdb.connect(str(path))
+    conn = require_duckdb().connect(str(path))
     try:
         rows = conn.execute("SHOW TABLES").fetchall()
         return [r[0] for r in rows]
@@ -136,7 +149,7 @@ def listar_tabelas_duckdb(path):
         conn.close()
 
 def colunas_tabela_duckdb(path, tabela):
-    conn = duckdb.connect(str(path))
+    conn = require_duckdb().connect(str(path))
     try:
         cur = conn.execute(f'SELECT * FROM "{tabela}" LIMIT 0')
         return [c[0] for c in cur.description]
@@ -175,7 +188,10 @@ def listar_tabelas_access(path):
             break
         except Exception as e:
             last_err = e; conn = None
-    if conn is None: raise last_err
+    if conn is None:
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("nao foi possivel conectar ao Access")
     try:
         cur = conn.cursor()
         tables=[]
@@ -202,7 +218,10 @@ def colunas_tabela_access(path, tabela):
     for cs in conn_strs:
         try: conn = pyodbc.connect(cs, autocommit=True, timeout=30); break
         except Exception as e: last_err = e; conn = None
-    if conn is None: raise last_err
+    if conn is None:
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("nao foi possivel conectar ao Access")
     try:
         cols=[]
         cur = conn.cursor()
@@ -243,15 +262,19 @@ def checar_com_filtros(path, engine, tabela, filters, sample, show_cols):
         return 0, None, None
     try:
         if engine == "duckdb":
-            conn = duckdb.connect(str(path))
+            conn = require_duckdb().connect(str(path))
             try:
                 sql_sample = f'SELECT * FROM "{tabela}" WHERE {where_sql} LIMIT 1'
                 try:
                     row = conn.execute(sql_sample, params).fetchone()
                 except Exception:
                     try:
-                        cnt = conn.execute(f'SELECT COUNT(*) FROM "{tabela}" WHERE {where_sql}', params).fetchone()[0]
-                        return int(cnt), None, None
+                        count_row = conn.execute(
+                            f'SELECT COUNT(*) FROM "{tabela}" WHERE {where_sql}',
+                            params,
+                        ).fetchone()
+                        count_value = count_row[0] if count_row else 0
+                        return int(count_value), None, None
                     except Exception as e2:
                         return 0, None, str(e2)
                 if row:
@@ -260,8 +283,12 @@ def checar_com_filtros(path, engine, tabela, filters, sample, show_cols):
                     if show_cols:
                         obj = {k: obj.get(k) for k in show_cols if k in obj}
                     return 1, obj if sample else {}, None
-                cnt = conn.execute(f'SELECT COUNT(*) FROM "{tabela}" WHERE {where_sql}', params).fetchone()[0]
-                return int(cnt), None, None
+                count_row = conn.execute(
+                    f'SELECT COUNT(*) FROM "{tabela}" WHERE {where_sql}',
+                    params,
+                ).fetchone()
+                count_value = count_row[0] if count_row else 0
+                return int(count_value), None, None
             finally:
                 conn.close()
 
@@ -338,6 +365,69 @@ def checar_com_filtros(path, engine, tabela, filters, sample, show_cols):
         return 0, None, "engine não suportada"
     except Exception as e:
         return 0, None, str(e)
+
+# ---------- busca generica por valor ----------
+def buscar_generico_em_tabela(path, engine, tabela, chave, col_cand, try_all_cols, sample, show_cols):
+    try:
+        if engine == "duckdb":
+            cols_all = colunas_tabela_duckdb(path, tabela)
+        elif engine == "sqlite":
+            cols_all = colunas_tabela_sqlite(path, tabela)
+        elif engine == "access":
+            cols_all = colunas_tabela_access(path, tabela)
+        else:
+            return False, None, None
+    except Exception:
+        return False, None, None
+
+    cols_map = {str(col).lower(): col for col in cols_all}
+    ordered_cols = []
+    seen = set()
+
+    for col in col_cand or []:
+        key = str(col).lower()
+        actual = cols_map.get(key)
+        if actual is not None and key not in seen:
+            ordered_cols.append(actual)
+            seen.add(key)
+
+    if try_all_cols:
+        for col in cols_all:
+            key = str(col).lower()
+            if key not in seen:
+                ordered_cols.append(col)
+                seen.add(key)
+
+    candidate_values = [chave]
+    try:
+        parsed_int = int(chave)
+    except Exception:
+        parsed_int = None
+    else:
+        candidate_values.append(parsed_int)
+
+    try:
+        parsed_float = float(chave)
+    except Exception:
+        parsed_float = None
+    else:
+        if parsed_float not in candidate_values:
+            candidate_values.append(parsed_float)
+
+    for col in ordered_cols:
+        for value in candidate_values:
+            count, sample_row, _err = checar_com_filtros(
+                path,
+                engine,
+                tabela,
+                [(col, value)],
+                sample,
+                show_cols,
+            )
+            if count:
+                return True, col, sample_row if sample else {}
+
+    return False, None, None
 
 # ---------- análise de CSV (função integrada) ----------
 def analyze_csv_file(path_csv):

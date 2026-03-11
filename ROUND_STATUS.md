@@ -147,3 +147,43 @@ Remove confirmed duplicate hot-path functions from `static/app.js` with the smal
 
 - The most obvious frontend duplication risk in `static/app.js` was reduced without refactor.
 - Validation on this machine still depends on cleaning up the ambient `uv` runtime selection, even though the previously documented clean synced venv baseline remains valid.
+
+## Follow-up Slice: Local Project Venv And Generic Search Repair
+
+### Goal
+
+Stop mixing the repo with the parent-directory virtualenv, pin the project to its own `uv` venv, and fix the missing generic search function in `tools/encontrar_registro_em_bds.py`.
+
+### Applied
+
+1. Recreated the project-local `.venv` with `uv` and Python `3.13.12`.
+2. Stopped using `uv run` for validation in this repo and switched to direct calls through `./.venv/bin/...`.
+3. Implemented `buscar_generico_em_tabela(...)` in `tools/encontrar_registro_em_bds.py`.
+4. Added focused regression coverage in `tests/test_find_record_generic.py` for:
+   - candidate-column search
+   - `--try-all-cols` fallback behavior
+5. Tightened a few low-risk typing paths in the same tool:
+   - safe Access connection raises
+   - safe DuckDB count fetch handling
+   - explicit `require_duckdb()` gate for optional module access
+
+### What Was Proved
+
+- The repo now has a working project-local venv at `/Users/menon/git/nmr5dbweb/.venv`.
+- The local interpreter is `Python 3.13.12`.
+- The generic search mode no longer references an undefined function.
+- The new focused tests pass and prove the repaired behavior in DuckDB.
+
+### Validation After Changes
+
+- `./.venv/bin/python -V`: `Python 3.13.12`
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_find_record_generic.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `10 passed`
+- `./.venv/bin/ty check tools/encontrar_registro_em_bds.py tests/test_find_record_generic.py`: passed
+- `./.venv/bin/ruff check tools/encontrar_registro_em_bds.py tests/test_find_record_generic.py`: still fails because the legacy tool file has broad pre-existing style debt unrelated to the repaired bug
+
+### Findings From This Slice
+
+- The environment drift problem was real: `uv run` was resolving against `/Users/menon/git/.venv` and even a global `pytest`.
+- For this repo, validation should currently prefer the project-local `.venv` directly until a stronger `uv` project configuration exists.
+- `tools/encontrar_registro_em_bds.py` still carries heavy style debt, but the concrete functional hole in generic search is now closed and covered by test.
