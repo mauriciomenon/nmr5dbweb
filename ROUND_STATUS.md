@@ -109,3 +109,41 @@ After this slice:
 1. start the next stabilization slice on top of `master`
 2. fix the next highest-value issues without broad refactor
 3. keep backlog and handoff files updated each round
+
+## Follow-up Slice: Remove Critical JS Duplication
+
+### Goal
+
+Remove confirmed duplicate hot-path functions from `static/app.js` with the smallest possible patch and no layout changes.
+
+### Applied
+
+1. Removed the older duplicated definitions of:
+   - `refreshTables`
+   - `selectUpload`
+   - `renderResults`
+   - `openTable`
+   - `exportTableCsv`
+   - `exportResultsCsv`
+2. Kept the newer definitions already present later in the file as the single source of behavior.
+3. Preserved the current `DOMContentLoaded` setup and existing UI structure.
+
+### What Was Proved
+
+- The six critical duplicated functions now appear exactly once in `static/app.js`.
+- The edited JS file still parses cleanly.
+- The patch is deletion-only for the duplicated blocks and does not alter visual layout.
+
+### Validation After Changes
+
+- `node --check static/app.js`: passed
+- `uv run python -m py_compile $(rg --files -g "*.py")`: passed
+- `uv run ruff check .`: still failing with pre-existing repo-wide debt
+- `uv run ty check .`: still failing with pre-existing repo-wide debt and environment/import resolution issues
+- `uv run pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: failed in this machine state because `uv run` picked an ambient pytest/plugin combination outside the repo setup
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: failed because the ambient `/Users/menon/git/.venv` does not currently have `pytest`
+
+### Findings From This Slice
+
+- The most obvious frontend duplication risk in `static/app.js` was reduced without refactor.
+- Validation on this machine still depends on cleaning up the ambient `uv` runtime selection, even though the previously documented clean synced venv baseline remains valid.
