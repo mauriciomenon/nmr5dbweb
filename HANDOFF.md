@@ -45,6 +45,11 @@ The first stabilization slice is intentionally narrow:
   - index startup error paths
   - search parameter validation
   - compare and generic-search regressions
+- No-key table compare in `interface/compare_dbs.py` now runs its diff summary in DuckDB SQL instead of materializing full table rows in Python
+- Current no-key compare semantics are still the old ones by design:
+  - row order is ignored
+  - duplicate-only differences are ignored
+  - `row_count_a` and `row_count_b` still reflect raw row totals
 
 ## Operator Notes For Next Conversation
 
@@ -54,5 +59,6 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
+  - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
+  - tighten identifier handling in `interface/compare_dbs.py`
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
-  - or structural cleanup in `static/app.js`

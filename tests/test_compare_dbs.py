@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from interface.compare_dbs import compare_table_duckdb
+from interface.compare_dbs import compare_table_content_duckdb, compare_table_duckdb  # noqa: E402
 
 
 def _make_db(path: Path, rows):
@@ -128,3 +128,60 @@ def test_compare_with_composite_key(tmp_path):
     assert (1, 20) in keys
     assert (2, 10) in keys
     assert (3, 10) in keys
+
+
+def test_compare_table_content_ignores_order(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a"), (2, "b"), (3, "c")])
+    _make_db(db2, [(3, "c"), (1, "a"), (2, "b")])
+
+    result = compare_table_content_duckdb(db1, db2, "T")
+
+    assert result == {"table": "T", "row_count_a": 3, "row_count_b": 3, "diff_count": 0}
+
+
+def test_compare_table_content_detects_distinct_rows(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a"), (2, "b"), (4, "x")])
+    _make_db(db2, [(1, "a"), (3, "c"), (4, "y")])
+
+    result = compare_table_content_duckdb(db1, db2, "T")
+
+    assert result["row_count_a"] == 3
+    assert result["row_count_b"] == 3
+    assert result["diff_count"] == 4
+
+
+def test_compare_table_content_ignores_duplicate_only_difference(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a"), (1, "a"), (2, "b")])
+    _make_db(db2, [(1, "a"), (2, "b")])
+
+    result = compare_table_content_duckdb(db1, db2, "T")
+
+    assert result["row_count_a"] == 3
+    assert result["row_count_b"] == 2
+    assert result["diff_count"] == 0
+
+
+def test_compare_table_content_without_common_columns_returns_minus_one(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+
+    conn1 = duckdb.connect(str(db1))
+    conn2 = duckdb.connect(str(db2))
+    try:
+        conn1.execute("CREATE TABLE T(id INTEGER, valor TEXT)")
+        conn2.execute("CREATE TABLE T(outro INTEGER, descricao TEXT)")
+        conn1.execute("INSERT INTO T VALUES (1, 'a')")
+        conn2.execute("INSERT INTO T VALUES (1, 'a')")
+    finally:
+        conn1.close()
+        conn2.close()
+
+    result = compare_table_content_duckdb(db1, db2, "T")
+
+    assert result == {"table": "T", "row_count_a": 0, "row_count_b": 0, "diff_count": -1}

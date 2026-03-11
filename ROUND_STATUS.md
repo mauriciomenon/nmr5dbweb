@@ -219,10 +219,9 @@ Harden the Flask backend around upload, index startup, and search parameter hand
 
 ### What Was Proved
 
-- The backend now rejects invalid upload names and unsupported upload extensions before writing files.
-- Local DB uploads in the SQLite family are selected immediately.
-- Index startup failure modes now return clean API errors instead of falling into unsafe paths.
-- Search parameter validation remains stable and covered by test.
+- Focused backend API validation is now green in the project-local venv.
+- The upload and search paths now fail earlier and more explicitly on bad input.
+- Optional backend dependencies are now guarded without silent fallback.
 
 ### Validation After Changes
 
@@ -233,6 +232,48 @@ Harden the Flask backend around upload, index startup, and search parameter hand
 
 ### Findings From This Slice
 
-- The backend package now has a cleaner import model and fewer silent failure paths.
-- Focused backend validation is now green on the project-local `.venv`.
-- Repo-wide `ruff` and `ty` debt still remain outside this slice, especially in other legacy modules.
+- The repo still has broader maintainability debt in `interface/app_flask_local_search.py`, but the highest-risk error paths around upload, search, and index startup are now covered.
+- The project-local `.venv` with Python `3.13.12` is the reliable validation target for this repo.
+
+## Follow-up Slice: SQL-Based Table Content Compare
+
+### Goal
+
+Remove the full-table Python materialization in `compare_table_content_duckdb(...)` and move the no-key table comparison into DuckDB SQL, without changing the current API contract.
+
+### Applied
+
+1. Reworked `interface/compare_dbs.py::compare_table_content_duckdb(...)` to:
+   - keep schema discovery via read-only connections
+   - attach both DuckDB files into an in-memory connection
+   - compute the diff summary with SQL instead of Python `set(...)`
+2. Preserved current external semantics:
+   - row order is ignored
+   - duplicate-only differences are still ignored
+   - `row_count_a` and `row_count_b` still report raw table row counts
+3. Added focused regression tests in `tests/test_compare_dbs.py` for:
+   - same content in different order
+   - real row differences
+   - duplicate-only differences
+   - no common columns
+4. Tightened result extraction in the same module to satisfy `ty` without broad refactor.
+
+### What Was Proved
+
+- The no-key compare path no longer pulls the full table contents into Python memory just to count differences.
+- The API-facing behavior remains compatible with the previous implementation for order and duplicate handling.
+- The compare module now has direct regression coverage for the no-key path that was previously untested.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed with pre-existing `SyntaxWarning` output from unrelated tool docstrings
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `12 passed`
+- `./.venv/bin/ty check interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+
+### Findings From This Slice
+
+- The old no-key compare path was both memory-heavier than necessary and semantically easy to misread because it used Python `set(...)` over full query results.
+- There are still broader compare concerns outside this slice:
+  - `compare_table_duckdb(...)` still interpolates identifiers directly into SQL
+  - the product still exposes two distinct compare models: keyed row diff and no-key content diff

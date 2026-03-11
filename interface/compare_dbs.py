@@ -49,14 +49,18 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
     if not db2.exists():
         raise FileNotFoundError(db2)
 
+    table_sql = table.replace('"', '""')
+    pragma_table = table.replace("'", "''")
+
     # Conexões em modo somente leitura para minimizar conflitos de lock em Windows.
     conn1 = duckdb.connect(str(db1), read_only=True)
     conn2 = duckdb.connect(str(db2), read_only=True)
+    conn_compare = _connect_memory()
     try:
         # Descobre colunas em comum via PRAGMA table_info em cada banco, sem
         # depender de helpers que abririam novas conexões.
-        info_a = conn1.execute(f"PRAGMA table_info('{table}')").fetchall()
-        info_b = conn2.execute(f"PRAGMA table_info('{table}')").fetchall()
+        info_a = conn1.execute(f"PRAGMA table_info('{pragma_table}')").fetchall()
+        info_b = conn2.execute(f"PRAGMA table_info('{pragma_table}')").fetchall()
         cols_a = {r[1] for r in info_a}
         cols_b = {r[1] for r in info_b}
         common_cols = sorted(cols_a & cols_b)
@@ -65,25 +69,47 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
             return {"table": table, "row_count_a": 0, "row_count_b": 0, "diff_count": -1}
 
         cols_sql = ", ".join(f'"{c}"' for c in common_cols)
+        conn_compare.execute(f"ATTACH '{db1.as_posix()}' AS db1 (READ_ONLY)")
+        conn_compare.execute(f"ATTACH '{db2.as_posix()}' AS db2 (READ_ONLY)")
+        diff_sql = f"""
+        WITH
+          a_distinct AS (
+            SELECT DISTINCT {cols_sql}
+            FROM db1."{table_sql}"
+          ),
+          b_distinct AS (
+            SELECT DISTINCT {cols_sql}
+            FROM db2."{table_sql}"
+          ),
+          only_a AS (
+            SELECT * FROM a_distinct
+            EXCEPT
+            SELECT * FROM b_distinct
+          ),
+          only_b AS (
+            SELECT * FROM b_distinct
+            EXCEPT
+            SELECT * FROM a_distinct
+          )
+        SELECT
+          (SELECT COUNT(*) FROM db1."{table_sql}") AS row_count_a,
+          (SELECT COUNT(*) FROM db2."{table_sql}") AS row_count_b,
+          ((SELECT COUNT(*) FROM only_a) + (SELECT COUNT(*) FROM only_b)) AS diff_count
+        """
+        summary_row = conn_compare.execute(diff_sql).fetchone()
+        if summary_row is None:
+            raise RuntimeError(f"Falha ao resumir diferencas da tabela {table}")
 
-        # Busca todas as linhas das colunas em comum em cada banco.
-        rows_a_list = conn1.execute(f'SELECT {cols_sql} FROM "{table}"').fetchall()
-        rows_b_list = conn2.execute(f'SELECT {cols_sql} FROM "{table}"').fetchall()
-
-        rows_a = set(tuple(row) for row in rows_a_list)
-        rows_b = set(tuple(row) for row in rows_b_list)
-
-        only_a = rows_a - rows_b
-        only_b = rows_b - rows_a
-        diff_count = len(only_a) + len(only_b)
+        row_count_a, row_count_b, diff_count = summary_row
 
         return {
             "table": table,
-            "row_count_a": len(rows_a_list),
-            "row_count_b": len(rows_b_list),
-            "diff_count": diff_count,
+            "row_count_a": int(row_count_a),
+            "row_count_b": int(row_count_b),
+            "diff_count": int(diff_count),
         }
     finally:
+        conn_compare.close()
         conn1.close()
         conn2.close()
 
@@ -223,11 +249,17 @@ def compare_table_duckdb(
         cols = [c[0] for c in conn.description]
 
         # Contagens de apoio para o resumo: total em cada tabela e total de chaves analisadas
-        total_a = conn.execute(f"SELECT COUNT(*) FROM db1.{table}").fetchone()[0]
-        total_b = conn.execute(f"SELECT COUNT(*) FROM db2.{table}").fetchone()[0]
-        total_keys = conn.execute(
+        total_a_row = conn.execute(f"SELECT COUNT(*) FROM db1.{table}").fetchone()
+        total_b_row = conn.execute(f"SELECT COUNT(*) FROM db2.{table}").fetchone()
+        total_keys_row = conn.execute(
             f"SELECT COUNT(*) FROM db1.{table} AS a FULL OUTER JOIN db2.{table} AS b ON {join_condition}"
-        ).fetchone()[0]
+        ).fetchone()
+        if total_a_row is None or total_b_row is None or total_keys_row is None:
+            raise RuntimeError(f"Falha ao resumir contagens da tabela {table}")
+
+        total_a = total_a_row[0]
+        total_b = total_b_row[0]
+        total_keys = total_keys_row[0]
     finally:
         conn.close()
 
