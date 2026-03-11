@@ -761,6 +761,15 @@ def api_compare_db_rows():
         return jsonify({"error": "table é obrigatório"}), 400
     if not isinstance(key_columns, list) or not key_columns:
         return jsonify({"error": "key_columns deve ser uma lista não vazia"}), 400
+    if any(not isinstance(col, str) or not col.strip() for col in key_columns):
+        return jsonify({"error": "key_columns deve conter apenas strings nao vazias"}), 400
+    key_columns = [col.strip() for col in key_columns]
+    if compare_columns is not None and not isinstance(compare_columns, list):
+        return jsonify({"error": "compare_columns deve ser uma lista"}), 400
+    if compare_columns is not None:
+        if any(not isinstance(col, str) or not col.strip() for col in compare_columns):
+            return jsonify({"error": "compare_columns deve conter apenas strings nao vazias"}), 400
+        compare_columns = [col.strip() for col in compare_columns]
 
     # row_limit é opcional; quando informado deve ser inteiro >= 0
     if row_limit is not None:
@@ -798,10 +807,34 @@ def api_compare_db_rows():
     if change_types is not None:
         if not isinstance(change_types, list):
             return jsonify({"error": "change_types deve ser uma lista"}), 400
-        change_types = [str(t) for t in change_types if str(t) in valid_types]
-        if not change_types:
-            # se nada sobrou, consideramos que nenhum tipo foi selecionado
-            change_types = []
+        invalid_change_types = [str(t) for t in change_types if str(t) not in valid_types]
+        if invalid_change_types:
+            return jsonify({
+                "error": "change_types contem valores invalidos",
+                "invalid": invalid_change_types,
+            }), 400
+        change_types = [str(t) for t in change_types]
+
+    key_filter = {}
+    if key_filter_str:
+        for part in key_filter_str.split(","):
+            p = part.strip()
+            if not p:
+                continue
+            if "=" not in p:
+                return jsonify({"error": "key_filter deve usar o formato COL=VAL"}), 400
+            k, v = p.split("=", 1)
+            k = k.strip()
+            v = v.strip()
+            if not k:
+                return jsonify({"error": "key_filter contem coluna vazia"}), 400
+            if not v:
+                return jsonify({"error": f"key_filter sem valor para a coluna {k}"}), 400
+            if k not in key_columns:
+                return jsonify({"error": f"key_filter usa coluna fora de key_columns: {k}"}), 400
+            if k in key_filter:
+                return jsonify({"error": f"key_filter repetiu a coluna {k}"}), 400
+            key_filter[k] = v
 
     try:
         db1 = Path(db1_path)
@@ -820,24 +853,12 @@ def api_compare_db_rows():
         result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=row_limit)
 
         rows = result.get("rows") or []
-
-        # aplica, no backend, o filtro opcional por chave (K), no formato "COL=VAL,COL2=VAL2"
-        key_filter = {}
-        if key_filter_str:
-            try:
-                for part in key_filter_str.split(","):
-                    p = part.strip()
-                    if not p:
-                        continue
-                    if "=" not in p:
-                        continue
-                    k, v = p.split("=", 1)
-                    k = k.strip()
-                    v = v.strip()
-                    if k:
-                        key_filter[k] = v
-            except Exception:
-                key_filter = {}
+        result_compare_columns = result.get("compare_columns") or []
+        if changed_column and changed_column not in result_compare_columns:
+            return jsonify({
+                "error": "changed_column precisa existir em compare_columns",
+                "changed_column": changed_column,
+            }), 400
 
         def _row_matches_filters(row: dict) -> bool:
             # filtro por chave
@@ -906,6 +927,8 @@ def api_compare_db_rows():
             return jsonify({"error": "banco_em_uso", "message": friendly}), 409
         app.logger.exception("DuckDB IOException em api_compare_db_rows")
         return jsonify({"error": "duckdb_io", "message": msg}), 500
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_rows")
         return jsonify({"error": "erro_interno", "message": str(exc)}), 500

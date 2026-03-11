@@ -277,3 +277,57 @@ Remove the full-table Python materialization in `compare_table_content_duckdb(..
 - There are still broader compare concerns outside this slice:
   - `compare_table_duckdb(...)` still interpolates identifiers directly into SQL
   - the product still exposes two distinct compare models: keyed row diff and no-key content diff
+
+## Follow-up Slice: Compare Identifier Hardening And Strict API Filters
+
+### Goal
+
+Harden the compare stack around SQL identifiers, client-side filter validation, and local tool-script warnings without changing the current compare contract.
+
+### Applied
+
+1. Hardened `interface/compare_dbs.py`:
+   - added safe quoting for SQL literals and identifiers
+   - switched schema discovery to `information_schema.columns`
+   - applied quoted table/column references in `compare_table_content_duckdb(...)`
+   - applied quoted table/column references in `compare_table_duckdb(...)`
+   - attached both databases in read-only mode for keyed compare as well
+   - added explicit validation for:
+     - missing table in `db1` or `db2`
+     - missing `key_columns`
+     - missing `compare_columns`
+2. Hardened `/api/compare_db_rows` in `interface/app_flask_local_search.py`:
+   - reject invalid `key_columns`
+   - reject invalid `compare_columns`
+   - reject invalid `change_types` instead of silently dropping values
+   - reject malformed `key_filter`
+   - reject `key_filter` columns outside `key_columns`
+   - reject `changed_column` not present in resolved `compare_columns`
+   - return `400` on compare-layer `ValueError` instead of leaking as `500`
+3. Expanded regression coverage:
+   - quoted table and column identifiers
+   - missing key column rejection
+   - invalid `key_filter`
+   - invalid `change_types`
+   - invalid `changed_column`
+4. Cleaned the localized `ruff` debt and `py_compile` warnings in:
+   - `tools/build_consolidated_interactive_report_pt.py`
+   - `tools/analyze_single_table_by_column.py`
+
+### What Was Proved
+
+- The compare layer now handles quoted and space-containing identifiers safely.
+- Invalid compare filters now fail explicitly at the API boundary instead of being ignored or downgraded into ambiguous behavior.
+- The project-local validation baseline is clean again for this slice, including `py_compile` on the touched tool scripts.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `18 passed`
+- `./.venv/bin/ty check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tools/build_consolidated_interactive_report_pt.py tools/analyze_single_table_by_column.py`: passed
+
+### Findings From This Slice
+
+- The compare backend is now less permissive on malformed payloads; callers that relied on silent coercion will now receive `400`.
+- The next unresolved compare decision is semantic, not structural: whether compare-without-key should keep ignoring duplicate-only differences or move to true multiset comparison.

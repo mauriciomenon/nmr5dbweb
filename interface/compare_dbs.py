@@ -20,8 +20,29 @@ def _connect_memory() -> duckdb.DuckDBPyConnection:
     return duckdb.connect()
 
 
-def _attach_db(conn: duckdb.DuckDBPyConnection, alias: str, path: Path) -> None:
-    conn.execute(f"ATTACH '{path.as_posix()}' AS {alias}")
+def _quote_sql_literal(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _quote_identifier(name: str) -> str:
+    if not isinstance(name, str) or not name:
+        raise ValueError("identificador SQL invalido")
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _qualify_identifier(alias: str, name: str) -> str:
+    return f"{alias}.{_quote_identifier(name)}"
+
+
+def _attach_db(
+    conn: duckdb.DuckDBPyConnection,
+    alias: str,
+    path: Path,
+    *,
+    read_only: bool = False,
+) -> None:
+    suffix = " (READ_ONLY)" if read_only else ""
+    conn.execute(f"ATTACH {_quote_sql_literal(path.as_posix())} AS {alias}{suffix}")
 
 
 def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
@@ -49,37 +70,50 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
     if not db2.exists():
         raise FileNotFoundError(db2)
 
-    table_sql = table.replace('"', '""')
-    pragma_table = table.replace("'", "''")
-
     # Conexões em modo somente leitura para minimizar conflitos de lock em Windows.
     conn1 = duckdb.connect(str(db1), read_only=True)
     conn2 = duckdb.connect(str(db2), read_only=True)
     conn_compare = _connect_memory()
     try:
-        # Descobre colunas em comum via PRAGMA table_info em cada banco, sem
-        # depender de helpers que abririam novas conexões.
-        info_a = conn1.execute(f"PRAGMA table_info('{pragma_table}')").fetchall()
-        info_b = conn2.execute(f"PRAGMA table_info('{pragma_table}')").fetchall()
-        cols_a = {r[1] for r in info_a}
-        cols_b = {r[1] for r in info_b}
+        info_a = conn1.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = ?
+            ORDER BY ordinal_position
+            """,
+            [table],
+        ).fetchall()
+        info_b = conn2.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = ?
+            ORDER BY ordinal_position
+            """,
+            [table],
+        ).fetchall()
+        cols_a = {r[0] for r in info_a}
+        cols_b = {r[0] for r in info_b}
         common_cols = sorted(cols_a & cols_b)
 
         if not common_cols:
             return {"table": table, "row_count_a": 0, "row_count_b": 0, "diff_count": -1}
 
-        cols_sql = ", ".join(f'"{c}"' for c in common_cols)
-        conn_compare.execute(f"ATTACH '{db1.as_posix()}' AS db1 (READ_ONLY)")
-        conn_compare.execute(f"ATTACH '{db2.as_posix()}' AS db2 (READ_ONLY)")
+        table_a_sql = _qualify_identifier("db1", table)
+        table_b_sql = _qualify_identifier("db2", table)
+        cols_sql = ", ".join(_quote_identifier(c) for c in common_cols)
+        _attach_db(conn_compare, "db1", db1, read_only=True)
+        _attach_db(conn_compare, "db2", db2, read_only=True)
         diff_sql = f"""
         WITH
           a_distinct AS (
             SELECT DISTINCT {cols_sql}
-            FROM db1."{table_sql}"
+            FROM {table_a_sql}
           ),
           b_distinct AS (
             SELECT DISTINCT {cols_sql}
-            FROM db2."{table_sql}"
+            FROM {table_b_sql}
           ),
           only_a AS (
             SELECT * FROM a_distinct
@@ -92,8 +126,8 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
             SELECT * FROM a_distinct
           )
         SELECT
-          (SELECT COUNT(*) FROM db1."{table_sql}") AS row_count_a,
-          (SELECT COUNT(*) FROM db2."{table_sql}") AS row_count_b,
+          (SELECT COUNT(*) FROM {table_a_sql}) AS row_count_a,
+          (SELECT COUNT(*) FROM {table_b_sql}) AS row_count_b,
           ((SELECT COUNT(*) FROM only_a) + (SELECT COUNT(*) FROM only_b)) AS diff_count
         """
         summary_row = conn_compare.execute(diff_sql).fetchone()
@@ -135,15 +169,22 @@ def list_common_tables(db1: Path, db2: Path) -> List[str]:
 
 
 def list_table_columns(db_path: Path, table: str) -> List[str]:
-    """Lista colunas de uma tabela DuckDB usando PRAGMA table_info."""
+    """Lista colunas de uma tabela DuckDB via information_schema."""
     db_path = db_path.resolve()
     if not db_path.exists():
         raise FileNotFoundError(db_path)
     conn = duckdb.connect(str(db_path))
     try:
-        rows = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
-        # schema: cid, name, type, notnull, dflt_value, pk
-        return [r[1] for r in rows]
+        rows = conn.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = ?
+            ORDER BY ordinal_position
+            """,
+            [table],
+        ).fetchall()
+        return [r[0] for r in rows]
     finally:
         conn.close()
 
@@ -173,35 +214,66 @@ def compare_table_duckdb(
     if not db2.exists():
         raise FileNotFoundError(db2)
 
+    cols_a = list_table_columns(db1, table)
+    cols_b = list_table_columns(db2, table)
+    missing_tables = []
+    if not cols_a:
+        missing_tables.append("db1")
+    if not cols_b:
+        missing_tables.append("db2")
+    if missing_tables:
+        raise ValueError(f"tabela '{table}' nao encontrada em: {', '.join(missing_tables)}")
+
+    common_columns = [c for c in cols_a if c in set(cols_b)]
+    missing_keys = [c for c in key_columns if c not in common_columns]
+    if missing_keys:
+        raise ValueError(
+            "key_columns ausentes nas duas tabelas: " + ", ".join(sorted(missing_keys))
+        )
+
     # Se compare_columns não for informado, usamos todas as colunas exceto as de chave,
     # tomando como referência o schema do primeiro banco.
     if compare_columns is None:
-        cols = list_table_columns(db1, table)
-        compare_columns = [c for c in cols if c not in key_columns]
+        compare_columns = [c for c in common_columns if c not in key_columns]
+    else:
+        missing_compare = [c for c in compare_columns if c not in common_columns]
+        if missing_compare:
+            raise ValueError(
+                "compare_columns ausentes nas duas tabelas: " + ", ".join(sorted(missing_compare))
+            )
 
     # usamos COALESCE nas chaves para obter um valor único mesmo em linhas adicionadas/removidas
     coalesced_keys = ", ".join([
-        f"COALESCE(a.\"{c}\", b.\"{c}\") AS \"{c}\"" for c in key_columns
+        f"COALESCE({_qualify_identifier('a', c)}, {_qualify_identifier('b', c)}) AS {_quote_identifier(c)}"
+        for c in key_columns
     ])
 
     compare_cols_sql_parts: List[str] = []
     diff_conditions: List[str] = []
     for c in compare_columns:
-        compare_cols_sql_parts.append(f"a.\"{c}\" AS a_{c}")
-        compare_cols_sql_parts.append(f"b.\"{c}\" AS b_{c}")
-        diff_conditions.append(f"a.\"{c}\" IS DISTINCT FROM b.\"{c}\"")
+        compare_cols_sql_parts.append(
+            f"{_qualify_identifier('a', c)} AS {_quote_identifier(f'a_{c}')}"
+        )
+        compare_cols_sql_parts.append(
+            f"{_qualify_identifier('b', c)} AS {_quote_identifier(f'b_{c}')}"
+        )
+        diff_conditions.append(
+            f"{_qualify_identifier('a', c)} IS DISTINCT FROM {_qualify_identifier('b', c)}"
+        )
 
     compare_cols_sql = ", ".join(compare_cols_sql_parts) if compare_cols_sql_parts else ""
     diff_condition_sql = " OR ".join(diff_conditions) if diff_conditions else "FALSE"
 
     # condição de junção pelas chaves
-    join_condition = " AND ".join([f"a.\"{c}\" = b.\"{c}\"" for c in key_columns])
+    join_condition = " AND ".join([
+        f"{_qualify_identifier('a', c)} = {_qualify_identifier('b', c)}" for c in key_columns
+    ])
 
     # change_type: classifica adicionados / removidos / alterados
     change_type_case = (
         "CASE "
-        f"WHEN a.\"{key_columns[0]}\" IS NULL THEN 'added' "
-        f"WHEN b.\"{key_columns[0]}\" IS NULL THEN 'removed' "
+        f"WHEN {_qualify_identifier('a', key_columns[0])} IS NULL THEN 'added' "
+        f"WHEN {_qualify_identifier('b', key_columns[0])} IS NULL THEN 'removed' "
         f"WHEN {diff_condition_sql} THEN 'changed' "
         "ELSE 'same' END AS change_type"
     )
@@ -210,6 +282,8 @@ def compare_table_duckdb(
     if compare_cols_sql:
         select_cols += ", " + compare_cols_sql
     select_cols += ", " + change_type_case
+    table_a_sql = _qualify_identifier("db1", table)
+    table_b_sql = _qualify_identifier("db2", table)
 
     # CTE "diff_rows" seleciona todas as linhas com diferença.
     # CTE "annotated" adiciona contadores globais via window functions.
@@ -219,12 +293,12 @@ def compare_table_duckdb(
     WITH diff_rows AS (
       SELECT
         {select_cols}
-      FROM db1.{table} AS a
-      FULL OUTER JOIN db2.{table} AS b
+      FROM {table_a_sql} AS a
+      FULL OUTER JOIN {table_b_sql} AS b
         ON {join_condition}
       WHERE
-        a."{key_columns[0]}" IS NULL
-        OR b."{key_columns[0]}" IS NULL
+        {_qualify_identifier('a', key_columns[0])} IS NULL
+        OR {_qualify_identifier('b', key_columns[0])} IS NULL
         OR ({diff_condition_sql})
     ), annotated AS (
       SELECT
@@ -243,16 +317,16 @@ def compare_table_duckdb(
 
     conn = _connect_memory()
     try:
-        _attach_db(conn, "db1", db1)
-        _attach_db(conn, "db2", db2)
+        _attach_db(conn, "db1", db1, read_only=True)
+        _attach_db(conn, "db2", db2, read_only=True)
         rows = conn.execute(sql).fetchall()
         cols = [c[0] for c in conn.description]
 
         # Contagens de apoio para o resumo: total em cada tabela e total de chaves analisadas
-        total_a_row = conn.execute(f"SELECT COUNT(*) FROM db1.{table}").fetchone()
-        total_b_row = conn.execute(f"SELECT COUNT(*) FROM db2.{table}").fetchone()
+        total_a_row = conn.execute(f"SELECT COUNT(*) FROM {table_a_sql}").fetchone()
+        total_b_row = conn.execute(f"SELECT COUNT(*) FROM {table_b_sql}").fetchone()
         total_keys_row = conn.execute(
-            f"SELECT COUNT(*) FROM db1.{table} AS a FULL OUTER JOIN db2.{table} AS b ON {join_condition}"
+            f"SELECT COUNT(*) FROM {table_a_sql} AS a FULL OUTER JOIN {table_b_sql} AS b ON {join_condition}"
         ).fetchone()
         if total_a_row is None or total_b_row is None or total_keys_row is None:
             raise RuntimeError(f"Falha ao resumir contagens da tabela {table}")

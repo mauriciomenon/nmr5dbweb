@@ -46,6 +46,10 @@ The first stabilization slice is intentionally narrow:
   - search parameter validation
   - compare and generic-search regressions
 - No-key table compare in `interface/compare_dbs.py` now runs its diff summary in DuckDB SQL instead of materializing full table rows in Python
+- Keyed compare in `interface/compare_dbs.py` now quotes table and column identifiers consistently
+- `interface/compare_dbs.py` now validates missing tables, `key_columns`, and `compare_columns` before building SQL
+- `/api/compare_db_rows` now rejects malformed `key_filter`, invalid `change_types`, and `changed_column` outside the resolved compare columns
+- The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
   - duplicate-only differences are ignored
@@ -60,5 +64,5 @@ The first stabilization slice is intentionally narrow:
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
-  - tighten identifier handling in `interface/compare_dbs.py`
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
+  - expand compare API payload-type validation if external callers send non-string fields today

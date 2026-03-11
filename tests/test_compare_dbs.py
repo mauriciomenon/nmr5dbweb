@@ -185,3 +185,54 @@ def test_compare_table_content_without_common_columns_returns_minus_one(tmp_path
     result = compare_table_content_duckdb(db1, db2, "T")
 
     assert result == {"table": "T", "row_count_a": 0, "row_count_b": 0, "diff_count": -1}
+
+
+def test_compare_with_quoted_identifiers(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    table = 'T weird"name'
+    key_col = 'key id'
+    value_col = 'value-name'
+
+    def q(name: str) -> str:
+        return '"' + name.replace('"', '""') + '"'
+
+    conn1 = duckdb.connect(str(db1))
+    conn2 = duckdb.connect(str(db2))
+    try:
+        conn1.execute(f"CREATE TABLE {q(table)} ({q(key_col)} INTEGER, {q(value_col)} TEXT)")
+        conn2.execute(f"CREATE TABLE {q(table)} ({q(key_col)} INTEGER, {q(value_col)} TEXT)")
+        conn1.execute(f"INSERT INTO {q(table)} VALUES (1, 'a'), (2, 'x')")
+        conn2.execute(f"INSERT INTO {q(table)} VALUES (1, 'a'), (2, 'y')")
+    finally:
+        conn1.close()
+        conn2.close()
+
+    result = compare_table_duckdb(
+        db1,
+        db2,
+        table,
+        key_columns=[key_col],
+        compare_columns=[value_col],
+    )
+    content_result = compare_table_content_duckdb(db1, db2, table)
+
+    assert result["summary"]["changed_count"] == 1
+    assert result["rows"][0]["key"][key_col] == 2
+    assert result["rows"][0]["a"][value_col] == "x"
+    assert result["rows"][0]["b"][value_col] == "y"
+    assert content_result["diff_count"] == 2
+
+
+def test_compare_table_duckdb_rejects_missing_key_column(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "a")])
+
+    try:
+        compare_table_duckdb(db1, db2, "T", key_columns=["nao_existe"], compare_columns=["valor"])
+    except ValueError as exc:
+        assert "key_columns ausentes" in str(exc)
+    else:
+        raise AssertionError("compare_table_duckdb deveria rejeitar key_columns ausentes")

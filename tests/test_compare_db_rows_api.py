@@ -153,3 +153,101 @@ def test_api_compare_changed_column_filter(tmp_path):
     assert len(data["rows"]) == 1
     assert data["rows"][0]["key"]["id"] == 1
     assert data["rows"][0]["type"] == "changed"
+
+
+def test_api_compare_key_filter_invalid_format_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "a")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "key_filter": "id",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "key_filter" in resp.get_json()["error"]
+
+
+def test_api_compare_key_filter_unknown_key_column_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "a")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "key_filter": "valor=a",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "fora de key_columns" in resp.get_json()["error"]
+
+
+def test_api_compare_change_types_invalid_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "change_types": ["changed", "foo"],
+        },
+    )
+
+    assert resp.status_code == 400
+    data = resp.get_json()
+    assert data["error"] == "change_types contem valores invalidos"
+    assert data["invalid"] == ["foo"]
+
+
+def test_api_compare_changed_column_outside_compare_columns_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "changed_column": "outra_coluna",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "changed_column" in resp.get_json()["error"]

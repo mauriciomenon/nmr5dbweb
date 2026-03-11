@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
+r"""
 analyze_single_table_by_column.py
 
 Objetivo
@@ -102,7 +102,9 @@ class Welford:
 
 class ReservoirSampler:
     def __init__(self, k):
-        self.k = int(k); self.n = 0; self.sample = []
+        self.k = int(k)
+        self.n = 0
+        self.sample = []
     def add(self, x):
         self.n += 1
         if len(self.sample) < self.k:
@@ -246,7 +248,7 @@ def list_columns(db_path: Path, table: str, engine: str):
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 # ---------------- helpers SQL (fallbacks e contagens) ----------------
@@ -264,7 +266,7 @@ def sql_count_total(db_path: Path, table: str, engine: str):
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 def sql_count_nulls(db_path: Path, table: str, col: str, engine: str):
@@ -282,7 +284,7 @@ def sql_count_nulls(db_path: Path, table: str, col: str, engine: str):
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 def sql_count_distinct(db_path: Path, table: str, col: str, engine: str):
@@ -304,7 +306,7 @@ def sql_count_distinct(db_path: Path, table: str, col: str, engine: str):
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 def sql_top_values_fallback(db_path: Path, table: str, col: str, engine: str, limit: int = 50):
@@ -325,7 +327,7 @@ def sql_top_values_fallback(db_path: Path, table: str, col: str, engine: str, li
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 def infer_tipo_aparente_fallback(db_path: Path, table: str, col: str, engine: str):
@@ -356,7 +358,7 @@ def stream_column_values(db_path: Path, table: str, col: str, engine: str, batch
         finally:
             try:
                 conn.close()
-            except:
+            except Exception:
                 pass
         return
 
@@ -374,7 +376,7 @@ def stream_column_values(db_path: Path, table: str, col: str, engine: str, batch
     finally:
         try:
             conn.close()
-        except:
+        except Exception:
             pass
 
 # ---------------- principal ----------------
@@ -629,7 +631,8 @@ def main():
     args = parse_args()
     db_path = Path(args.db)
     if not db_path.exists():
-        print("Arquivo de banco não encontrado:", db_path); sys.exit(1)
+        print("Arquivo de banco nao encontrado:", db_path)
+        sys.exit(1)
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     analyze_table(db_path, args.table, outdir, engine=args.engine, top=args.top,
