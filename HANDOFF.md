@@ -25,6 +25,7 @@ The first stabilization slice is intentionally narrow:
 - Backend responsibilities are concentrated in one large Flask file
 - Search and compare use different models and are hard to reason about together
 - `tools/encontrar_registro_em_bds.py` still has heavy style debt even after the generic-search repair
+- The Flask backend is now safer on upload/search/index paths, but the file still carries broader maintainability debt
 
 ## Setup Status
 
@@ -39,6 +40,11 @@ The first stabilization slice is intentionally narrow:
 - `node --check static/app.js` passes after the JS cleanup
 - Avoid `uv run` in this repo for now; prefer direct `./.venv/bin/...` validation commands
 - `tools/encontrar_registro_em_bds.py` now has `buscar_generico_em_tabela(...)` implemented and covered by focused tests
+- Focused backend API validation is now green:
+  - upload edge cases
+  - index startup error paths
+  - search parameter validation
+  - compare and generic-search regressions
 
 ## Operator Notes For Next Conversation
 
@@ -47,4 +53,6 @@ The first stabilization slice is intentionally narrow:
 - Read `RECOVERY_BACKLOG.md` for deferred work
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
-- Do not start broad frontend refactors before deciding whether the next slice is `static/app.js` structure cleanup or Python debt baseline reduction
+- Natural next slices are:
+  - deeper backend debt reduction in `interface/app_flask_local_search.py`
+  - or structural cleanup in `static/app.js`

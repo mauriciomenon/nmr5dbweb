@@ -187,3 +187,52 @@ Stop mixing the repo with the parent-directory virtualenv, pin the project to it
 - The environment drift problem was real: `uv run` was resolving against `/Users/menon/git/.venv` and even a global `pytest`.
 - For this repo, validation should currently prefer the project-local `.venv` directly until a stronger `uv` project configuration exists.
 - `tools/encontrar_registro_em_bds.py` still carries heavy style debt, but the concrete functional hole in generic search is now closed and covered by test.
+
+## Follow-up Slice: Backend API Hardening
+
+### Goal
+
+Harden the Flask backend around upload, index startup, and search parameter handling without broad refactor.
+
+### Applied
+
+1. Switched internal imports in `interface/app_flask_local_search.py` to package-qualified `interface.*` imports.
+2. Typed optional backend dependencies and guarded their use more explicitly:
+   - `pyodbc`
+   - `convert_access_to_duckdb`
+   - `create_or_resume_fulltext`
+3. Hardened `/admin/upload`:
+   - reject filenames that sanitize to empty
+   - reject unsupported extensions before saving
+   - avoid saving Access uploads when the converter is unavailable
+   - treat `.db`, `.sqlite`, and `.sqlite3` like immediate-select local databases
+4. Hardened `/admin/select` and `/admin/delete` filename sanitization.
+5. Hardened `/admin/start_index`:
+   - reject invalid `chunk` and `batch`
+   - reject missing current DB
+   - removed the fallback import dance inside the worker thread
+6. Hardened `/api/search` and `api_search_duckdb(...)`:
+   - safer integer parsing for `per_table`, `candidate_limit`, and `total_limit`
+   - safer connection closing on DuckDB search path
+7. Reduced a localized lint-debt block in `fallback_search_access(...)`.
+8. Added focused API regression tests in `tests/test_app_flask_local_search_api.py`.
+
+### What Was Proved
+
+- The backend now rejects invalid upload names and unsupported upload extensions before writing files.
+- Local DB uploads in the SQLite family are selected immediately.
+- Index startup failure modes now return clean API errors instead of falling into unsafe paths.
+- Search parameter validation remains stable and covered by test.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_find_record_generic.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `16 passed`
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_find_record_generic.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_find_record_generic.py tests/test_compare_db_rows_api.py`: passed
+
+### Findings From This Slice
+
+- The backend package now has a cleaner import model and fewer silent failure paths.
+- Focused backend validation is now green on the project-local `.venv`.
+- Repo-wide `ruff` and `ty` debt still remain outside this slice, especially in other legacy modules.
