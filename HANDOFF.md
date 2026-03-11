@@ -14,8 +14,10 @@ The first stabilization slice is intentionally narrow:
 
 - Product working clone is `/Users/menon/git/nmr5dbweb`
 - Student source is `allysonalmeidaa/mdb2sql_fork`
-- Clone source branch is `minha-alteracao`
-- Future default branch in the product repo should be `master`
+- Clone source branch was `minha-alteracao`
+- Current local/product branch is `master`
+- `origin`: `https://github.com/mauriciomenon/nmr5dbweb.git`
+- `upstream`: `https://github.com/allysonalmeidaa/mdb2sql_fork.git`
 
 ## Risks To Remember
 

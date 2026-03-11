@@ -7,8 +7,9 @@ Slice 1: repo zero-state and control files
 ## Branch / Source
 
 - Local work dir: `/Users/menon/git/nmr5dbweb`
-- Current source branch at clone time: `minha-alteracao`
-- Planned product default branch in the new repo: `master`
+- Current local branch: `master`
+- Source branch at clone time: `minha-alteracao`
+- Product default branch: `master`
 
 ## Objective For This Round
 
@@ -21,7 +22,9 @@ Slice 1: repo zero-state and control files
 - The original local repo `/Users/menon/git/mdb2sql` was not the student fork branch.
 - The student fork branch `minha-alteracao` was cloned successfully into `/Users/menon/git/nmr5dbweb`.
 - `gh` is authenticated as `mauriciomenon`.
-- `mauriciomenon/nmr5dbweb` does not exist yet.
+- `mauriciomenon/nmr5dbweb` was created and published.
+- `origin` now points to the product repo.
+- `upstream` now points to `allysonalmeidaa/mdb2sql_fork`.
 
 ## Baseline Validation Before Changes
 
@@ -64,6 +67,6 @@ Slice 1: repo zero-state and control files
 
 After this slice:
 
-1. create the new GitHub repo
-2. publish current stabilized state on `master`
-3. then start the next stabilization slice
+1. start the next stabilization slice on top of `master`
+2. fix the next highest-value issues without broad refactor
+3. keep backlog and handoff files updated each round
