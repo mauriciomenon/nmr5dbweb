@@ -1,7 +1,0 @@
-{
-  "db_path": "C:\\mdb2sql_fork\\interface\\uploads\\2025-04-01_db5.duckdb",
-  "priority_tables": [
-    "RANGER_SOSTAT"
-  ],
-  "auto_index_after_convert": true
-}

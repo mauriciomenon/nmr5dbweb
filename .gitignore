@@ -49,3 +49,4 @@ benchmark_results_*.json
 /import_folder
 /uploads
 /interface/uploads
+/interface/config.json
