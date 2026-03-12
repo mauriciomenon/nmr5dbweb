@@ -4,11 +4,6 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 ## Componentes
 
-- `app_flask_search.py`: Backend Flask simples.
-  - Endpoints: `/` (serve `static/index.html`), `/api/tables`, `/api/table`, `/api/search`.
-  - Busca por ILIKE diretamente nas colunas das tabelas (sem `_fulltext`).
-  - Usa `DB_PATH` fixo (`minha.duckdb`). Ideal para demo rápida.
-
 - `app_flask_local_search.py`: Backend Flask completo para operação local.
   - Upload/seleção/remoção de arquivos: `/admin/upload`, `/admin/select`, `/admin/delete`, `/admin/list_uploads`.
   - Conversão Access→DuckDB (se existir `access_convert.convert_access_to_duckdb`).
@@ -17,6 +12,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
   - Definir prioridade de tabelas: `/admin/set_priority` (afeta ordenação de resultados na UI).
   - Busca principal `/api/search`:
     - Com `.duckdb`: usa `_fulltext` e ranking `RapidFuzz` (mais rápido e tolerante).
+    - Com `.sqlite/.sqlite3/.db` compatíveis com SQLite: busca textual leve sem `_fulltext`.
     - Com `.mdb/.accdb`: fallback via `pyodbc` (se instalado), faz LIKE e ranking em Python.
   - Lê/atualiza `config.json` com `db_path`, `priority_tables` e `auto_index_after_convert`.
 
@@ -49,18 +45,15 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
   - `utils.normalize_text` e `utils.serialize_value` (normalização/serialização).
   - Opcional `access_convert.convert_access_to_duckdb` para conversão.
 
-- `app_flask_search.py` é independente de `_fulltext` e de `utils.py` (usa ILIKE direto). Serve `static/index.html` como o completo, mas com menos recursos.
+- O backend simples legado foi retirado do caminho principal do produto e mantido apenas em backup local (`bkp_limpeza/`) para consulta, sem fazer parte da operação suportada.
 
 ## Quando precisam estar juntos?
 
-- Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade):
-  - Necessários: `app_flask_local_search.py`, `create_fulltext.py`, `utils.py` e `static/index.html` (fora deste diretório).
+- Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade, compare e rastreio):
+  - Necessários: `app_flask_local_search.py`, `create_fulltext.py`, `utils.py` e os assets em `static/`.
   - O `check_progress.py` é opcional (diagnóstico).
   - `access_convert.py` é opcional, porém necessário para conversão de `.mdb/.accdb` para `.duckdb` via UI.
   - `pyodbc` é opcional (apenas para fallback Access).
-
-- Para a versão simples:
-  - Basta `app_flask_search.py` e `static/index.html`, com `minha.duckdb` disponível.
 
 ## Dependências
 
@@ -70,13 +63,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 ## Como rodar
 
-- Versão simples:
-```
-python interface/app_flask_search.py
-```
-Acesse `http://127.0.0.1:5000/`.
-
-- Versão completa:
+- Produto principal:
 ```
 python interface/app_flask_local_search.py
 ```
@@ -89,3 +76,4 @@ Selecione um DB em "Configurar/Upload"; para `.duckdb`, a busca usa `_fulltext` 
 - Após converter Access→DuckDB, a indexação automática pode ser acionada (se `auto_index_after_convert` estiver habilitado).
 - A prioridade de tabelas influencia a ordem de exibição dos resultados.
 - Use `check_progress.py` para verificar se `_fulltext` já cobre todas as tabelas.
+- A interface principal do produto não depende mais de um backend Flask alternativo/simplificado.

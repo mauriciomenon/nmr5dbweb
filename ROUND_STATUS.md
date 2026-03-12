@@ -61,6 +61,40 @@
 - `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `45 passed`
 
+## Current Slice: Safe Cleanup Level A
+
+### Goal
+
+1. Remove clearly unrelated or legacy files from the product path only after proving they are not in the supported runtime flow
+2. Keep a local backup in an ignored folder before any cleanup
+3. Adapt the main product docs to the real supported backend path
+
+### Applied
+
+1. Created local backup area:
+   - `bkp_limpeza/`
+   - ignored via `.gitignore`
+2. Backed up and then removed from the product repo path:
+   - `notes/*.md`
+   - `interface/app_flask_search.py`
+3. Backed up `interface/README.md` before rewriting it for the product path.
+4. Updated docs to describe only the supported backend/product flow:
+   - `interface/app_flask_local_search.py`
+   - current search/compare/track behavior
+5. Left `converters/`, `tools/`, and `artifacts/` in place because they still have current references and product/analysis value.
+
+### What Was Proved
+
+- `notes/*.md` had no role in the runtime product path.
+- `interface/app_flask_search.py` was only referenced by docs and not by the current product startup path.
+- `converters/`, `tools/`, and `artifacts/` still have active references in the repo and were correctly kept for now.
+
+### Validation After Changes
+
+- proof-of-use scan completed before cleanup
+- backup copies stored locally under `bkp_limpeza/`
+- product docs updated to the supported backend path only
+
 ## Current Slice: Immediate-Use Hardening And Stable Browser Smoke
 
 ### Goal

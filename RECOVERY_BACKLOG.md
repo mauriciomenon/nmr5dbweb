@@ -33,6 +33,9 @@ Track real product debt that should not be fixed in the current slice.
 15. Review whether the browser regression should manage its own Playwright browser bootstrap or stay environment-driven.
 16. Continue reducing the backend global-state concentration in `interface/app_flask_local_search.py` now that startup/runtime DB handling and active-DB resolution are safer.
 17. Review whether the JS lint baseline should be tightened in phases after the current legacy global-script model is reduced.
+18. Continue cleanup by proof of use only:
+   - review old docs and references before removal
+   - keep backups in `bkp_limpeza/` until explicitly discarded
 
 ## Do Not Pull Into Slice 1
 

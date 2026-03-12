@@ -22,8 +22,8 @@ Map the current product structure in a stable way so future rounds can update th
   - Runtime/generated artifacts guidance only. Generated content must stay out of git.
 - `tests/`
   - Current focused tests for compare flows.
-- `notes/`
-  - Working notes. Keep only durable knowledge here.
+- `bkp_limpeza/`
+  - Local ignored backup area for files removed from the product path during safe cleanup rounds.
 
 ## Runtime Flow
 
@@ -81,6 +81,8 @@ Map the current product structure in a stable way so future rounds can update th
   - Local machine state only.
 - `interface/uploads/`
   - Uploaded and converted DB files.
+- `bkp_limpeza/`
+  - Local cleanup backup only.
 - Generated `.duckdb`, `.db`, `.sqlite`, `.sqlite3`
 - Logs, temp files, generated reports, and ad hoc inspection scripts tied to one machine
 
@@ -92,6 +94,7 @@ Map the current product structure in a stable way so future rounds can update th
 - Some docs still point to the student fork and old paths.
 - The main UI still works around a single active DB selection model in the backend.
 - SQLite is accepted by the product, but the main UI/backend contract around it still needs explicit hardening.
+- Safe cleanup is now proving use before removal; unrelated notes and the old simplified Flask backend are no longer part of the product path.
 
 ## Reporting Notes
 

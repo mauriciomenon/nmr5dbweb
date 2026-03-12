@@ -29,6 +29,7 @@ wheels/
 .env
 .venv
 node_modules/
+bkp_limpeza/
 env/
 venv/
 ENV/
