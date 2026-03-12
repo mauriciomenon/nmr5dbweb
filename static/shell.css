@@ -249,6 +249,391 @@ html[data-theme="light"] .shell-track .pill-link {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.shell-search .tabs,
+.shell-compare .tabs,
+.shell-track .tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-search .options-container,
+.shell-search .options-wrapper,
+.shell-compare .options-container,
+.shell-compare .options-wrapper,
+.shell-track .options-container,
+.shell-track .options-wrapper {
+  position: relative;
+}
+
+.shell-search .tab-btn,
+.shell-compare .tab-btn,
+.shell-track .tab-btn {
+  background: #1f2630;
+  color: var(--ink);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.shell-search .tab-btn.active,
+.shell-compare .tab-btn.active,
+.shell-track .tab-btn.active {
+  background: #1f4ed8;
+  color: #ffffff;
+  border-color: #1f4ed8;
+}
+
+html[data-theme="light"] .shell-search .tab-btn,
+html[data-theme="light"] .shell-compare .tab-btn,
+html[data-theme="light"] .shell-track .tab-btn {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+html[data-theme="light"] .shell-search .tab-btn.active,
+html[data-theme="light"] .shell-compare .tab-btn.active,
+html[data-theme="light"] .shell-track .tab-btn.active {
+  background: #1f4ed8;
+  color: #ffffff;
+}
+
+.shell-search .options-menu,
+.shell-compare .options-menu,
+.shell-track .options-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-soft);
+  padding: 4px;
+  min-width: 130px;
+  z-index: 40;
+}
+
+html[data-theme="light"] .shell-search .options-menu,
+html[data-theme="light"] .shell-compare .options-menu,
+html[data-theme="light"] .shell-track .options-menu {
+  background: #f9fafb;
+}
+
+.shell-search .options-item,
+.shell-compare .options-item,
+.shell-track .options-item {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.shell-search .options-item:hover,
+.shell-compare .options-item:hover,
+.shell-track .options-item:hover {
+  background: #1f2630;
+}
+
+html[data-theme="light"] .shell-search .options-item:hover,
+html[data-theme="light"] .shell-compare .options-item:hover,
+html[data-theme="light"] .shell-track .options-item:hover {
+  background: #e5e7eb;
+}
+
+.shell-search .btn,
+.shell-compare .btn {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border: none;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.shell-search .btn:hover,
+.shell-compare .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 24px rgba(31, 78, 216, 0.45);
+}
+
+.shell-search .btn.ghost,
+.shell-compare .btn.ghost {
+  background: transparent;
+  color: var(--primary);
+  border: 1px solid rgba(43, 92, 255, 0.5);
+  box-shadow: none;
+}
+
+.shell-search .flow-hint,
+.shell-compare .flow-hint,
+.shell-track .flow-hint {
+  background: rgba(43, 92, 255, 0.12);
+  border: 1px solid rgba(43, 92, 255, 0.35);
+  color: #dbe6ff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+html[data-theme="light"] .shell-search .flow-hint,
+html[data-theme="light"] .shell-compare .flow-hint,
+html[data-theme="light"] .shell-track .flow-hint {
+  color: #1f2933;
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.shell-search .flow-hint.info,
+.shell-compare .flow-hint.info,
+.shell-track .flow-hint.info {
+  background: rgba(43, 92, 255, 0.12);
+  border-color: rgba(43, 92, 255, 0.4);
+  color: #dbe6ff;
+}
+
+.shell-search .flow-hint.warn,
+.shell-compare .flow-hint.warn,
+.shell-track .flow-hint.warn {
+  background: rgba(255, 196, 77, 0.12);
+  border-color: rgba(255, 196, 77, 0.4);
+  color: #ffe4b3;
+}
+
+.shell-search .flow-hint.error,
+.shell-compare .flow-hint.error,
+.shell-track .flow-hint.error {
+  background: rgba(215, 90, 74, 0.18);
+  border-color: rgba(215, 90, 74, 0.5);
+  color: #ffd3cc;
+}
+
+.shell-compare input[type="text"],
+.shell-compare input[type="number"],
+.shell-compare select,
+.shell-compare textarea,
+.shell-track input[type="text"],
+.shell-track select,
+.shell-track textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: #1f2630;
+  color: var(--ink);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+html[data-theme="light"] .shell-compare input[type="text"],
+html[data-theme="light"] .shell-compare input[type="number"],
+html[data-theme="light"] .shell-compare select,
+html[data-theme="light"] .shell-compare textarea,
+html[data-theme="light"] .shell-track input[type="text"],
+html[data-theme="light"] .shell-track select,
+html[data-theme="light"] .shell-track textarea {
+  background: #f9fafb;
+  color: var(--ink);
+}
+
+.shell-compare textarea,
+.shell-track textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.shell-compare label,
+.shell-track label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.shell-compare .card,
+.shell-track .card {
+  background: var(--card);
+  padding: 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+}
+
+.shell-compare .card-header-row,
+.shell-track .card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.shell-compare .card-title-main,
+.shell-track .card-title-main {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.shell-compare .card-title-sub,
+.shell-track .card-title-sub {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+.shell-compare .row,
+.shell-track .row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.shell-compare .col,
+.shell-track .col {
+  flex: 1 1 260px;
+}
+
+.shell-compare .primary,
+.shell-track .primary {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: var(--primary);
+  color: var(--primary-ink);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shell-compare .primary:disabled,
+.shell-track .primary:disabled,
+.shell-compare .secondary:disabled,
+.shell-track .secondary:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+
+.shell-compare .secondary,
+.shell-track .secondary {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #1f2630;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.shell-compare .secondary:hover,
+.shell-track .secondary:hover {
+  background: #262e3b;
+}
+
+html[data-theme="light"] .shell-compare .secondary,
+html[data-theme="light"] .shell-track .secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.shell-compare .status,
+.shell-track .status {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: pre-line;
+}
+
+.shell-compare .help-text,
+.shell-track .help-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shell-compare .workflow,
+.shell-track .workflow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: #1f2630;
+}
+
+html[data-theme="light"] .shell-compare .workflow,
+html[data-theme="light"] .shell-track .workflow {
+  background: #f3f4ff;
+}
+
+.shell-compare .workflow-step,
+.shell-track .workflow-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+}
+
+.shell-compare .workflow-step-label,
+.shell-track .workflow-step-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.shell-compare .step-badge,
+.shell-track .step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #111827;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+html[data-theme="light"] .shell-compare .step-badge,
+html[data-theme="light"] .shell-track .step-badge {
+  background: #e5e7eb;
+  border-color: #cbd5f5;
+  color: #111827;
+}
+
+.shell-track .actions {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 .shell-search .operations-stage,
 .shell-search .context-list,
 .shell-search .quick-links,

@@ -550,3 +550,63 @@ Reduce the duplicated shell/theme code across the static web pages without chang
 
 - The shared theme/options behavior is now centralized, which lowers the cost of future UI changes.
 - CSS duplication still exists in page-specific styles, but the shell-level drift risk is lower than before.
+
+## Follow-up Slice: Shared Workbench Components And Compare Flow Cleanup
+
+### Goal
+
+Push the web UI beyond shell extraction by sharing more component-level rules across the static pages and by simplifying the compare page flow where the operator actually works.
+
+### Applied
+
+1. Expanded `static/shell.css` so it now also carries shared component rules for:
+   - tabs and options menu
+   - primary/ghost buttons used by the search and compare shells
+   - shared flow hints
+   - compare/track card, form, workflow, and action primitives
+2. Removed the duplicated tab/options/button/form/workflow CSS blocks from:
+   - `static/index.html`
+   - `static/compare_dbs.html`
+   - `static/track_record.html`
+3. Reorganized step 2 of `static/compare_dbs.html` into clearer operator panels:
+   - table + key definition
+   - compare scope
+   - visual filters
+   - page/limit controls
+4. Reframed step 3 of `static/compare_dbs.html` so the result area now has:
+   - a clearer result note
+   - a more explicit tables overview action
+   - cleaner separation between summary and detailed diff reading
+5. Consolidated compare page request logic around shared helpers for:
+   - `POST` JSON calls
+   - compare busy-state handling
+   - compare metadata refresh
+   - payload collection from the current form
+6. Reused the same compare request path for:
+   - direct compare
+   - page changes
+   - export pagination
+   - tables overview generation
+   - restored compare state
+
+### What Was Proved
+
+- The search/compare/track pages now depend on a broader shared shell/component layer without changing backend ids or Flask routes.
+- The compare page still preserves the current API contract while using less duplicated request logic.
+- The Flask routes for the touched UI still serve correctly on an alternate local port after the compare layout cleanup.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `node --check static/app.js && node --check static/ui_utils.js && node --check static/shell.js`: passed
+- extracted inline script check for `static/compare_dbs.html` with `node --check`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- Flask route smoke check on alternate port `5081`: passed for `/`, `/admin.html`, `/compare_dbs`, `/track_record`, `/shell.css`, `/shell.js`
+
+### Findings From This Slice
+
+- Component-level CSS drift is lower now for search/compare/track, but `static/admin.html` still carries a more isolated visual system than the other pages.
+- `static/compare_dbs.html` is more maintainable than before, but it still has a large inline script and remains a future extraction candidate.
+- This machine still lacks `curl` in PATH, so local HTTP smoke checks should prefer Python `urllib` or another available client.

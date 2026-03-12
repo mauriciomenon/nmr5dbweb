@@ -58,6 +58,13 @@ The first stabilization slice is intentionally narrow:
 - The page refresh preserved the existing DOM ids expected by `static/app.js` and the inline page scripts
 - `static/shell.css` and `static/shell.js` now centralize the shared web shell/theme behavior used by the static pages
 - The repeated inline theme/options blocks were removed from the page HTML files
+- `static/shell.css` now also carries a shared component layer for search/compare/track:
+  - tabs and options menu
+  - flow hints
+  - compare/track form and workflow primitives
+  - shared search/compare button styles
+- `static/compare_dbs.html` now groups the operator flow into clearer compare panels instead of one long flat form
+- `static/compare_dbs.html` now reuses shared request helpers for compare, pagination, export, tables overview, and restored state
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -65,6 +72,7 @@ The first stabilization slice is intentionally narrow:
   - `row_count_a` and `row_count_b` still reflect raw row totals
 - Local browser validation is partially blocked on this machine because Playwright has no Chromium binary installed
 - Local smoke tests should avoid port `5000` here, because another machine service is already bound there; `5081` worked for Flask route checks
+- This machine also has no `curl` in PATH, so local HTTP smoke checks should prefer Python `urllib` or another available client
 
 ## Operator Notes For Next Conversation
 
@@ -74,7 +82,9 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
-  - continue reducing page-specific CSS duplication now that the shared shell exists
+  - continue reducing page-specific CSS duplication now that the shared shell also owns more component primitives
+  - decide whether `static/admin.html` should join the same component system or remain intentionally distinct
+  - consider extracting the large inline script from `static/compare_dbs.html` once the current operator flow is stable
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today

@@ -59,17 +59,10 @@
         background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
         box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
       }
-      .card {
-        background: var(--card);
-      }
       .result-summary-card,
       .diff-section,
       .diff-row {
         background: #f9fafb;
-      }
-      input[type="text"], input[type="number"], select, textarea {
-        background: #f9fafb;
-        color: var(--ink);
       }
     }
     :root[data-theme="light"] {
@@ -174,36 +167,6 @@
       padding: 4px 8px;
       border-radius: 999px;
     }
-    .options-container { position: relative; }
-    .options-wrapper { position: relative; }
-    .options-menu {
-      position: absolute;
-      right: 0;
-      top: 100%;
-      margin-top: 4px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: var(--shadow-soft);
-      padding: 4px;
-      min-width: 130px;
-      z-index: 40;
-    }
-    html[data-theme="light"] .options-menu { background: #f9fafb; }
-    .options-item {
-      display: block;
-      width: 100%;
-      background: transparent;
-      border: none;
-      text-align: left;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: var(--ink);
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .options-item:hover { background: #1f2630; }
-    html[data-theme="light"] .options-item:hover { background: #e5e7eb; }
     .badge.same {
       background: #022c22;
       color: #6ee7b7;
@@ -388,105 +351,93 @@
     }
     .tables-overview-name { font-weight: 600; }
     .tables-overview-meta { color: var(--muted); }
-    .btn {
-      background: var(--primary);
-      color: var(--primary-ink);
-      border: none;
-      padding: 8px 14px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-weight: 600;
-      letter-spacing: 0.2px;
-      box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
-      transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+    .compare-config-grid,
+    .compare-filter-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
     }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 14px 24px rgba(31, 78, 216, 0.45); }
-    .btn.ghost {
-      background: transparent;
-      color: var(--primary);
-      border: 1px solid rgba(43, 92, 255, 0.5);
-      box-shadow: none;
+    .compare-filter-grid {
+      margin-top: 12px;
+    }
+    .compare-config-panel {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(8, 12, 18, 0.16);
+      display: grid;
+      gap: 10px;
+    }
+    html[data-theme="light"] .compare-config-panel {
+      background: rgba(248, 250, 252, 0.94);
+    }
+    .compare-panel-head {
+      display: grid;
+      gap: 4px;
+    }
+    .compare-panel-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .compare-panel-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .compare-panel-copy {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .compare-checklist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      font-size: 13px;
+    }
+    .compare-checklist label,
+    .compare-limit-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      color: var(--ink);
+    }
+    .compare-limit-row {
+      display: flex;
+      gap: 10px;
+      align-items: end;
+      flex-wrap: wrap;
+    }
+    .compare-limit-field {
+      width: 140px;
+    }
+    .compare-actions-row {
+      margin-top: 12px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .compare-results-stack {
+      display: grid;
+      gap: 10px;
+    }
+    .compare-results-note {
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+      color: var(--muted);
+      background: rgba(8, 12, 18, 0.14);
+    }
+    html[data-theme="light"] .compare-results-note {
+      background: rgba(248, 250, 252, 0.92);
     }
     .container { position: relative; z-index: 1; padding: 20px 24px 40px; }
     main { max-width: 1200px; margin: 0 auto; }
-    input[type="text"], input[type="number"], select, textarea {
-      padding: 10px 12px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      font-size: 14px;
-      background: #1f2630;
-      color: var(--ink);
-      width: 100%;
-      box-sizing: border-box;
-    }
-    html[data-theme="light"] input[type="text"],
-    html[data-theme="light"] input[type="number"],
-    html[data-theme="light"] select,
-    html[data-theme="light"] textarea {
-      background: #f9fafb;
-      color: var(--ink);
-    }
-    textarea { resize: vertical; min-height: 60px; }
-    .card {
-      background: var(--card);
-      padding: 14px;
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      margin-bottom: 14px;
-      border: 1px solid var(--border);
-    }
-    .card-header-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .card-title-main {
-      font-size: 15px;
-      font-weight: 600;
-      margin: 0;
-    }
-    .card-title-sub {
-      font-size: 12px;
-      color: var(--muted);
-      margin: 0;
-    }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .col { flex: 1 1 260px; }
-    button.primary {
-      padding: 8px 16px;
-      border-radius: 999px;
-      border: none;
-      background: var(--primary);
-      color: var(--primary-ink);
-      cursor: pointer;
-      font-size: 14px;
-      font-weight: 600;
-      box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
-    }
-    button.primary:hover { background: #244fd9; }
-    button.secondary {
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: #1f2630;
-      color: var(--ink);
-      cursor: pointer;
-      font-size: 12px;
-    }
-    button.secondary:hover { background: #262e3b; }
-    html[data-theme="light"] button.secondary {
-      background: #e5e7eb;
-      color: #111827;
-    }
-    .status {
-      font-size: 13px;
-      margin-top: 8px;
-      white-space: pre-line;
-      color: var(--muted);
-    }
-    .help-text { font-size: 12px; color: var(--muted); }
     .divider { margin: 16px 0 12px; border-top: 1px dashed var(--border); }
     table {
       width: 100%;
@@ -501,54 +452,6 @@
     }
     th { background: #1f2630; }
     html[data-theme="light"] th { background: #e5e7eb; }
-    .workflow {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px dashed var(--border);
-      background: #1f2630;
-    }
-    html[data-theme="light"] .workflow { background: #f3f4ff; }
-    .workflow-step { display: flex; align-items: center; gap: 8px; flex: 1 1 220px; }
-    .workflow-step-label { font-size: 12px; color: var(--muted); }
-    .step-badge {
-      width: 22px;
-      height: 22px;
-      border-radius: 999px;
-      background: #111827;
-      border: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      color: var(--muted);
-    }
-    html[data-theme="light"] .step-badge {
-      background: #e5e7eb;
-      border-color: #cbd5f5;
-      color: #111827;
-    }
-    .flow-hint {
-      background: rgba(43, 92, 255, 0.12);
-      border: 1px solid rgba(43, 92, 255, 0.35);
-      color: #dbe6ff;
-      padding: 10px 12px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-      font-weight: 600;
-      font-size: 13px;
-    }
-    html[data-theme="light"] .flow-hint {
-      color: #1f2933;
-      background: rgba(37, 99, 235, 0.06);
-      border-color: rgba(37, 99, 235, 0.35);
-    }
-    .flow-hint.info { background: rgba(43, 92, 255, 0.12); border-color: rgba(43, 92, 255, 0.4); color: #dbe6ff; }
-    .flow-hint.warn { background: rgba(255, 196, 77, 0.12); border-color: rgba(255, 196, 77, 0.4); color: #ffe4b3; }
-    .flow-hint.error { background: rgba(215, 90, 74, 0.18); border-color: rgba(215, 90, 74, 0.5); color: #ffd3cc; }
     .flow-steps { display: grid; gap: 10px; }
     .steps-title { font-weight: 700; display: flex; align-items: center; gap: 8px; }
     .steps-grid { display: grid; gap: 8px; }
@@ -609,26 +512,11 @@
       color: var(--badge-removed-text);
       font-weight: 600;
     }
-    .tabs { display: flex; gap: 8px; }
-    .tab-btn {
-      background: #1f2630;
-      color: var(--ink);
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .tab-btn.active { background: #1f4ed8; color: #fff; border-color: #1f4ed8; }
-    html[data-theme="light"] .tab-btn {
-      background: #e5e7eb;
-      color: #111827;
-    }
-    html[data-theme="light"] .tab-btn.active {
-      background: #1f4ed8;
-      color: #ffffff;
+    @media (max-width: 980px) {
+      .compare-config-grid,
+      .compare-filter-grid {
+        grid-template-columns: 1fr;
+      }
     }
     @media (max-width: 720px) {
       header { padding: 12px 16px; flex-wrap: wrap; }
@@ -733,7 +621,7 @@
             1) Informe os caminhos dos bancos <strong>A</strong> (novo) e <strong>B</strong> (anterior) ou use os botoes de upload.<br/>
             2) Clique em <strong>Mapear tabelas comuns</strong> para listar apenas o que existe nos dois bancos.<br/>
             3) Escolha a tabela, defina a <strong>chave K</strong> e ajuste filtros quando quiser isolar alteracoes, inclusoes ou remocoes.<br/>
-            4) Clique em <strong>Rodar comparacao</strong> para ver o diff linha a linha.
+            4) Clique em <strong>Comparar tabela</strong> para ver o diff linha a linha.
           </div>
           <div class="help-text">
             O resumo geral mostra o impacto total da tabela. Os filtros abaixo apenas controlam a visualizacao detalhada e a exportacao.
@@ -785,72 +673,98 @@
       <div class="card-header-row step-card-header" onclick="toggleStep(2)">
         <div>
           <p class="card-title-main">2. Selecionar tabela, chaves e filtros</p>
-          <p class="card-title-sub">Escolha a tabela, defina a chave (K) e, se quiser, refine com filtros.</p>
+          <p class="card-title-sub">Separe identidade da linha, escopo do diff e filtros visuais para nao contaminar a leitura.</p>
         </div>
         <span class="step-status-pill" id="step2Status">Aguardando</span>
       </div>
       <div class="step-card-body" id="stepBody2">
-        <div class="row">
-          <div class="col">
-            <label for="tableSelect">Tabela</label>
-            <select id="tableSelect" onchange="onTableChange()">
-              <option value="">-- carregue as tabelas primeiro --</option>
-            </select>
+        <div class="compare-config-grid">
+          <div class="compare-config-panel">
+            <div class="compare-panel-head">
+              <div class="compare-panel-kicker">Base da comparacao</div>
+              <div class="compare-panel-title">Tabela e chave K</div>
+              <div class="compare-panel-copy">Defina primeiro a tabela e a chave que identifica cada linha sem ambiguidade.</div>
+            </div>
+            <div class="row">
+              <div class="col">
+                <label for="tableSelect">Tabela</label>
+                <select id="tableSelect" onchange="onTableChange()">
+                  <option value="">-- carregue as tabelas primeiro --</option>
+                </select>
+              </div>
+              <div class="col">
+                <label for="keyColumns">Colunas-chave (K)</label>
+                <input id="keyColumns" type="text" placeholder="Ex: ID ou ID,DATA" />
+                <div class="help-text">
+                  K = nome(s) das colunas que identificam unicamente cada linha.
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="col">
-            <label for="keyColumns">Colunas-chave (K)</label>
-            <input id="keyColumns" type="text" placeholder="Ex: ID ou ID,DATA" />
-            <div class="help-text" style="margin-top:2px;">
-              K = nome(s) das coluna(s) que identificam unicamente cada linha (chave primária).
+          <div class="compare-config-panel">
+            <div class="compare-panel-head">
+              <div class="compare-panel-kicker">Escopo do diff</div>
+              <div class="compare-panel-title">Colunas e foco da leitura</div>
+              <div class="compare-panel-copy">Restringa o que sera comparado ou isole uma chave quando a revisao for cirurgica.</div>
+            </div>
+            <div>
+              <label for="compareColumns">Colunas para comparar (opcional)</label>
+              <textarea id="compareColumns" placeholder="Se vazio, compara todas as colunas nao-chave.
+Ex: COL1,COL2,COL3"></textarea>
+            </div>
+            <div>
+              <label for="keyFilter">Filtro opcional por chave (K)</label>
+              <input id="keyFilter" type="text" placeholder="Ex: RTUNO=1,PNTNO=2304" />
+              <div class="help-text">
+                Os detalhes abaixo mostram apenas os registros cuja chave K bate com este filtro. O resumo geral continua olhando a tabela inteira.
+              </div>
             </div>
           </div>
         </div>
-        <div style="margin-top:8px;">
-          <label for="compareColumns">Colunas para comparar (opcional)</label>
-          <textarea id="compareColumns" placeholder="Se vazio, compara todas as colunas não-chave.
-Ex: COL1,COL2,COL3"></textarea>
-        </div>
-        <div style="margin-top:8px;">
-          <label for="keyFilter">Filtro opcional por chave (K)</label>
-          <input id="keyFilter" type="text" placeholder="Ex: RTUNO=1,PNTNO=2304" />
-          <div class="help-text" style="margin-top:2px;">
-            Se preenchido, os detalhes abaixo mostram apenas os registros cuja chave K bate com este filtro.
-            O resumo geral continua considerando toda a tabela.
+
+        <div class="compare-filter-grid">
+          <div class="compare-config-panel">
+            <div class="compare-panel-head">
+              <div class="compare-panel-kicker">Filtro visual</div>
+              <div class="compare-panel-title">Tipos de diferenca</div>
+              <div class="compare-panel-copy">Use isso para limpar ruido sem alterar o panorama total da tabela.</div>
+            </div>
+            <div class="compare-checklist">
+              <label><input type="checkbox" id="filterChanged" checked /> Alteradas</label>
+              <label><input type="checkbox" id="filterAdded" checked /> Novas (so em A / banco NOVO)</label>
+              <label><input type="checkbox" id="filterRemoved" checked /> Removidas (so em B / banco ANTIGO)</label>
+            </div>
+            <div>
+              <label for="filterColumn">Filtrar por coluna alterada (opcional)</label>
+              <select id="filterColumn">
+                <option value="">-- todas as colunas --</option>
+              </select>
+              <div class="help-text">
+                Aplica-se apenas as linhas <strong>alteradas</strong> (a chave existe em A e B).
+              </div>
+            </div>
+          </div>
+          <div id="advancedOptions" class="compare-config-panel">
+            <div class="compare-panel-head">
+              <div class="compare-panel-kicker">Volume e pagina</div>
+              <div class="compare-panel-title">Limite operacional</div>
+              <div class="compare-panel-copy">Controle quantas chaves com diferenca vao para o detalhe sem afetar o resumo geral.</div>
+            </div>
+            <label class="compare-limit-toggle"><input type="checkbox" id="rowLimitEnabled" checked /> Aplicar limite de chaves com diferenca nos detalhes</label>
+            <div class="compare-limit-row">
+              <div class="compare-limit-field">
+                <label for="rowLimit">Quantidade maxima de chaves</label>
+                <input id="rowLimit" type="number" min="1" value="100" />
+              </div>
+            </div>
+            <div class="help-text">
+              Quando o limite esta ativo, apenas as primeiras N chaves com diferenca sao carregadas nos detalhes. O resumo geral continua considerando toda a tabela.
+            </div>
           </div>
         </div>
-        <div style="margin-top:8px; font-size:13px;">
-          <div style="margin-bottom:2px;">Filtrar por tipo de diferença (somente na visualização):</div>
-          <label style="margin-right:8px;"><input type="checkbox" id="filterChanged" checked /> Alteradas</label>
-          <label style="margin-right:8px;"><input type="checkbox" id="filterAdded" checked /> Novas (só em A / banco NOVO)</label>
-          <label><input type="checkbox" id="filterRemoved" checked /> Removidas (só em B / banco ANTIGO)</label>
-        </div>
-        <div style="margin-top:4px; font-size:13px;">
-          <label for="filterColumn">Filtrar por coluna alterada (opcional)</label>
-          <select id="filterColumn" style="max-width:260px; font-size:11px;">
-            <option value="">-- todas as colunas --</option>
-          </select>
-          <div class="help-text" style="margin-top:2px;">
-            Aplica-se apenas às linhas <strong>alteradas</strong> (chave existe em A e B).
-          </div>
-        </div>
-        <div style="margin-top:4px; font-size:13px;">
-          <a href="#" onclick="toggleAdvancedOptions(event)" style="color:#60a5fa; text-decoration:none;">Opcoes avancadas de comparacao</a>
-        </div>
-        <div id="advancedOptions" style="margin-top:4px; display:none; font-size:13px; color:#9ca3af; border:1px dashed #1f2937; border-radius:6px; padding:8px; max-width:420px;">
-          <div style="margin-bottom:4px; font-weight:500; color:#e5e7eb;">Limites e desempenho</div>
-          <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-            <input type="checkbox" id="rowLimitEnabled" checked />
-            <span>Aplicar limite de chaves com diferença nos detalhes</span>
-          </label>
-          <label for="rowLimit" style="display:block; margin-bottom:2px;">Quantidade máxima de chaves com diferença (detalhe)</label>
-          <input id="rowLimit" type="number" min="1" value="100" style="max-width:120px; font-size:12px;" />
-          <div class="help-text" style="margin-top:2px;">
-            Quando o limite está ativo, apenas as primeiras N chaves (registros) com diferença
-            são carregadas para os detalhes abaixo. O resumo geral continua considerando toda a tabela.
-          </div>
-        </div>
-        <div style="margin-top:8px;">
-          <button class="primary" onclick="runCompare()">Rodar comparacao</button>
+
+        <div class="compare-actions-row">
+          <button id="runCompareBtn" class="primary" onclick="runCompare()">Comparar tabela</button>
         </div>
         <div id="statusCompare" class="status"></div>
       </div>
@@ -879,16 +793,19 @@ Ex: COL1,COL2,COL3"></textarea>
       </div>
       <div class="step-card-body" id="stepBody3">
         <div class="export-row">
-          <span>Os resultados abaixo respeitam os filtros e limites configurados.</span>
+          <span>Os resultados abaixo respeitam os filtros de visualizacao e a pagina atual.</span>
           <span style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Panorama das tabelas</button>
+            <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Mapa geral das tabelas</button>
             <button type="button" class="secondary" onclick="exportComparison()">Exportar CSV</button>
           </span>
         </div>
-        <div id="tablesOverview" style="display:none;"></div>
-        <div id="summary"></div>
-        <div id="results"></div>
-        <div id="pagination" style="margin-top:8px; font-size:12px;"></div>
+        <div class="compare-results-stack">
+          <div class="compare-results-note">Leia o resumo primeiro. Ele mostra o impacto total da tabela. Os blocos abaixo servem para investigar a diferenca, nao para redefinir o contexto da comparacao.</div>
+          <div id="tablesOverview" style="display:none;"></div>
+          <div id="summary"></div>
+          <div id="results"></div>
+          <div id="pagination" style="margin-top:8px; font-size:12px;"></div>
+        </div>
       </div>
     </div>
       </div>
@@ -976,14 +893,6 @@ Ex: COL1,COL2,COL3"></textarea>
       setStepOpen(1);
     }
 
-    function toggleAdvancedOptions(ev) {
-      if (ev && ev.preventDefault) ev.preventDefault();
-      const box = document.getElementById('advancedOptions');
-      if (!box) return;
-      const isHidden = !box.style.display || box.style.display === 'none';
-      box.style.display = isHidden ? 'block' : 'none';
-    }
-
     function updateRowLimitState() {
       const cb = document.getElementById('rowLimitEnabled');
       const input = document.getElementById('rowLimit');
@@ -998,6 +907,70 @@ Ex: COL1,COL2,COL3"></textarea>
       if (!el) return;
       el.textContent = message || '';
       el.style.color = isError ? '#fecaca' : '#9ca3af';
+    }
+
+    function getRunCompareButton() {
+      return document.getElementById('runCompareBtn');
+    }
+
+    async function postJson(path, payload) {
+      const resp = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      let data = null;
+      try {
+        data = await resp.json();
+      } catch (error) {
+        data = null;
+      }
+      if (!resp.ok) {
+        const apiMsg = data && (data.message || data.error);
+        const err = new Error(apiMsg || ('resposta HTTP ' + resp.status));
+        err.payload = data;
+        err.status = resp.status;
+        throw err;
+      }
+      return data;
+    }
+
+    function setCompareBusy(statusText, flowText, stepText, slowText) {
+      const statusEl = document.getElementById('statusCompare');
+      const btn = getRunCompareButton();
+      if (statusEl) {
+        statusEl.textContent = statusText;
+      }
+      setFlowHint(flowText, 'info');
+      setStepState('stepCompare', stepText, 'active');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Comparando...';
+      }
+      return setTimeout(() => {
+        if (statusEl) {
+          statusEl.textContent = slowText;
+        }
+      }, 60000);
+    }
+
+    function clearCompareBusy(timeoutId, buttonText = 'Comparar tabela') {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      const btn = getRunCompareButton();
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = buttonText;
+      }
+    }
+
+    function updateLastCompareMeta(data, fallbackPage = 1) {
+      lastCompareMeta = {
+        total_filtered_rows: typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0),
+        page: data.page || fallbackPage,
+        total_pages: data.total_pages || 1,
+      };
     }
 
     function saveCompareState() {
@@ -1093,26 +1066,20 @@ Ex: COL1,COL2,COL3"></textarea>
       // tentar recarregar automaticamente, mas apenas se os arquivos ainda existirem.
       if (saved.tablesLoadedOnce && db1Input && db2Input && db1Input.value && db2Input.value) {
         try {
-          const headResp = await fetch('/api/compare_db_tables', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ db1_path: db1Input.value, db2_path: db2Input.value }),
+          const headData = await postJson('/api/compare_db_tables', {
+            db1_path: db1Input.value,
+            db2_path: db2Input.value,
           });
-          const headData = await headResp.json();
-          if (!headResp.ok) {
-            console.warn('Arquivos anteriores nao encontrados ao restaurar estado:', headData && headData.error);
+          tablesMeta = headData.tables || [];
+          if (!tablesMeta.length) {
+            console.warn('Nenhuma tabela em comum ao restaurar estado salvo.');
           } else {
-            tablesMeta = headData.tables || [];
-            if (!tablesMeta.length) {
-              console.warn('Nenhuma tabela em comum ao restaurar estado salvo.');
-            } else {
-              tableSelect.innerHTML = '';
-              for (const t of tablesMeta) {
-                const opt = document.createElement('option');
-                opt.value = t.name;
-                opt.textContent = t.name;
-                tableSelect.appendChild(opt);
-              }
+            tableSelect.innerHTML = '';
+            for (const t of tablesMeta) {
+              const opt = document.createElement('option');
+              opt.value = t.name;
+              opt.textContent = t.name;
+              tableSelect.appendChild(opt);
             }
           }
         } catch (e) {
@@ -1123,20 +1090,13 @@ Ex: COL1,COL2,COL3"></textarea>
       // se havia uma comparação concluída antes, tenta reconstruir o resultado
       if (lastComparePayload && lastComparePayload.table) {
         try {
-          const resp = await fetch('/api/compare_db_rows', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(lastComparePayload),
-          });
-          const data = await resp.json();
-          if (resp.ok) {
-            renderResult(data);
-            setFlowHint('Última comparação restaurada. Você pode ajustar filtros ou comparar novamente.', 'info');
-            setStepState('stepPickFiles', 'Concluído', 'done');
-            setStepState('stepLoadTables', tablesLoadedOnce ? 'Concluído' : 'Aguardando', tablesLoadedOnce ? 'done' : null);
-            setStepState('stepCompare', 'Concluído', 'done');
-            setStepOpen(3);
-          }
+          const data = await postJson('/api/compare_db_rows', lastComparePayload);
+          renderResult(data);
+          setFlowHint('Ultima comparacao restaurada. Voce pode ajustar filtros ou comparar novamente.', 'info');
+          setStepState('stepPickFiles', 'Concluido', 'done');
+          setStepState('stepLoadTables', tablesLoadedOnce ? 'Concluido' : 'Aguardando', tablesLoadedOnce ? 'done' : null);
+          setStepState('stepCompare', 'Concluido', 'done');
+          setStepOpen(3);
         } catch (e) {
           console.warn('Nao foi possivel restaurar resultado anterior da comparacao.', e);
         }
@@ -1272,6 +1232,9 @@ Ex: COL1,COL2,COL3"></textarea>
       const btn = document.getElementById('btnLoadTables');
       tablesMeta = [];
       tablesLoadedOnce = false;
+      tablesOverviewCache = null;
+      tablesOverviewVisible = false;
+      updateTablesOverviewVisibility();
       tableSelect.innerHTML = '<option value="">carregando...</option>';
       statusEl.textContent = 'Carregando tabelas em comum...';
 
@@ -1297,7 +1260,7 @@ Ex: COL1,COL2,COL3"></textarea>
         tableSelect.innerHTML = '<option value="">-- informe os caminhos acima --</option>';
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Carregar tabelas em comum';
+          btn.textContent = 'Mapear tabelas comuns';
         }
         if (tablesTimeout) {
           clearTimeout(tablesTimeout);
@@ -1311,15 +1274,7 @@ Ex: COL1,COL2,COL3"></textarea>
       setStepState('stepLoadTables', 'Carregando...', 'active');
 
       try {
-        const resp = await fetch('/api/compare_db_tables', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ db1_path: db1, db2_path: db2 })
-        });
-        const data = await resp.json();
-        if (!resp.ok) {
-          throw new Error(data.error || 'Falha ao carregar tabelas');
-        }
+        const data = await postJson('/api/compare_db_tables', { db1_path: db1, db2_path: db2 });
         tablesMeta = data.tables || [];
         if (!tablesMeta.length) {
           statusEl.textContent = 'Nenhuma tabela em comum encontrada entre os dois bancos.';
@@ -1345,7 +1300,7 @@ Ex: COL1,COL2,COL3"></textarea>
         // caso contrário, o navegador mantém a primeira opção selecionada.
         statusEl.textContent = `Tabelas em comum: ${tablesMeta.length}`;
         tablesLoadedOnce = true;
-        setFlowHint('Tabelas em comum carregadas. Selecione a tabela, defina a chave K e clique em "Comparar tabela completa".', 'info');
+        setFlowHint('Tabelas em comum carregadas. Selecione a tabela, defina a chave K e clique em "Comparar tabela".', 'info');
         setStepState('stepLoadTables', 'Concluído', 'done');
         setStepState('stepCompare', 'Pronto para comparar', 'active');
         setStepOpen(2);
@@ -1360,7 +1315,7 @@ Ex: COL1,COL2,COL3"></textarea>
       } finally {
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Carregar tabelas em comum';
+          btn.textContent = 'Mapear tabelas comuns';
         }
         if (tablesTimeout) {
           clearTimeout(tablesTimeout);
@@ -1392,7 +1347,7 @@ Ex: COL1,COL2,COL3"></textarea>
       cmpInput.value = '';
     }
 
-    async function runCompare() {
+    function collectCompareRequest(page = 1) {
       const db1 = document.getElementById('db1Path').value.trim();
       const db2 = document.getElementById('db2Path').value.trim();
       const table = document.getElementById('tableSelect').value;
@@ -1405,38 +1360,6 @@ Ex: COL1,COL2,COL3"></textarea>
       const colSelect = document.getElementById('filterColumn');
       const rowLimitEl = document.getElementById('rowLimit');
       const rowLimitEnabledEl = document.getElementById('rowLimitEnabled');
-      const statusEl = document.getElementById('statusCompare');
-      const summaryEl = document.getElementById('summary');
-      const resultsEl = document.getElementById('results');
-      const btn = document.querySelector('button.primary[onclick="runCompare()"]');
-
-      let compareTimeout = null;
-
-      summaryEl.innerHTML = '';
-      resultsEl.innerHTML = '';
-      statusEl.textContent = '';
-
-      if (!db1 || !db2) {
-        statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
-        setFlowHint('Informe os caminhos de ambos os bancos A e B para conseguir comparar.', 'warn');
-        setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
-        setStepState('stepLoadTables', 'Aguardando', null);
-        setStepState('stepCompare', 'Aguardando', null);
-        return;
-      }
-      if (!table) {
-        statusEl.textContent = 'Selecione uma tabela.';
-        setFlowHint('Carregue as tabelas em comum e selecione uma tabela antes de comparar.', 'warn');
-        setStepState('stepLoadTables', 'Tabela não selecionada', 'warn');
-        setStepState('stepCompare', 'Aguardando', null);
-        return;
-      }
-      if (!keyColsStr) {
-        statusEl.textContent = 'Informe pelo menos uma coluna-chave K.';
-        setFlowHint('Informe pelo menos uma coluna-chave K para identificar os registros únicos.', 'warn');
-        setStepState('stepCompare', 'Chave K faltando', 'warn');
-        return;
-      }
 
       const key_columns = keyColsStr.split(',').map(s => s.trim()).filter(Boolean);
       const compare_columns = cmpColsStr ? cmpColsStr.split(',').map(s => s.trim()).filter(Boolean) : null;
@@ -1453,100 +1376,94 @@ Ex: COL1,COL2,COL3"></textarea>
         }
       }
 
-      // monta parâmetros de filtro para o backend
-      // No backend, "added" = só em B (ANTIGO) e "removed" = só em A (NOVO).
-      // Como na UI as caixas estão rotuladas como "Novas" (A) e "Removidas" (B),
-      // aqui invertemos o mapeamento para que o filtro faça sentido para quem
-      // pensa A = novo e B = antigo.
       const change_types = [];
       if (!cbChanged || cbChanged.checked) change_types.push('changed');
-      if (!cbAdded || cbAdded.checked) change_types.push('removed');   // Novas = só em A
-      if (!cbRemoved || cbRemoved.checked) change_types.push('added'); // Removidas = só em B
+      if (!cbAdded || cbAdded.checked) change_types.push('removed');
+      if (!cbRemoved || cbRemoved.checked) change_types.push('added');
 
       const changed_column = (colSelect && colSelect.value) ? colSelect.value : null;
-
-      // monta payload principal de comparação (página 1 por padrão)
       const page_size = row_limit || null;
-      const payload = {
-        db1_path: db1,
-        db2_path: db2,
-        table,
-        key_columns,
-        compare_columns,
-        row_limit,
-        key_filter: keyFilterStr || null,
-        change_types,
-        changed_column,
-        page: 1,
-        page_size,
-      };
 
-      lastComparePayload = payload;
+      return {
+        db1,
+        db2,
+        table,
+        keyColsStr,
+        payload: {
+          db1_path: db1,
+          db2_path: db2,
+          table,
+          key_columns,
+          compare_columns,
+          row_limit,
+          key_filter: keyFilterStr || null,
+          change_types,
+          changed_column,
+          page,
+          page_size,
+        },
+      };
+    }
+
+    async function runCompare() {
+      const statusEl = document.getElementById('statusCompare');
+      const summaryEl = document.getElementById('summary');
+      const resultsEl = document.getElementById('results');
+      const compareRequest = collectCompareRequest(1);
+
+      summaryEl.innerHTML = '';
+      resultsEl.innerHTML = '';
+      statusEl.textContent = '';
+
+      if (!compareRequest.db1 || !compareRequest.db2) {
+        statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
+        setFlowHint('Informe os caminhos de ambos os bancos A e B para conseguir comparar.', 'warn');
+        setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
+        setStepState('stepLoadTables', 'Aguardando', null);
+        setStepState('stepCompare', 'Aguardando', null);
+        return;
+      }
+      if (!compareRequest.table) {
+        statusEl.textContent = 'Selecione uma tabela.';
+        setFlowHint('Carregue as tabelas em comum e selecione uma tabela antes de comparar.', 'warn');
+        setStepState('stepLoadTables', 'Tabela nao selecionada', 'warn');
+        setStepState('stepCompare', 'Aguardando', null);
+        return;
+      }
+      if (!compareRequest.keyColsStr) {
+        statusEl.textContent = 'Informe pelo menos uma coluna-chave K.';
+        setFlowHint('Informe pelo menos uma coluna-chave K para identificar os registros unicos.', 'warn');
+        setStepState('stepCompare', 'Chave K faltando', 'warn');
+        return;
+      }
+
+      lastComparePayload = compareRequest.payload;
       lastCompareMeta = null;
       saveCompareState();
 
-      statusEl.textContent = 'Comparando tabela completa entre A e B (pode levar alguns segundos)...';
-      setFlowHint('Comparando tabela completa entre A e B. Aguarde, dependendo do tamanho pode levar alguns segundos ou minutos.', 'info');
-      setStepState('stepCompare', 'Comparando...', 'active');
-
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Comparando...';
-      }
-
-      // Aviso se a comparação demorar demais
-      compareTimeout = setTimeout(() => {
-        statusEl.textContent = 'A comparação está levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso é esperado. Caso não conclua, tente restringir por chave (K) ou revisar os bancos.';
-      }, 60000);
+      const compareTimeout = setCompareBusy(
+        'Comparando tabela completa entre A e B (pode levar alguns segundos)...',
+        'Comparando tabela completa entre A e B. Aguarde, dependendo do tamanho pode levar alguns segundos ou minutos.',
+        'Comparando...',
+        'A comparacao esta levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso pode ser esperado. Se travar, tente restringir por chave K.'
+      );
 
       try {
-        const resp = await fetch('/api/compare_db_rows', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        let data = null;
-        try {
-          data = await resp.json();
-        } catch (e) {
-          data = null;
-        }
-
-        if (!resp.ok) {
-          const apiMsg = data && (data.message || data.error);
-          if (apiMsg) {
-            statusEl.textContent = 'Erro ao comparar: ' + apiMsg;
-          } else {
-            statusEl.textContent = 'Erro ao comparar: resposta HTTP ' + resp.status;
-          }
-          return;
-        }
-
+        const data = await postJson('/api/compare_db_rows', compareRequest.payload);
         renderResult(data);
-        lastCompareMeta = {
-          total_filtered_rows: typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0),
-          page: data.page || 1,
-          total_pages: data.total_pages || 1,
-        };
+        updateLastCompareMeta(data, 1);
         saveCompareState();
-        statusEl.textContent = 'Comparação concluída.';
-        setFlowHint('Comparação concluída. Revise o resumo e os detalhes de diferenças abaixo.', 'info');
-        setStepState('stepCompare', 'Concluído', 'done');
+        statusEl.textContent = 'Comparacao concluida.';
+        setFlowHint('Comparacao concluida. Revise o resumo e os detalhes de diferencas abaixo.', 'info');
+        setStepState('stepCompare', 'Concluido', 'done');
         setStepOpen(3);
       } catch (err) {
         console.error(err);
-        statusEl.textContent = 'Erro inesperado ao comparar: ' + (err && err.message ? err.message : String(err));
+        statusEl.textContent = 'Erro ao comparar: ' + (err && err.message ? err.message : String(err));
         setFlowHint('Erro ao comparar bancos: ' + (err && err.message ? err.message : String(err)), 'error');
         setStepState('stepCompare', 'Erro ao comparar', 'warn');
       } finally {
-        if (compareTimeout) {
-          clearTimeout(compareTimeout);
-          compareTimeout = null;
-        }
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Comparar tabela completa';
-        }
+        clearCompareBusy(compareTimeout);
       }
     }
 
@@ -2001,75 +1918,33 @@ Ex: COL1,COL2,COL3"></textarea>
     async function changePage(newPage) {
       if (!lastComparePayload) return;
       const statusEl = document.getElementById('statusCompare');
-      const summaryEl = document.getElementById('summary');
-      const resultsEl = document.getElementById('results');
-      const btn = document.querySelector('button.primary[onclick="runCompare()"]');
 
       const payload = { ...lastComparePayload, page: newPage };
       lastComparePayload = payload;
       saveCompareState();
 
-      let compareTimeout = null;
-
-      statusEl.textContent = `Carregando página ${newPage}...`;
-      setFlowHint(`Carregando página ${newPage} dos resultados de comparação...`, 'info');
-      setStepState('stepCompare', `Carregando página ${newPage}...`, 'active');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Comparando...';
-      }
-
-      compareTimeout = setTimeout(() => {
-        statusEl.textContent = 'A troca de página está levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso é esperado.';
-      }, 60000);
+      const compareTimeout = setCompareBusy(
+        `Carregando pagina ${newPage}...`,
+        `Carregando pagina ${newPage} dos resultados de comparacao...`,
+        `Carregando pagina ${newPage}...`,
+        'A troca de pagina esta levando mais de 60 segundos. Se a tabela for grande, isso pode ser esperado.'
+      );
 
       try {
-        const resp = await fetch('/api/compare_db_rows', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        let data = null;
-        try {
-          data = await resp.json();
-        } catch (e) {
-          data = null;
-        }
-
-        if (!resp.ok) {
-          const apiMsg = data && (data.message || data.error);
-          if (apiMsg) {
-            statusEl.textContent = 'Erro ao comparar: ' + apiMsg;
-          } else {
-            statusEl.textContent = 'Erro ao comparar: resposta HTTP ' + resp.status;
-          }
-          return;
-        }
-
+        const data = await postJson('/api/compare_db_rows', payload);
         renderResult(data);
-        lastCompareMeta = {
-          total_filtered_rows: typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0),
-          page: data.page || newPage,
-          total_pages: data.total_pages || 1,
-        };
+        updateLastCompareMeta(data, newPage);
         saveCompareState();
-        statusEl.textContent = 'Comparação concluída.';
-        setFlowHint('Resultados atualizados. Continue revisando as diferenças.', 'info');
-        setStepState('stepCompare', 'Concluído', 'done');
+        statusEl.textContent = 'Comparacao concluida.';
+        setFlowHint('Resultados atualizados. Continue revisando as diferencas.', 'info');
+        setStepState('stepCompare', 'Concluido', 'done');
       } catch (err) {
         console.error(err);
-        statusEl.textContent = 'Erro inesperado ao comparar: ' + (err && err.message ? err.message : String(err));
-        setFlowHint('Erro ao buscar página de resultados: ' + (err && err.message ? err.message : String(err)), 'error');
-        setStepState('stepCompare', 'Erro ao carregar página', 'warn');
+        statusEl.textContent = 'Erro ao carregar pagina: ' + (err && err.message ? err.message : String(err));
+        setFlowHint('Erro ao buscar pagina de resultados: ' + (err && err.message ? err.message : String(err)), 'error');
+        setStepState('stepCompare', 'Erro ao carregar pagina', 'warn');
       } finally {
-        if (compareTimeout) {
-          clearTimeout(compareTimeout);
-          compareTimeout = null;
-        }
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Comparar tabela completa';
-        }
+        clearCompareBusy(compareTimeout);
       }
     }
 
@@ -2089,17 +1964,7 @@ Ex: COL1,COL2,COL3"></textarea>
 
         while (page <= totalPages) {
           const payload = { ...basePayload, page };
-          const resp = await fetch('/api/compare_db_rows', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await resp.json();
-          if (!resp.ok) {
-            const apiMsg = data && (data.message || data.error);
-            alert('Erro ao preparar exportação: ' + (apiMsg || 'resposta HTTP ' + resp.status));
-            return;
-          }
+          const data = await postJson('/api/compare_db_rows', payload);
           if (!meta) {
             meta = data;
           }
@@ -2203,21 +2068,11 @@ Ex: COL1,COL2,COL3"></textarea>
       for (const t of tablesMeta) {
         const name = t.name;
         try {
-          const payload = {
+          const data = await postJson('/api/compare_db_table_content', {
             db1_path: db1,
             db2_path: db2,
             table: name,
-          };
-          const resp = await fetch('/api/compare_db_table_content', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
           });
-          const data = await resp.json();
-          if (!resp.ok) {
-            overview.push({ table: name, status: 'error', error: data && (data.message || data.error) });
-            continue;
-          }
           const diffCount = typeof data.diff_count === 'number' ? data.diff_count : -1;
           const hasDiff = diffCount > 0;
           overview.push({

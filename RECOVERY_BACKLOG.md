@@ -19,6 +19,8 @@ Track real product debt that should not be fixed in the current slice.
 8. Review tool scripts and notes for machine-specific leftovers before each release.
 9. Expand compare endpoint validation for non-string payload fields if external callers are sending mixed JSON types in practice.
 10. Continue reducing the remaining page-specific CSS duplication after the shared shell extraction in `static/shell.css` and `static/shell.js`.
+11. Decide whether `static/admin.html` should migrate to the same shared component layer now used by search/compare/track, or remain intentionally separate.
+12. Extract and stabilize the large inline script in `static/compare_dbs.html` once the current operator flow stops changing.
 
 ## Do Not Pull Into Slice 1
 

@@ -157,25 +157,6 @@
       border-color: rgba(37, 99, 235, 0.45);
     }
     .badge.clickable { cursor: pointer; }
-    .btn {
-      background: var(--primary);
-      color: var(--primary-ink);
-      border: none;
-      padding: 8px 14px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-weight: 600;
-      letter-spacing: 0.2px;
-      box-shadow: 0 10px 18px rgba(31, 78, 216, 0.35);
-      transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-    .btn:hover { transform: translateY(-1px); box-shadow: 0 14px 24px rgba(31, 78, 216, 0.45); }
-    .btn.ghost {
-      background: transparent;
-      color: var(--primary);
-      border: 1px solid rgba(43, 92, 255, 0.5);
-      box-shadow: none;
-    }
     .btn.attention { animation: pulse 1.5s ease-in-out infinite; }
     @keyframes pulse {
       0% { box-shadow: 0 0 0 0 rgba(244, 180, 0, 0.5); }
@@ -226,23 +207,6 @@
     }
     .small { font-size: 13px; color: var(--muted); }
     .muted { color: var(--muted); font-size: 12px; }
-    .flow-hint {
-      background: rgba(43, 92, 255, 0.12);
-      border: 1px solid rgba(43, 92, 255, 0.35);
-      color: #dbe6ff;
-      padding: 10px 12px;
-      border-radius: 12px;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-    html[data-theme="light"] .flow-hint {
-      color: #1f2933;
-      background: rgba(37, 99, 235, 0.06);
-      border-color: rgba(37, 99, 235, 0.35);
-    }
-    .flow-hint.info { background: rgba(43, 92, 255, 0.12); border-color: rgba(43, 92, 255, 0.4); color: #dbe6ff; }
-    .flow-hint.warn { background: rgba(255, 196, 77, 0.12); border-color: rgba(255, 196, 77, 0.4); color: #ffe4b3; }
-    .flow-hint.error { background: rgba(215, 90, 74, 0.18); border-color: rgba(215, 90, 74, 0.5); color: #ffd3cc; }
     .modal-banner { padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; font-weight: 600; }
     .modal-banner.info { background: rgba(43, 92, 255, 0.12); border: 1px solid rgba(43, 92, 255, 0.4); color: #dbe6ff; }
     .modal-banner.warn { background: rgba(255, 196, 77, 0.12); border: 1px solid rgba(255, 196, 77, 0.4); color: #ffe4b3; }
@@ -333,57 +297,6 @@
     table.results { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
     table.results th, table.results td { border: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
     mark { background: rgba(62, 123, 255, 0.35); padding: 0 2px; border-radius: 3px; color: #e9efff; }
-    .tabs { display: flex; gap: 8px; margin: 10px 0 12px 0; flex-wrap: wrap; }
-    .options-container { position: relative; }
-    .tab-btn {
-      background: #1f2630;
-      color: var(--ink);
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      text-decoration: none;
-    }
-    .tab-btn.active { background: #1f4ed8; color: #fff; border-color: #1f4ed8; }
-    html[data-theme="light"] .tab-btn {
-      background: #e5e7eb;
-      color: #111827;
-    }
-    html[data-theme="light"] .tab-btn.active {
-      background: #1f4ed8;
-      color: #ffffff;
-    }
-    .options-wrapper { position: relative; }
-    .options-menu {
-      position: absolute;
-      right: 0;
-      top: 100%;
-      margin-top: 4px;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: var(--shadow-soft);
-      padding: 4px;
-      min-width: 130px;
-      z-index: 40;
-    }
-    html[data-theme="light"] .options-menu { background: #f9fafb; }
-    .options-item {
-      display: block;
-      width: 100%;
-      background: transparent;
-      border: none;
-      text-align: left;
-      padding: 6px 10px;
-      font-size: 12px;
-      color: var(--ink);
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    .options-item:hover { background: #1f2630; }
-    html[data-theme="light"] .options-item:hover { background: #e5e7eb; }
     .flow-panel { display: none; background: #1f2630; border: 1px solid var(--border); padding: 10px 12px; border-radius: 10px; margin-bottom: 10px; }
     html[data-theme="light"] .flow-panel { background: #f9fafb; }
     #indexPanel { display: none; }
