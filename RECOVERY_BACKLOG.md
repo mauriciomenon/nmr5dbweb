@@ -18,7 +18,6 @@ Track real product debt that should not be fixed in the current slice.
 7. Formalize the `uv` workflow with stronger project metadata or lockfile support, so the repo no longer depends on direct `./.venv/bin/...` discipline.
 8. Review tool scripts and notes for machine-specific leftovers before each release.
 9. Expand compare endpoint validation for non-string payload fields if external callers are sending mixed JSON types in practice.
-10. Consolidate the two keyed compare engines in `interface/compare_dbs.py` if future slices keep extending compare behavior.
 
 ## Do Not Pull Into Slice 1
 

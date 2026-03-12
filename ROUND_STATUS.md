@@ -410,3 +410,41 @@ Replace the route-level Python filtering and pagination path with a dedicated SQ
 
 - The route-level performance bottleneck from Python-side compare pagination is now closed.
 - The compare module now carries two keyed compare engines with overlapping setup logic, which is acceptable for the stabilization phase but is the next cleanup candidate if we keep extending this area.
+
+## Follow-up Slice: Consolidated Keyed Compare Internals
+
+### Goal
+
+Remove duplicated keyed-compare setup logic in `interface/compare_dbs.py` without changing the public compare contract.
+
+### Applied
+
+1. Added shared internal helpers in `interface/compare_dbs.py` for:
+   - path validation
+   - common-column resolution
+   - keyed compare column validation
+   - SQL plan assembly
+   - compare-row hydration into the existing JSON shape
+2. Introduced `_KeyedComparePlan` to keep the shared compare metadata explicit and local to the module.
+3. Refactored both public keyed compare entry points to use the same internal plan and row-mapping path:
+   - `compare_table_duckdb(...)`
+   - `compare_table_duckdb_paged(...)`
+4. Preserved the current route and test contract without touching layout or unrelated backend flows.
+
+### What Was Proved
+
+- The two keyed compare paths now share one internal source of truth for validation, SQL setup, and row shaping.
+- The refactor did not change the external behavior already covered by the compare unit/API tests.
+- The compare area is less likely to drift the next time keyed compare behavior is extended.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `24 passed`
+- `./.venv/bin/ty check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+
+### Findings From This Slice
+
+- The internal duplication between the two keyed compare engines is now closed.
+- The next compare decision is semantic rather than structural: whether compare-without-key should keep its duplicate-insensitive behavior.
