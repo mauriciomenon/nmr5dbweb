@@ -58,6 +58,7 @@ The first stabilization slice is intentionally narrow:
 - The page refresh preserved the existing DOM ids expected by `static/app.js` and the inline page scripts
 - `static/shell.css` and `static/shell.js` now centralize the shared web shell/theme behavior used by the static pages
 - The repeated inline theme/options blocks were removed from the page HTML files
+- `static/shell.css` now also owns the shared search/track body and header shell base, so `static/index.html` and `static/track_record.html` no longer duplicate that layer inline
 - `static/shell.css` now also carries a shared component layer for search/compare/track:
   - tabs and options menu
   - flow hints
@@ -68,6 +69,7 @@ The first stabilization slice is intentionally narrow:
 - `static/compare_dbs.html` now reuses shared request helpers for compare, pagination, export, tables overview, and restored state
 - `static/compare_dbs.html` no longer carries the large inline page script; that logic now lives in `static/compare_dbs.js`
 - Flask now serves the dedicated `/compare_dbs.js` asset successfully in local smoke validation
+- `static/app.js` now has one active bootstrap path for search/admin and no longer carries the old duplicated copies of the search and priority handlers
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -85,7 +87,8 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
-  - continue reducing page-specific CSS duplication now that `static/admin.html` also sits on the shared component system
+  - continue splitting `static/app.js` by responsibility now that the duplicate search/bootstrap path is gone
+  - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
   - split `static/compare_dbs.js` by responsibility once the compare operator flow stabilizes
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`

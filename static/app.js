@@ -1392,541 +1392,6 @@ async function refreshStatus(){
 }
 
 
-/* modal open/close */
-$('openConfig').addEventListener('click', ()=>{
-  openModalById('configModal');
-  refreshUiState({sync:true});
-});
-const openPriorityBtn = $('openPriority');
-if(openPriorityBtn){
-  openPriorityBtn.addEventListener('click', ()=>{
-    openModalById('priorityModal');
-    loadPriorityModal();
-  });
-}
-const openIndexBtn = $('openIndex');
-if(openIndexBtn){
-  openIndexBtn.addEventListener('click', ()=>{
-    openModalById('indexModal');
-    refreshStatus();
-  });
-}
-const openIndexInline = $('openIndexInline');
-if(openIndexInline){
-  openIndexInline.addEventListener('click', (ev)=>{
-    ev.preventDefault();
-    openModalById('indexModal');
-    refreshStatus();
-  });
-}
-const openSelectInline = $('openSelectInline');
-if(openSelectInline){
-  openSelectInline.addEventListener('click', (ev)=>{
-    ev.preventDefault();
-    openModalById('configModal');
-    refreshUiState({sync:true});
-  });
-}
-async function openStatusModal(){
-  openModalById('statusModal');
-  try{
-    await refreshStatus();
-    await fetchServerLogs();
-    renderStatusModal();
-    logUi('INFO', 'detalhes abertos');
-  }catch(e){
-    renderStatusModal();
-    logUi('ERROR', 'detalhes falhou');
-  }
-}
-window.openStatusModal = openStatusModal;
-const openConvertInline = $('openConvertInline');
-if(openConvertInline){
-  openConvertInline.addEventListener('click', async (ev)=>{
-    ev.preventDefault();
-    await openStatusModal();
-  });
-}
-const stepConvert = $('stepConvert');
-if(stepConvert){
-  stepConvert.addEventListener('click', async (ev)=>{
-    if(ev && ev.target && ev.target.tagName === 'BUTTON') return;
-    await openStatusModal();
-  });
-}
-const openSearchInline = $('openSearchInline');
-if(openSearchInline){
-  openSearchInline.addEventListener('click', (ev)=>{
-    ev.preventDefault();
-    openModalById('searchModal');
-    refreshStatus();
-    const q = $('q');
-    if(q && !q.disabled){
-      q.focus();
-      q.select();
-    }
-  });
-}
-const stepIndex = $('stepIndex');
-if(stepIndex){
-  stepIndex.addEventListener('click', (ev)=>{
-    if(ev && ev.target && ev.target.tagName === 'BUTTON') return;
-    openModalById('indexModal');
-    refreshStatus();
-  });
-}
-const stepSearch = $('stepSearch');
-if(stepSearch){
-  stepSearch.addEventListener('click', (ev)=>{
-    if(ev && ev.target && ev.target.tagName === 'BUTTON') return;
-    openModalById('searchModal');
-    refreshStatus();
-    const q = $('q');
-    if(q && !q.disabled){
-      q.focus();
-      q.select();
-    }
-  });
-}
-const dbSearchBtn = $('dbSearchBtn');
-if(dbSearchBtn){
-  dbSearchBtn.addEventListener('click', (ev)=>{
-    ev.preventDefault();
-    openModalById('searchModal');
-    refreshStatus();
-    const q = $('q');
-    if(q && !q.disabled){
-      q.focus();
-      q.select();
-    }
-  });
-}
-const openStatusBtn = $('openStatus');
-if(openStatusBtn){
-  openStatusBtn.addEventListener('click', async ()=>{
-    await openStatusModal();
-  });
-}
-const statusAlerts = $('statusAlerts');
-if(statusAlerts){
-  statusAlerts.addEventListener('click', async ()=>{
-    await openStatusModal();
-  });
-}
-$('closeStatus').addEventListener('click', ()=> closeModal());
-$('closeConfig').addEventListener('click', ()=> closeModal());
-const closePriorityBtn = $('closePriority');
-if(closePriorityBtn) closePriorityBtn.addEventListener('click', ()=> closeModal());
-const closeIndexBtn = $('closeIndex');
-if(closeIndexBtn) closeIndexBtn.addEventListener('click', ()=> closeModal());
-const closeSearchBtn = $('closeSearch');
-if(closeSearchBtn) closeSearchBtn.addEventListener('click', ()=> closeModal());
-const overlayEl = $('overlay');
-if(overlayEl){
-  const closeHandler = (e)=>{
-    e.preventDefault();
-    e.stopPropagation();
-    forceCloseModals();
-  };
-  overlayEl.addEventListener('mousedown', closeHandler, true);
-  overlayEl.addEventListener('click', closeHandler, true);
-  overlayEl.onclick = closeHandler;
-  overlayEl.addEventListener('mouseup', closeHandler, true);
-  overlayEl.addEventListener('pointerdown', closeHandler, true);
-  overlayEl.addEventListener('pointerup', closeHandler, true);
-}
-['openConfig','openPriority','openIndex','closeConfig','closePriority','closeIndex','closeSearch','overlay'].forEach(id => {
-  const el = $(id);
-  if(el) el.addEventListener('click', ()=> scheduleStatusPoll());
-});
-
-/* upload/select/delete actions */
-  $('uploadBtn').addEventListener('click', async ()=>{
-    const fi = $('fileInput'); if(!fi.files.length){ $('uploadMsg').textContent='Selecione um arquivo.'; return; }
-    const f = fi.files[0];
-    if(!isFileAllowedForFlow(f.name, currentFlow)){
-      const msg = currentFlow === 'access'
-        ? 'Use .mdb ou .accdb neste fluxo.'
-        : 'Use .duckdb, .db, .sqlite, .sqlite3 neste fluxo.';
-      $('uploadMsg').textContent = msg;
-      setFlowBanner(msg + ' Voce pode alternar o fluxo acima.', 'warn');
-      return;
-    }
-    const sizeText = formatBytes(f.size || 0);
-    const fd = new FormData(); fd.append('file', f); $('uploadMsg').textContent='Enviando...';
-    try{
-      const res = await fetch('/admin/upload',{method:'POST', body: fd});
-      const j = await res.json();
-      const msg = $('uploadMsg');
-      const nameHint = shortName((j && (j.db_path || j.db || j.output || j.input)) || f.name || '');
-      if(j && j.ok){
-        if(j.status === 'converting'){
-          msg.textContent = 'Conversao iniciada: ' + (nameHint || f.name) + ' (' + sizeText + ')';
-        } else {
-          msg.textContent = 'Upload ok: ' + (nameHint || f.name) + ' (' + sizeText + ')';
-        }
-        setFlowBanner('', '');
-      } else if(j && j.error){
-        msg.textContent = 'Erro: ' + j.error;
-        setFlowBanner('Falha no upload. Verifique o arquivo e tente novamente.', 'error');
-      } else {
-        msg.textContent = 'Falha no upload';
-        setFlowBanner('Falha ao enviar arquivo. Tente novamente.', 'error');
-      }
-      await refreshUiState();
-    } catch(e){
-      $('uploadMsg').textContent='Erro no upload';
-      setFlowBanner('Erro no upload. Verifique o servidor e tente novamente.', 'error');
-      logUi('ERROR', 'upload falhou');
-    }
-  });
-function onSelectRowClick(ev, nameEnc){
-  if(ev && ev.target && ev.target.closest && ev.target.closest('.file-actions')) return;
-  selectUpload(nameEnc, null);
-}
-async function deleteUpload(nameEnc, btn){
-  if(!confirm('Deseja realmente excluir este arquivo?')) return;
-  const name = decodeURIComponent(nameEnc);
-  const msg = $('uploadMsg');
-  const prevText = btn ? btn.textContent : '';
-  if(btn){ btn.disabled = true; btn.textContent = 'Excluindo...'; }
-  if(msg) msg.textContent = 'Excluindo: ' + name;
-  try{
-    const j = await apiJSON('/admin/delete',{method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({filename: name})});
-    if(j && j.ok){
-      alert('Arquivo apagado');
-      setFlowBanner('', '');
-      await refreshUiState();
-    } else {
-      const err = j && j.error ? j.error : 'falha ao excluir';
-      setFlowBanner('Nao foi possivel excluir. Verifique se o arquivo esta em uso.', 'warn');
-      alert('Erro: ' + err);
-    }
-  } catch(e){
-    if(msg) msg.textContent = 'Erro ao excluir';
-    setFlowBanner('Erro ao excluir. Tente novamente.', 'error');
-    logUi('ERROR', 'delete falhou');
-  } finally {
-    if(btn){ btn.disabled = false; btn.textContent = prevText || 'Excluir'; }
-  }
-}
-async function selectDbFromTab(nameEnc){
-  const name = decodeURIComponent(nameEnc);
-  const msg = $('uploadMsg');
-  if(msg) msg.textContent = 'Selecionando: ' + name;
-  try{
-    const j = await apiJSON('/admin/select',{method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({filename: name})});
-    if(j && j.ok){
-      if(msg) msg.textContent = 'DB selecionado: ' + name;
-      manualFlowOverride = '';
-      setFlowBanner('', '');
-      await refreshUiState();
-    } else {
-      const err = j && j.error ? j.error : 'falha ao selecionar';
-      if(msg) msg.textContent = 'Erro ao selecionar: ' + err;
-      setFlowBanner('Nao foi possivel selecionar o arquivo. Tente novamente.', 'error');
-      logUi('ERROR', 'select db falhou');
-    }
-  }catch(e){
-    if(msg) msg.textContent = 'Erro ao selecionar DB';
-    setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-    logUi('ERROR', 'select db falhou');
-  }
-}
-
-/* priority modal */
-async function loadPriorityModal(){
-  const allEl = $('allTablesList'), selEl = $('priorityListModal');
-  if(!allEl || !selEl) return;
-  if(!hasDbSelected()){
-    allEl.innerHTML = '<li class="muted">Nenhum DB selecionado</li>';
-    selEl.innerHTML = '';
-    $('priorityMsg').textContent='Nenhum DB selecionado';
-    return;
-  }
-  allEl.innerHTML=''; selEl.innerHTML=''; $('priorityMsg').textContent='Carregando...';
-  try{
-    const t = await apiJSON('/api/tables');
-    if(t.error){
-      allEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>';
-      selEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>';
-      $('priorityMsg').textContent='';
-      logUi('ERROR', 'priority tabelas ' + t.error);
-      return;
-    }
-    const tables = t.tables || [];
-    const visible = tables.filter(n => !/^MSys/i.test(n));
-    const st = await apiJSON('/admin/list_uploads'); const saved = st.priority_tables || [];
-    const remaining = visible.filter(x => !saved.includes(x));
-    remaining.forEach(name => {
-      const li = document.createElement('li'); li.dataset.table=name;
-      li.innerHTML = `<label style="display:flex;align-items:center;gap:8px;width:100%"><input type="checkbox" data-name="${encodeURIComponent(name)}" onchange="onTableCheckboxChange(this)"> <span style="flex:1">${escapeHtml(name)}</span></label>`;
-      allEl.appendChild(li);
-    });
-    saved.forEach(name => {
-      const li = document.createElement('li'); li.draggable=true; li.dataset.table=name;
-      li.innerHTML = `<div style="flex:1">${escapeHtml(name)}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)" title="Mover para cima">Up</button><button class="btn ghost" onclick="prioMoveDown(this)" title="Mover para baixo">Down</button><button class="btn ghost" onclick="prioRemove(this)" title="Remover">X</button></div>`;
-      selEl.appendChild(li);
-    });
-    enableDragAndDrop(selEl); $('priorityMsg').textContent='';
-  }catch(e){
-    allEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>';
-    selEl.innerHTML='<li class="muted">Erro ao listar tabelas</li>';
-    $('priorityMsg').textContent='';
-    logUi('ERROR', 'priority modal falhou');
-  }
-}
-function onTableCheckboxChange(chk){ const raw = chk.getAttribute('data-name') || ''; const name = decodeURIComponent(raw); if(chk.checked){ const selEl = $('priorityListModal'); const li = document.createElement('li'); li.draggable=true; li.dataset.table=name; li.innerHTML = `<div style="flex:1">${escapeHtml(name)}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)" title="Mover para cima">Up</button><button class="btn ghost" onclick="prioMoveDown(this)" title="Mover para baixo">Down</button><button class="btn ghost" onclick="prioRemove(this)" title="Remover">X</button></div>`; selEl.appendChild(li); enableDragAndDrop(selEl); } else { const selEl = $('priorityListModal'); const it = Array.from(selEl.children).find(li => li.dataset.table === name); if(it) selEl.removeChild(it); } }
-function enableDragAndDrop(listEl){ let dragSrc=null; Array.from(listEl.children).forEach(li=>{ li.addEventListener('dragstart',(e)=>{ dragSrc=li; li.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; }); li.addEventListener('dragend',()=>{ li.classList.remove('dragging'); }); li.addEventListener('dragover',(e)=>{ e.preventDefault(); const target=e.currentTarget; if(target===dragSrc) return; const rect=target.getBoundingClientRect(); const next=(e.clientY-rect.top)>rect.height/2; if(next){ target.parentNode.insertBefore(dragSrc,target.nextSibling); } else { target.parentNode.insertBefore(dragSrc,target); } }); li.addEventListener('drop',(e)=>{ e.preventDefault(); }); }); }
-function prioMoveUp(btn){ const li=btn.closest('li'); const prev=li.previousElementSibling; if(prev) li.parentNode.insertBefore(li,prev); }
-function prioMoveDown(btn){ const li=btn.closest('li'); const next=li.nextElementSibling; if(next) li.parentNode.insertBefore(li,next.nextElementSibling); }
-function prioRemove(btn){ const li=btn.closest('li'); const name=li.dataset.table; li.parentNode.removeChild(li); const leftChk = Array.from(document.querySelectorAll('#allTablesList input[type=checkbox]')).find(c=>c.getAttribute('data-name')===name); if(leftChk) leftChk.checked=false; }
-
-$('refreshPriorityBtnModal').addEventListener('click', ()=> loadPriorityModal());
-  $('savePriorityBtnModal').addEventListener('click', async ()=>{
-    const listEl = $('priorityListModal');
-    const tables = Array.from(listEl.querySelectorAll('li')).map(li=>li.dataset.table);
-    const res = await fetch('/admin/set_priority',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({tables:tables})});
-    const j = await res.json();
-    const msg = $('priorityMsg');
-    if(j && j.ok){
-      if(msg) msg.textContent = 'Prioridades salvas: ' + tables.length;
-    } else if(msg){
-      msg.textContent = 'Erro ao salvar prioridades';
-    }
-    await refreshUiState();
-  });
-
-/* flow tabs */
-const flowTabButtons = document.querySelectorAll('#flowTabs .tab-btn');
-flowTabButtons.forEach(btn => {
-  btn.addEventListener('click', ()=>{
-    const flow = btn.getAttribute('data-flow') || 'duckdb';
-    manualFlowOverride = normalizeFlow(flow);
-    setFlow(manualFlowOverride);
-    if(!lastUploads.length){
-      refreshUiState();
-      return;
-    }
-    renderFilesSelect();
-    renderSelectedInfo();
-  });
-});
-
-/* auto index toggle */
-  const autoIndexToggleEl = $('autoIndexToggle');
-  if(autoIndexToggleEl){
-    autoIndexToggleEl.addEventListener('change', async ()=>{
-      const enabled = autoIndexToggleEl.checked;
-      const res = await fetch('/admin/set_auto_index',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({enabled: enabled})});
-      const j = await res.json();
-      const msg = $('autoIndexMsg');
-      if(j && j.ok){
-        if(msg) msg.textContent = 'Auto indexacao: ' + (j.auto_index_after_convert ? 'on' : 'off');
-      } else {
-        if(msg) msg.textContent = 'Erro ao atualizar auto indexacao';
-      }
-    });
-  }
-
-  const resetIndexDefaultsBtn = $('resetIndexDefaults');
-  if(resetIndexDefaultsBtn){
-    resetIndexDefaultsBtn.addEventListener('click', ()=>{
-      if($('chunk')) $('chunk').value = 2000;
-      if($('batch')) $('batch').value = 1000;
-      if($('dropCheckbox')) $('dropCheckbox').checked = false;
-      const msg = $('indexMsg');
-      if(msg){
-        msg.textContent = 'Valores padrao restaurados.';
-        setTimeout(()=>{ msg.textContent = ''; }, 2000);
-      }
-    });
-  }
-
-  const startIndexBtn = $('startIndex');
-  if(startIndexBtn){
-    startIndexBtn.addEventListener('click', async ()=>{
-      const msg = $('indexMsg');
-      if(!hasDbSelected()){
-        if(msg) msg.textContent = 'Selecione um DB primeiro.';
-        return;
-      }
-      const statusDbFlow = lastStatus ? getFlowFromName(lastStatus.db || '') : '';
-      if(lastStatus && statusDbFlow !== 'duckdb'){
-        if(msg) msg.textContent = 'Indice _fulltext disponivel apenas para DuckDB.';
-        return;
-      }
-      if(lastStatus && lastStatus.conversion && lastStatus.conversion.running){
-        if(msg) msg.textContent = 'Aguarde a conversao terminar.';
-        return;
-      }
-      const drop = !!($('dropCheckbox') && $('dropCheckbox').checked);
-      const chunkVal = parseInt($('chunk') ? $('chunk').value : '2000', 10);
-      const batchVal = parseInt($('batch') ? $('batch').value : '1000', 10);
-      const chunk = Number.isFinite(chunkVal) && chunkVal > 0 ? chunkVal : 2000;
-      const batch = Number.isFinite(batchVal) && batchVal > 0 ? batchVal : 1000;
-      if(msg) msg.textContent = 'Iniciando indexacao...';
-      try{
-        const res = await apiJSON('/admin/start_index', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({drop: drop, chunk: chunk, batch: batch})});
-        if(res && res.ok){
-          if(msg) msg.textContent = 'Indexacao iniciada.';
-          await refreshStatus();
-          scheduleStatusPoll();
-        } else if(res && res.error){
-          if(msg) msg.textContent = 'Erro: ' + res.error;
-        } else {
-          if(msg) msg.textContent = 'Falha ao iniciar indexacao';
-        }
-      }catch(e){
-        if(msg) msg.textContent = 'Erro ao iniciar indexacao';
-        logUi('ERROR', 'indexacao falhou');
-      }
-    });
-  }
-
-/* search */
-  const refreshFilesBtn = $('refreshFilesBtn');
-  if(refreshFilesBtn) refreshFilesBtn.addEventListener('click', ()=> refreshUiState());
-  const filesSort = $('filesSort');
-  if(filesSort) filesSort.addEventListener('change', ()=> renderFilesMain());
-  $('searchBtn').addEventListener('click', doSearch);
-  $('q').addEventListener('keydown', (e)=> { if(e.key==='Enter') doSearch(); });
-  $('refreshBtn').addEventListener('click', ()=> refreshUiState());
-  $('filterTables').addEventListener('input', ()=> refreshTables());
-  const exportAllBtn = $('exportAllBtn');
-  if(exportAllBtn) exportAllBtn.addEventListener('click', exportResultsCsv);
-  $('min_score').addEventListener('input', ()=> $('minScoreVal').textContent = $('min_score').value);
-  const clearTablesBtn = $('clearTablesFilter');
-  if(clearTablesBtn){
-    clearTablesBtn.addEventListener('click', ()=>{
-      const sel = $('tablesFilter');
-      if(!sel) return;
-      Array.from(sel.options).forEach(o => o.selected = false);
-    });
-  }
-  const resetAdvancedBtn = $('resetAdvanced');
-  if(resetAdvancedBtn){
-    resetAdvancedBtn.addEventListener('click', ()=>{
-      resetAdvancedDefaults();
-      const msg = $('advancedMsg');
-      if(msg){
-        msg.textContent = 'Valores padrao restaurados.';
-        setTimeout(()=>{ msg.textContent = ''; }, 2000);
-      }
-    });
-  }
-
-  async function doSearch(opts){
-    const q = $('q').value.trim();
-    if(!q){ alert('Digite um termo para pesquisar'); return; }
-    if(!hasDbSelected()){
-      setNoDbState({showHint:true});
-      logUi('WARN', 'acao exige DB');
-      alert('Selecione um DB primeiro');
-      return;
-    }
-
-    const btn = $('searchBtn');
-    if(btn.disabled) return; // evita buscas duplicadas
-  const exportBtn = $('exportAllBtn');
-  if(exportBtn) exportBtn.disabled = true;
-
-  // Bloqueia busca enquanto conversao ou indexacao estiverem em andamento
-  try{
-    if(lastStatus && lastStatus.conversion && lastStatus.conversion.running){
-      alert('Aguarde a conversao do banco terminar antes de pesquisar.');
-      return;
-    }
-    if(lastStatus && lastStatus.indexing){
-      alert('Aguarde a indexacao (_fulltext) terminar antes de pesquisar.');
-      return;
-    }
-    if(lastStatus && lastStatus.db && lastStatus.db.toLowerCase().endsWith('.duckdb') && !lastStatus.fulltext_count){
-      alert('Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.');
-      return;
-    }
-  }catch(e){ /* ignored */ }
-
-  const per_table = parseInt($('per_table').value) || 10;
-  const candidate_limit = parseInt($('candidate_limit').value) || 1000;
-  const total_limit = parseInt($('total_limit').value) || 500;
-  const token_mode = $('token_mode').value;
-  const min_score = parseInt($('min_score').value) || null;
-    lastQuery = q;
-    $('searchMeta').textContent = `Buscando: "${q}" ...`;
-  // Monta parametro opcional de filtro de tabelas
-    const tablesSel = $('tablesFilter');
-    let tablesParam = '';
-    let selectedTables = [];
-    if(tablesSel){
-      selectedTables = Array.from(tablesSel.selectedOptions).map(o => o.value).filter(Boolean);
-      if(selectedTables.length){
-        tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
-      }
-    }
-
-  const url = `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}${min_score?('&min_score='+min_score):''}${tablesParam}`;
-  btn.disabled = true;
-  btn.textContent = 'Buscando...';
-  try{
-    const res = await fetch(url);
-    const data = await res.json();
-    if(data.error){
-      $('searchMeta').textContent = 'Erro: ' + data.error;
-      logUi('ERROR', 'search ' + data.error);
-      return;
-    }
-    lastResults = data;
-    if(!opts || !opts.skipHistory){
-      const state = buildSearchState();
-      try{ history.pushState(state, '', window.location.pathname); }catch(e){ /* ignored */ }
-    }
-    $('searchMeta').textContent = `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`;
-    if(exportBtn) exportBtn.disabled = !(data && data.returned_count);
-    renderResults(q, data.results || {}, per_table);
-  }catch(e){
-    $('searchMeta').textContent = 'Erro na busca';
-    logUi('ERROR', 'search falhou');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Pesquisar';
-  }
-}
-
-/* render */
-function backToResults(){
-  if(lastResults && lastResults.results){
-    const perTable = parseInt($('per_table').value) || 10;
-    $('searchMeta').textContent = `Resultados: ${lastResults.returned_count || 0} (candidatos: ${lastResults.candidate_count || 0})`;
-    renderResults(lastQuery || ($('q') ? $('q').value.trim() : ''), lastResults.results || {}, perTable);
-  } else {
-    refreshUiState();
-  }
-}
-
-  /* utilities */
-function escapeHtml(s){
-  return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function escapeAttr(s){
-  return escapeHtml(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-}
-function tableTagId(name){
-  return 'tag-' + encodeURIComponent(name);
-}
-function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function highlightText(text, tokens){
-  if(!text) return '';
-  if(!tokens || tokens.length===0) return text;
-  try{
-    const parts = tokens.map(t=>escapeRegExp(t)).filter(Boolean);
-    if(parts.length===0) return text;
-    const re = new RegExp('('+parts.join('|')+')', 'ig');
-    return text.replace(re, m => `<mark>${m}</mark>`);
-  }catch(e){ return text; }
-}
-
-
 async function refreshTables() {
   const tableList = $('tableList');
   if (!tableList) return;
@@ -2005,6 +1470,14 @@ document.addEventListener('DOMContentLoaded', () => {
       loadPriorityModal();
     });
   }
+  const refreshPriorityBtnModal = $('refreshPriorityBtnModal');
+  if (refreshPriorityBtnModal)
+    refreshPriorityBtnModal.addEventListener('click', () => loadPriorityModal());
+  const savePriorityBtnModal = $('savePriorityBtnModal');
+  if (savePriorityBtnModal)
+    savePriorityBtnModal.addEventListener('click', () => {
+      savePriority();
+    });
 
   const openIndexBtn = $('openIndex');
   if (openIndexBtn) {
@@ -2098,6 +1571,19 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  const dbSearchBtn = $('dbSearchBtn');
+  if (dbSearchBtn) {
+    dbSearchBtn.addEventListener('click', ev => {
+      ev.preventDefault();
+      openModalById('searchModal');
+      refreshStatus();
+      const q = $('q');
+      if (q && !q.disabled) {
+        q.focus();
+        q.select();
+      }
+    });
+  }
 
   const openStatusBtn = $('openStatus');
   if (openStatusBtn) {
@@ -2176,6 +1662,60 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Upload / select / delete
+  const uploadBtn = $('uploadBtn');
+  if (uploadBtn) {
+    uploadBtn.addEventListener('click', async () => {
+      const fi = $('fileInput');
+      const msg = $('uploadMsg');
+      if (!fi || !fi.files.length) {
+        if (msg) msg.textContent = 'Selecione um arquivo.';
+        return;
+      }
+      const f = fi.files[0];
+      if (!isFileAllowedForFlow(f.name, currentFlow)) {
+        const flowMsg =
+          currentFlow === 'access'
+            ? 'Use .mdb ou .accdb neste fluxo.'
+            : 'Use .duckdb, .db, .sqlite, .sqlite3 neste fluxo.';
+        if (msg) msg.textContent = flowMsg;
+        setFlowBanner(flowMsg + ' Voce pode alternar o fluxo acima.', 'warn');
+        return;
+      }
+      const sizeText = formatBytes(f.size || 0);
+      const fd = new FormData();
+      fd.append('file', f);
+      if (msg) msg.textContent = 'Enviando...';
+      try {
+        const res = await fetch('/admin/upload', { method: 'POST', body: fd });
+        const j = await res.json();
+        const nameHint = shortName(
+          (j && (j.db_path || j.db || j.output || j.input)) || f.name || ''
+        );
+        if (j && j.ok) {
+          if (msg) {
+            if (j.status === 'converting') {
+              msg.textContent =
+                'Conversao iniciada: ' + (nameHint || f.name) + ' (' + sizeText + ')';
+            } else {
+              msg.textContent = 'Upload ok: ' + (nameHint || f.name) + ' (' + sizeText + ')';
+            }
+          }
+          setFlowBanner('', '');
+        } else if (j && j.error) {
+          if (msg) msg.textContent = 'Erro: ' + j.error;
+          setFlowBanner('Falha no upload. Verifique o arquivo e tente novamente.', 'error');
+        } else {
+          if (msg) msg.textContent = 'Falha no upload';
+          setFlowBanner('Falha ao enviar arquivo. Tente novamente.', 'error');
+        }
+        await refreshUiState();
+      } catch (e) {
+        if (msg) msg.textContent = 'Erro no upload';
+        setFlowBanner('Erro no upload. Verifique o servidor e tente novamente.', 'error');
+        logUi('ERROR', 'upload falhou');
+      }
+    });
+  }
   const refreshFilesBtn = $('refreshFilesBtn');
   if (refreshFilesBtn) refreshFilesBtn.addEventListener('click', () => refreshUiState());
   const filesSort = $('filesSort');
@@ -2592,17 +2132,6 @@ async function savePriority() {
   }
   await refreshUiState();
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const refreshPriorityBtnModal = $('refreshPriorityBtnModal');
-  if (refreshPriorityBtnModal)
-    refreshPriorityBtnModal.addEventListener('click', () => loadPriorityModal());
-  const savePriorityBtnModal = $('savePriorityBtnModal');
-  if (savePriorityBtnModal)
-    savePriorityBtnModal.addEventListener('click', () => {
-      savePriority();
-    });
-});
 
 async function doSearch(opts) {
   const q = $('q').value.trim();

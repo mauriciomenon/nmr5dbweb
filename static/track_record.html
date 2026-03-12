@@ -37,16 +37,6 @@
         --shadow: 0 16px 30px rgba(15, 23, 42, 0.15);
         --shadow-soft: 0 6px 14px rgba(15, 23, 42, 0.12);
       }
-      body {
-        background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
-          radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
-          linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
-        color: var(--ink);
-      }
-      header {
-        background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
-        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
-      }
       .card { background: var(--card); }
     }
     :root[data-theme="light"] {
@@ -78,60 +68,6 @@
       --shadow-soft: 0 6px 16px rgba(9, 12, 17, 0.3);
     }
     * { box-sizing: border-box; }
-    body {
-      font-family: "Space Grotesk", "IBM Plex Sans", "Segoe UI", sans-serif;
-      margin: 0;
-      background: radial-gradient(900px 600px at 10% 10%, #1c2330 0%, transparent 55%),
-        radial-gradient(700px 500px at 90% 0%, #1b2130 0%, transparent 50%),
-        linear-gradient(180deg, #14171c 0%, #171a1f 70%, #171a1f 100%);
-      color: var(--ink);
-      min-height: 100vh;
-    }
-    html[data-theme="light"] body {
-      background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
-        radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
-        linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
-      color: var(--ink);
-    }
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(transparent 70%, rgba(255, 255, 255, 0.04) 72%) 0 0/26px 26px,
-        radial-gradient(transparent 72%, rgba(255, 255, 255, 0.03) 74%) 13px 13px/26px 26px;
-      pointer-events: none;
-      opacity: 0.25;
-      z-index: 0;
-    }
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 20;
-      background: linear-gradient(90deg, rgba(26, 32, 42, 0.96) 0%, rgba(24, 30, 40, 0.96) 100%);
-      padding: 16px 24px;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      border-bottom: 1px solid var(--border);
-      box-shadow: 0 8px 18px rgba(8, 12, 18, 0.35);
-      backdrop-filter: blur(8px);
-    }
-    html[data-theme="light"] header {
-      background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
-      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
-    }
-    .brand-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: conic-gradient(from 45deg, #2b5cff, #79a0ff, #2b5cff);
-      box-shadow: 0 0 0 4px rgba(43, 92, 255, 0.2);
-    }
-    header h1 { font-size: 20px; margin: 0; letter-spacing: 0.4px; }
-    header .subtitle { font-size: 13px; color: var(--muted); max-width: 380px; }
-    .top-right { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    .container { position: relative; z-index: 1; padding: 20px 24px 40px; }
     main { max-width: 1100px; margin: 0 auto; }
     .inline-row { display:flex; gap:8px; align-items:center; }
     .table-wrapper { max-height: 420px; overflow: auto; margin-top: 8px; border-radius: 10px; border: 1px solid var(--border); }
@@ -253,9 +189,6 @@
       color: #166534;
     }
     @media (max-width: 720px) {
-      header { padding: 12px 16px; flex-wrap: wrap; }
-      .tabs { margin-left: 0; }
-      .container { padding: 16px 12px 28px; }
       .card { padding: 12px 12px 16px; }
     }
   </style>

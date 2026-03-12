@@ -5,6 +5,87 @@ body.shell-track {
   font-family: "Aptos", "Bahnschrift", "IBM Plex Sans", "Segoe UI", sans-serif;
 }
 
+body.shell-search,
+body.shell-track {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  background: radial-gradient(900px 600px at 10% 10%, #1c2330 0%, transparent 55%),
+    radial-gradient(700px 500px at 90% 0%, #1b2130 0%, transparent 50%),
+    linear-gradient(180deg, #14171c 0%, #171a1f 70%, #171a1f 100%);
+}
+
+html[data-theme="light"] body.shell-search,
+html[data-theme="light"] body.shell-track {
+  background: radial-gradient(900px 600px at 10% 10%, #e0e7ff 0%, transparent 55%),
+    radial-gradient(700px 500px at 90% 0%, #e5e7eb 0%, transparent 50%),
+    linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 70%, #e5e7eb 100%);
+}
+
+body.shell-search::before,
+body.shell-track::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(transparent 70%, rgba(255, 255, 255, 0.04) 72%) 0 0/26px 26px,
+    radial-gradient(transparent 72%, rgba(255, 255, 255, 0.03) 74%) 13px 13px/26px 26px;
+  pointer-events: none;
+  opacity: 0.25;
+  z-index: 0;
+}
+
+.shell-search header,
+.shell-track header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: linear-gradient(90deg, rgba(26, 32, 42, 0.96) 0%, rgba(24, 30, 40, 0.96) 100%);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 8px 18px rgba(8, 12, 18, 0.35);
+  backdrop-filter: blur(8px);
+}
+
+html[data-theme="light"] .shell-search header,
+html[data-theme="light"] .shell-track header {
+  background: linear-gradient(90deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.shell-search .brand-dot,
+.shell-track .brand-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: conic-gradient(from 45deg, #2b5cff, #79a0ff, #2b5cff);
+  box-shadow: 0 0 0 4px rgba(43, 92, 255, 0.2);
+}
+
+.shell-search header h1,
+.shell-track header h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: 0.4px;
+}
+
+.shell-search header .subtitle,
+.shell-track header .subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 380px;
+}
+
+.shell-search .container,
+.shell-track .container {
+  position: relative;
+  z-index: 1;
+  padding: 20px 24px 40px;
+}
+
 .shell-admin .header-row,
 .shell-search .header-topline,
 .shell-compare .header-topline,
@@ -1226,6 +1307,10 @@ html[data-theme="light"] .shell-track .tracker-guide {
     position: static;
     max-height: none;
   }
+
+  .shell-search .container {
+    padding: 16px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1243,6 +1328,12 @@ html[data-theme="light"] .shell-track .tracker-guide {
     margin-left: 0;
   }
 
+  .shell-search header,
+  .shell-track header {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
   .shell-admin header {
     padding: 16px;
   }
@@ -1256,6 +1347,10 @@ html[data-theme="light"] .shell-track .tracker-guide {
   .shell-compare .hero-title,
   .shell-track .hero-title {
     font-size: 24px;
+  }
+
+  .shell-track .container {
+    padding: 16px 12px 28px;
   }
 
   .shell-admin .stat-grid,

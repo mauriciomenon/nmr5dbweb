@@ -653,3 +653,53 @@ Pull the admin page into the same shared component system and move the large com
 - The four HTML pages now share a broader common visual/component layer, which lowers the cost of future UX cleanup.
 - `static/compare_dbs.js` is still a large page module and should eventually be split by responsibility after the operator flow settles.
 - Local UI smoke remains CLI/browser-light on this machine because Playwright still has no Chromium binary installed.
+
+## Follow-up Slice: Search Bootstrap Dedup And Shared Shell Base
+
+### Goal
+
+Remove the remaining duplicated search/admin bootstrap path in `static/app.js` and move the common search/track shell base out of page-local CSS without changing ids, Flask routes, or data flow.
+
+### Applied
+
+1. Removed the older duplicated frontend block from `static/app.js`, including the second copies of:
+   - modal/bootstrap wiring
+   - priority modal setup
+   - search execution
+   - search utility/render helpers
+2. Kept a single active bootstrap path in `static/app.js` and reattached the unique behaviors that still mattered there:
+   - upload button flow
+   - `dbSearchBtn`
+   - priority modal refresh/save bindings
+3. Expanded `static/shell.css` with the shared search/track shell base for:
+   - body background
+   - sticky header shell
+   - brand mark/title/subtitle
+   - common container padding
+   - responsive header/container padding
+4. Removed the duplicated search/track shell base CSS from:
+   - `static/index.html`
+   - `static/track_record.html`
+5. Kept the existing DOM ids, Flask endpoints, and frontend payload behavior intact.
+
+### What Was Proved
+
+- `static/app.js` now has one active bootstrap path and one active definition for the previously duplicated search/priority helpers.
+- The search and track pages now depend on a broader shared shell base instead of duplicating body/header shell rules inline.
+- The local Flask smoke still serves the touched pages and assets correctly after the JS/CSS consolidation.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `node --check static/app.js && node --check static/ui_utils.js && node --check static/shell.js && node --check static/compare_dbs.js`: passed
+- Flask route smoke check on alternate port `5081`: passed for `/`, `/track_record`, `/compare_dbs`, `/admin.html`
+- Shared asset smoke check on alternate port `5081`: passed for `/shell.css`, `/shell.js`, `/compare_dbs.js`, `/app.js`
+
+### Findings From This Slice
+
+- The remaining frontend risk is now more about file size and responsibility boundaries than raw duplicate logic.
+- `static/app.js` is still large, but the duplicated search/priority/bootstrap path is now closed.
+- Search and track still keep page-specific visual rules, but the shell-level base is now centralized.
