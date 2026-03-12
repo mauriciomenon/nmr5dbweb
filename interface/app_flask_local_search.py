@@ -253,6 +253,91 @@ def build_admin_status():
     return status
 
 
+def normalize_priority_tables(value):
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    raise ValueError("tables param required")
+
+
+def parse_enabled_flag(data, field_name="enabled"):
+    return bool((data or {}).get(field_name, False))
+
+
+def list_existing_record_dirs():
+    items = []
+    for key, meta in RECORD_DIRS.items():
+        path = Path(meta["path"]).resolve()
+        if path.exists() and path.is_dir():
+            items.append({
+                "id": key,
+                "label": meta.get("label", key),
+                "path": str(path),
+            })
+    return items
+
+
+def list_directory_roots():
+    roots = []
+    if os.name == "nt":
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            drive = f"{c}:\\"
+            if os.path.exists(drive):
+                roots.append(drive)
+    else:
+        roots.append(str(Path("/")))
+    return [{"name": root, "path": root, "has_db": False} for root in roots]
+
+
+def list_child_directories(base_path):
+    path = Path(base_path)
+    if not path.exists() or not path.is_dir():
+        raise ValueError(f"diretorio invalido: {base_path}")
+
+    parent = str(path.parent) if path.parent != path else None
+    entries = []
+    try:
+        for child in sorted(path.iterdir(), key=lambda item: item.name.lower()):
+            if not child.is_dir():
+                continue
+            has_db = False
+            try:
+                for sub in child.iterdir():
+                    if sub.is_file() and sub.suffix.lower() in SUPPORTED_EXTS:
+                        has_db = True
+                        break
+            except Exception:
+                has_db = False
+            entries.append({
+                "name": child.name,
+                "path": str(child),
+                "has_db": has_db,
+            })
+    except Exception as exc:
+        raise RuntimeError(str(exc)) from exc
+
+    return {"entries": entries, "parent": parent, "path": str(path)}
+
+
+def validate_compare_db_inputs(db1_path, db2_path, route_name):
+    if not db1_path or not db2_path:
+        raise ValueError("db1_path e db2_path são obrigatórios")
+
+    db1 = Path(db1_path)
+    db2 = Path(db2_path)
+    missing = []
+    if not db1.exists():
+        missing.append(str(db1))
+    if not db2.exists():
+        missing.append(str(db2))
+    if missing:
+        message = "arquivo(s) não encontrado(s): " + ", ".join(missing)
+        app.logger.warning("%s: %s", route_name, message)
+        raise FileNotFoundError(message)
+    return db1, db2
+
+
 def get_current_db_context_response(*, require_selected=False, require_exists=False, allowed_engines=None):
     try:
         return get_current_db_context(
@@ -861,16 +946,7 @@ def api_record_dirs():
 
     Apenas diretórios existentes são retornados, para evitar opções quebradas na UI.
     """
-    items = []
-    for key, meta in RECORD_DIRS.items():
-        path = Path(meta["path"]).resolve()
-        if path.exists() and path.is_dir():
-            items.append({
-                "id": key,
-                "label": meta.get("label", key),
-                "path": str(path),
-            })
-    return jsonify({"dirs": items})
+    return jsonify({"dirs": list_existing_record_dirs()})
 
 
 @app.route("/api/browse_dirs", methods=["GET"])
@@ -884,50 +960,14 @@ def api_browse_dirs():
     com extensões suportadas (SUPPORTED_EXTS).
     """
     base = (request.args.get("path") or "").strip()
-    entries = []
-    parent = None
-
-    # Sem caminho: listar unidades no Windows ou raiz em outros SOs
     if not base:
-        roots = []
-        if os.name == "nt":  # Windows
-            for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
-                drive = f"{c}:\\"
-                if os.path.exists(drive):
-                    roots.append(drive)
-        else:
-            roots.append(str(Path("/")))
-        for r in roots:
-            entries.append({"name": r, "path": r, "has_db": False})
-    else:
-        p = Path(base)
-        if not p.exists() or not p.is_dir():
-            return jsonify({"error": f"diretorio invalido: {base}"}), 400
-        # calcula pasta pai (se existir)
-        if p.parent != p:
-            parent = str(p.parent)
-        # lista subdiretórios
-        try:
-            for child in sorted(p.iterdir(), key=lambda x: x.name.lower()):
-                if not child.is_dir():
-                    continue
-                has_db = False
-                try:
-                    for sub in child.iterdir():
-                        if sub.is_file() and sub.suffix.lower() in SUPPORTED_EXTS:
-                            has_db = True
-                            break
-                except Exception:
-                    has_db = False
-                entries.append({
-                    "name": child.name,
-                    "path": str(child),
-                    "has_db": has_db,
-                })
-        except Exception as exc:
-            return jsonify({"error": str(exc)}), 500
-
-    return jsonify({"entries": entries, "parent": parent, "path": base or None})
+        return jsonify({"entries": list_directory_roots(), "parent": None, "path": None})
+    try:
+        return jsonify(list_child_directories(base))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except RuntimeError as exc:
+        return jsonify({"error": str(exc)}), 500
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
@@ -1008,7 +1048,7 @@ def admin_set_auto_index():
     Usado pelo toggle "Auto indexacao apos conversao (Access)" na interface.
     """
     data = request.get_json() or {}
-    enabled = bool(data.get("enabled", False))
+    enabled = parse_enabled_flag(data)
     cfg["auto_index_after_convert"] = enabled
     save_config(cfg)
     return jsonify({"ok": True, "auto_index_after_convert": enabled})
@@ -1016,13 +1056,10 @@ def admin_set_auto_index():
 @app.route("/admin/set_priority", methods=["POST"])
 def admin_set_priority():
     data = request.get_json() or {}
-    tables = data.get("tables")
-    if isinstance(tables, str):
-        lst = [t.strip() for t in tables.split(",") if t.strip()]
-    elif isinstance(tables, list):
-        lst = [str(t).strip() for t in tables]
-    else:
-        return jsonify({"error": "tables param required"}), 400
+    try:
+        lst = normalize_priority_tables(data.get("tables"))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     cfg["priority_tables"] = lst
     save_config(cfg)
     return jsonify({"ok": True, "priority_tables": lst})
@@ -1104,29 +1141,16 @@ def api_compare_db_tables():
     db1_path = (data.get("db1_path") or "").strip()
     db2_path = (data.get("db2_path") or "").strip()
 
-    if not db1_path or not db2_path:
-        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
-
     try:
-        db1 = Path(db1_path)
-        db2 = Path(db2_path)
-
-        missing = []
-        if not db1.exists():
-            missing.append(str(db1))
-        if not db2.exists():
-            missing.append(str(db2))
-        if missing:
-            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
-            app.logger.warning("compare_db_tables: %s", msg)
-            return jsonify({"error": msg}), 400
-
+        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_tables")
         tables = list_common_tables(db1, db2)
         detailed = []
         for t in tables:
             cols = list_table_columns(db1, t)
             detailed.append({"name": t, "columns": cols})
         return jsonify({"tables": detailed})
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_tables")
         return jsonify({"error": str(exc)}), 500
@@ -1147,26 +1171,14 @@ def api_compare_db_table_content():
     db1_path = (data.get("db1_path") or "").strip()
     db2_path = (data.get("db2_path") or "").strip()
     table = (data.get("table") or "").strip()
-    if not db1_path or not db2_path:
-        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
     if not table:
         return jsonify({"error": "table é obrigatório"}), 400
     try:
-        db1 = Path(db1_path)
-        db2 = Path(db2_path)
-
-        missing = []
-        if not db1.exists():
-            missing.append(str(db1))
-        if not db2.exists():
-            missing.append(str(db2))
-        if missing:
-            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
-            app.logger.warning("compare_db_table_content: %s", msg)
-            return jsonify({"error": msg}), 400
-
+        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_table_content")
         result = compare_table_content_duckdb(db1, db2, table)
         return jsonify(result)
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_table_content")
         return jsonify({"error": str(exc)}), 500
@@ -1198,8 +1210,10 @@ def api_compare_db_rows():
     page = data.get("page") or 1
     page_size = data.get("page_size")
 
-    if not db1_path or not db2_path:
-        return jsonify({"error": "db1_path e db2_path são obrigatórios"}), 400
+    try:
+        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_rows")
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"error": str(exc)}), 400
     if not table:
         return jsonify({"error": "table é obrigatório"}), 400
     if not isinstance(key_columns, list) or not key_columns:
@@ -1280,19 +1294,6 @@ def api_compare_db_rows():
             key_filter[k] = v
 
     try:
-        db1 = Path(db1_path)
-        db2 = Path(db2_path)
-
-        missing = []
-        if not db1.exists():
-            missing.append(str(db1))
-        if not db2.exists():
-            missing.append(str(db2))
-        if missing:
-            msg = "arquivo(s) não encontrado(s): " + ", ".join(missing)
-            app.logger.warning("compare_db_rows: %s", msg)
-            return jsonify({"error": msg}), 400
-
         result = compare_table_duckdb_paged(
             db1,
             db2,

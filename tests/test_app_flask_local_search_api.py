@@ -162,6 +162,88 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     assert payload["capabilities"]["access_fallback"] in {True, False}
 
 
+def test_admin_set_auto_index_persiste_valor(monkeypatch):
+    client = app.test_client()
+    saved = []
+    monkeypatch.setattr(local_search, "save_config", lambda data: saved.append(dict(data)))
+
+    resp = client.post("/admin/set_auto_index", json={"enabled": True})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["auto_index_after_convert"] is True
+    assert local_search.cfg["auto_index_after_convert"] is True
+    assert saved[-1]["auto_index_after_convert"] is True
+
+
+def test_admin_set_priority_normaliza_lista(monkeypatch):
+    client = app.test_client()
+    saved = []
+    monkeypatch.setattr(local_search, "save_config", lambda data: saved.append(dict(data)))
+
+    resp = client.post("/admin/set_priority", json={"tables": [" alpha ", "", "beta"]})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["priority_tables"] == ["alpha", "beta"]
+    assert local_search.cfg["priority_tables"] == ["alpha", "beta"]
+    assert saved[-1]["priority_tables"] == ["alpha", "beta"]
+
+
+def test_admin_set_priority_rejeita_payload_invalido():
+    client = app.test_client()
+
+    resp = client.post("/admin/set_priority", json={"tables": None})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "tables param required"
+
+
+def test_api_record_dirs_lista_apenas_existentes(tmp_path, monkeypatch):
+    client = app.test_client()
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    missing = tmp_path / "missing"
+    monkeypatch.setattr(
+        local_search,
+        "RECORD_DIRS",
+        {
+            "ok": {"label": "OK", "path": existing},
+            "gone": {"label": "Gone", "path": missing},
+        },
+    )
+
+    resp = client.get("/api/record_dirs")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["dirs"] == [{"id": "ok", "label": "OK", "path": str(existing.resolve())}]
+
+
+def test_api_browse_dirs_rejeita_diretorio_invalido(tmp_path):
+    client = app.test_client()
+
+    resp = client.get(f"/api/browse_dirs?path={tmp_path / 'missing'}")
+
+    assert resp.status_code == 400
+    assert "diretorio invalido" in resp.get_json()["error"]
+
+
+def test_api_browse_dirs_lista_subdiretorios_e_has_db(tmp_path):
+    client = app.test_client()
+    with_db = tmp_path / "with_db"
+    with_db.mkdir()
+    (with_db / "sample.sqlite3").write_bytes(b"SQLite format 3\x00")
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    resp = client.get(f"/api/browse_dirs?path={tmp_path}")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["path"] == str(tmp_path)
+    by_name = {entry["name"]: entry for entry in payload["entries"]}
+    assert by_name["with_db"]["has_db"] is True
+    assert by_name["empty"]["has_db"] is False
+
+
 def test_api_tables_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
     client = app.test_client()
     missing = tmp_path / "missing.duckdb"
@@ -271,3 +353,28 @@ def test_api_search_busca_textual_sqlite(tmp_path, monkeypatch):
     payload = resp.get_json()
     assert payload["returned_count"] == 1
     assert payload["results"]["alpha"][0]["row"]["name"] == "alpha unit"
+
+
+def test_api_compare_db_tables_rejeita_arquivo_ausente(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "missing_a.duckdb"
+    db2 = tmp_path / "missing_b.duckdb"
+
+    resp = client.post("/api/compare_db_tables", json={"db1_path": str(db1), "db2_path": str(db2)})
+
+    assert resp.status_code == 400
+    assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]
+
+
+def test_api_compare_db_table_content_rejeita_arquivo_ausente(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "missing_a.duckdb"
+    db2 = tmp_path / "missing_b.duckdb"
+
+    resp = client.post(
+        "/api/compare_db_table_content",
+        json={"db1_path": str(db1), "db2_path": str(db2), "table": "alpha"},
+    )
+
+    assert resp.status_code == 400
+    assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]

@@ -1119,3 +1119,47 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - The most immediate runtime risk was not in compare speed anymore; it was startup/config/runtime-state coupling in the Flask layer.
 - Browser regression is now materially more useful because it covers a success path instead of only validation failures.
 - The next backend target should stay inside `interface/app_flask_local_search.py`, but now around reducing concentration of responsibilities, not around startup safety.
+
+## Current Slice
+
+### Scope Completed
+
+1. Reduced the `status/admin settings` block in `interface/app_flask_local_search.py`.
+2. Reduced the `record dir browsing` block in `interface/app_flask_local_search.py`.
+3. Hardened shared validation across the three compare endpoints without touching `interface/compare_dbs.py`.
+
+### What Changed
+
+- Added shared helpers for:
+  - priority normalization
+  - boolean admin setting parsing
+  - configured record directory listing
+  - browse-root and child-directory enumeration
+  - common compare input validation for `db1_path` and `db2_path`
+- Rewired these routes to shared helpers:
+  - `/admin/set_auto_index`
+  - `/admin/set_priority`
+  - `/api/record_dirs`
+  - `/api/browse_dirs`
+  - `/api/compare_db_tables`
+  - `/api/compare_db_table_content`
+  - `/api/compare_db_rows`
+- Added focused API coverage for:
+  - `set_auto_index`
+  - `set_priority`
+  - `record_dirs`
+  - `browse_dirs`
+  - compare endpoints with missing files
+
+### What Was Proved
+
+- The backend now has less route-local duplication in the operator/admin and compare-validation paths.
+- Directory browsing behavior is now isolated enough to change safely later without touching the routes again.
+- Missing-file compare failures are now produced from one backend validation path instead of three ad hoc implementations.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g '*.py')`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `55 passed`

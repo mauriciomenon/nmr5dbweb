@@ -37,9 +37,9 @@ Track real product debt that should not be fixed in the current slice.
    - review old docs and references before removal
    - keep backups in `bkp_limpeza/` until explicitly discarded
 19. Continue breaking down `interface/app_flask_local_search.py` by functional islands after the admin upload block:
-   - status/admin settings
-   - compare route validation
-   - record directory browsing
+   - search/table browsing
+   - record tracking flow
+   - startup/config persistence boundaries
 
 ## Do Not Pull Into Slice 1
 

@@ -136,6 +136,12 @@ The first stabilization slice is intentionally narrow:
   - upload target validation is centralized
   - Access conversion startup is isolated in a helper
   - delete cleanup of derived `.duckdb` files is centralized and covered by test
+- The next three backend islands have now also been reduced with shared helpers:
+  - admin settings (`/admin/set_auto_index`, `/admin/set_priority`)
+  - record directory browsing (`/api/record_dirs`, `/api/browse_dirs`)
+  - compare input validation (`/api/compare_db_tables`, `/api/compare_db_table_content`, `/api/compare_db_rows`)
+- Shared compare-path validation now owns the repeated `db1_path`/`db2_path` existence checks, which reduces drift risk across the compare routes.
+- Record-directory listing and browse enumeration are now isolated enough to be moved later without route rewrites.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -159,4 +165,5 @@ The first stabilization slice is intentionally narrow:
   - design richer diff/report outputs on top of the current compare results, preserving the fast path
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
+  - continue reducing the remaining operator islands in `interface/app_flask_local_search.py` after upload, settings, browsing, and compare validation
   - expand compare API payload-type validation if external callers send non-string fields today
