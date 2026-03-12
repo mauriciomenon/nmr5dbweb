@@ -62,6 +62,26 @@ def test_admin_upload_db_seleciona_imediatamente(tmp_path, monkeypatch):
     assert saved_path.read_bytes() == b"duck"
 
 
+def test_admin_list_uploads_retorna_metadados_basicos(tmp_path, monkeypatch):
+    client = app.test_client()
+    sample = tmp_path / "sample.sqlite3"
+    sample.write_bytes(b"duck")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(sample))
+    monkeypatch.setitem(local_search.cfg, "priority_tables", ["alpha"])
+    monkeypatch.setitem(local_search.cfg, "auto_index_after_convert", False)
+
+    resp = client.get("/admin/list_uploads")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["current_db"] == str(sample)
+    assert payload["priority_tables"] == ["alpha"]
+    assert payload["auto_index_after_convert"] is False
+    assert payload["uploads"][0]["name"] == "sample.sqlite3"
+    assert payload["uploads"][0]["size"] == 4
+
+
 def test_admin_start_index_sem_indexador_retorna_erro(monkeypatch):
     client = app.test_client()
     monkeypatch.setattr(local_search, "create_or_resume_fulltext", None)
@@ -70,6 +90,23 @@ def test_admin_start_index_sem_indexador_retorna_erro(monkeypatch):
 
     assert resp.status_code == 500
     assert "indexador não disponível" in resp.get_json()["error"]
+
+
+def test_admin_delete_remove_db_convertido_derivado(tmp_path, monkeypatch):
+    client = app.test_client()
+    source = tmp_path / "sample.accdb"
+    derived = tmp_path / "sample.duckdb"
+    source.write_bytes(b"accdb")
+    derived.write_bytes(b"duck")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(source))
+    monkeypatch.setattr(local_search, "clear_db_path", lambda: None)
+
+    resp = client.post("/admin/delete", json={"filename": "sample.accdb"})
+
+    assert resp.status_code == 200
+    assert not source.exists()
+    assert not derived.exists()
 
 
 def test_admin_start_index_rejeita_chunk_invalido(tmp_path, monkeypatch):

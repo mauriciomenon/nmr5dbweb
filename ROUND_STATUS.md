@@ -95,6 +95,45 @@
 - backup copies stored locally under `bkp_limpeza/`
 - product docs updated to the supported backend path only
 
+## Current Slice: Admin Upload Flow Consolidation
+
+### Goal
+
+1. Reduce the concentration of the upload/select/delete/list block in the main Flask backend
+2. Keep the same route contracts while moving repeated file-handling logic into smaller helpers
+3. Preserve immediate usability and prove the behavior with focused tests
+
+### Applied
+
+1. Added internal helpers in `interface/app_flask_local_search.py` for:
+   - upload listing metadata
+   - upload-path resolution and validation inside `UPLOAD_DIR`
+   - immediate-select decision for uploaded DB files
+   - Access conversion output naming
+   - Access conversion startup
+   - derived-file cleanup on delete
+2. Rewired these routes to the helpers without changing their external contract:
+   - `/admin/list_uploads`
+   - `/admin/upload`
+   - `/admin/select`
+   - `/admin/delete`
+3. Added focused regression coverage for:
+   - upload listing metadata
+   - delete removing the derived converted DuckDB file
+
+### What Was Proved
+
+- The admin file-management block now has less duplicated path/filename logic.
+- Access-conversion startup is more isolated from the route body.
+- Delete now keeps the source/derived cleanup behavior covered by test.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `47 passed`
+
 ## Current Slice: Immediate-Use Hardening And Stable Browser Smoke
 
 ### Goal

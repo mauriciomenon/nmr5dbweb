@@ -131,6 +131,11 @@ The first stabilization slice is intentionally narrow:
   - `notes/` was removed from the product repo path and copied to local ignored backup under `bkp_limpeza/notes/`
   - the old simplified backend `interface/app_flask_search.py` was removed from the product repo path and copied to `bkp_limpeza/interface/`
   - `interface/README.md` was rewritten to describe only the supported product backend path
+- The admin file-management block in `interface/app_flask_local_search.py` is now less repetitive:
+  - upload listing metadata uses a shared helper
+  - upload target validation is centralized
+  - Access conversion startup is isolated in a helper
+  - delete cleanup of derived `.duckdb` files is centralized and covered by test
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored

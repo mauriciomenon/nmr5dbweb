@@ -334,6 +334,111 @@ def sanitize_filename(value):
         return ""
     return secure_filename(str(value))
 
+
+def list_uploaded_files():
+    uploads = []
+    for path in sorted(UPLOAD_DIR.iterdir(), key=lambda item: item.name):
+        if not path.is_file():
+            continue
+        stat_info = path.stat()
+        uploads.append({
+            "name": path.name,
+            "path": str(path),
+            "size": stat_info.st_size,
+            "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+        })
+    return uploads
+
+
+def resolve_upload_target(filename, *, required=False):
+    safe_filename = sanitize_filename(filename)
+    if not safe_filename:
+        raise ValueError("filename required" if required else "invalid filename or path")
+    target = UPLOAD_DIR / safe_filename
+    try:
+        target.resolve().relative_to(UPLOAD_DIR.resolve())
+    except Exception as exc:
+        raise ValueError("invalid filename or path") from exc
+    return target
+
+
+def should_select_uploaded_db(extension):
+    return extension in {".duckdb", ".db", ".sqlite", ".sqlite3"}
+
+
+def build_access_conversion_output(filename):
+    return UPLOAD_DIR / f"{Path(filename).stem}.duckdb"
+
+
+def maybe_start_auto_index(db_path):
+    global index_thread
+    indexer = create_or_resume_fulltext
+    if not cfg.get("auto_index_after_convert", True) or indexer is None:
+        return
+    with index_lock:
+        if index_thread and index_thread.is_alive():
+            return
+
+        def run_index_auto():
+            try:
+                indexer(str(db_path), drop=False, chunk=2000, batch_insert=1000)
+            except Exception as exc:
+                app.logger.exception("auto index failed: %s", exc)
+
+        index_thread = threading.Thread(target=run_index_auto, daemon=True)
+        index_thread.start()
+
+
+def start_access_conversion(source_path, output_path, converter):
+    global convert_thread, convert_status
+
+    def progress_cb(progress):
+        with convert_lock:
+            convert_status.update({
+                key: value
+                for key, value in progress.items()
+                if key in ("total_tables", "processed_tables", "current_table", "percent", "msg")
+            })
+
+    def run_convert():
+        global convert_status
+        try:
+            ok, msg = converter(
+                str(source_path),
+                str(output_path),
+                chunk_size=20000,
+                progress_callback=progress_cb,
+            )
+            with convert_lock:
+                convert_status["running"] = False
+                convert_status["ok"] = bool(ok)
+                convert_status["msg"] = msg
+                convert_status["percent"] = 100 if ok else convert_status.get("percent", 0)
+            if ok:
+                set_db_path(str(output_path))
+                maybe_start_auto_index(output_path)
+        except Exception as exc:
+            with convert_lock:
+                convert_status["running"] = False
+                convert_status["ok"] = False
+                convert_status["msg"] = f"exception: {exc}"
+
+    convert_thread = threading.Thread(target=run_convert, daemon=True)
+    convert_thread.start()
+
+
+def delete_upload_target(target):
+    current = get_db_path()
+    if current and Path(current).resolve() == target.resolve():
+        clear_db_path()
+    target.unlink()
+    derived_duckdb = build_access_conversion_output(target.name)
+    if derived_duckdb.exists():
+        try:
+            derived_duckdb.unlink()
+        except Exception:
+            pass
+
 app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 
 # Simple in-memory logs for UI status modal
@@ -738,18 +843,8 @@ def list_tables_access(path):
 # ---------------- Admin endpoints ----------------
 @app.route("/admin/list_uploads", methods=["GET"])
 def admin_list_uploads():
-    files = []
-    for p in sorted(UPLOAD_DIR.iterdir(), key=lambda x: x.name):
-        if p.is_file():
-            st = p.stat()
-            files.append({
-                "name": p.name,
-                "path": str(p),
-                "size": st.st_size,
-                "modified": datetime.fromtimestamp(st.st_mtime).isoformat(),
-            })
     return jsonify({
-        "uploads": files,
+        "uploads": list_uploaded_files(),
         "current_db": get_db_path(),
         "priority_tables": cfg.get("priority_tables", []),
         "auto_index_after_convert": cfg.get("auto_index_after_convert", True),
@@ -836,7 +931,6 @@ def api_browse_dirs():
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
-    global convert_thread
     if 'file' not in request.files:
         return jsonify({"error": "arquivo não enviado"}), 400
     f = request.files['file']
@@ -853,11 +947,9 @@ def admin_upload():
         return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
     dest = UPLOAD_DIR / filename
     f.save(dest)
-    # duckdb -> select immediately
-    if ext in (".duckdb", ".db", ".sqlite", ".sqlite3"):
+    if should_select_uploaded_db(ext):
         set_db_path(str(dest))
         return jsonify({"ok": True, "db_path": str(dest)})
-    # access -> convert in background if converter available
     if ext in (".mdb", ".accdb"):
         with convert_lock:
             if convert_status.get("running"):
@@ -865,47 +957,13 @@ def admin_upload():
             active_converter = converter
             if active_converter is None:
                 return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
-            out_duckdb = UPLOAD_DIR / f"{Path(filename).stem}.duckdb"
+            out_duckdb = build_access_conversion_output(filename)
             convert_status.update({
                 "running": True, "ok": None, "msg": "started",
                 "input": str(dest), "output": str(out_duckdb),
                 "total_tables": 0, "processed_tables": 0, "current_table": "", "percent": 0
             })
-            def progress_cb(p):
-                with convert_lock:
-                    convert_status.update({k: v for k, v in p.items() if k in ("total_tables", "processed_tables", "current_table", "percent", "msg")})
-            def run_convert():
-                global convert_status
-                try:
-                    ok, msg = active_converter(str(dest), str(out_duckdb), chunk_size=20000, progress_callback=progress_cb)
-                    with convert_lock:
-                        convert_status["running"] = False
-                        convert_status["ok"] = bool(ok)
-                        convert_status["msg"] = msg
-                        convert_status["percent"] = 100 if ok else convert_status.get("percent", 0)
-                    if ok:
-                        set_db_path(str(out_duckdb))
-                        # optional auto-index with create_or_resume_fulltext
-                        indexer = create_or_resume_fulltext
-                        if cfg.get("auto_index_after_convert", True) and indexer is not None:
-                            # reutiliza o mesmo mecanismo de indexação monitorado por /admin/status
-                            global index_thread
-                            with index_lock:
-                                if not index_thread or not index_thread.is_alive():
-                                    def run_index_auto():
-                                        try:
-                                            indexer(str(out_duckdb), drop=False, chunk=2000, batch_insert=1000)
-                                        except Exception as e:
-                                            app.logger.exception("auto index failed: %s", e)
-                                    index_thread = threading.Thread(target=run_index_auto, daemon=True)
-                                    index_thread.start()
-                except Exception as e:
-                    with convert_lock:
-                        convert_status["running"] = False
-                        convert_status["ok"] = False
-                        convert_status["msg"] = f"exception: {e}"
-            convert_thread = threading.Thread(target=run_convert, daemon=True)
-            convert_thread.start()
+            start_access_conversion(dest, out_duckdb, active_converter)
         return jsonify({"ok": True, "status": "converting", "input": str(dest), "output": str(out_duckdb)})
     return jsonify({"error": f"extensão não permitida: {ext}"}), 400
 
@@ -915,13 +973,12 @@ def admin_select():
     filename = data.get("filename")
     if not filename:
         return jsonify({"error": "filename required"}), 400
-    safe_filename = sanitize_filename(filename)
-    if not safe_filename:
-        return jsonify({"error": "filename required"}), 400
-    fpath = UPLOAD_DIR / safe_filename
+    try:
+        fpath = resolve_upload_target(filename, required=True)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not fpath.exists():
         return jsonify({"error": "arquivo não encontrado"}), 404
-    # set as current DB (duckdb or access). Frontend /api/tables will handle listing with fallback.
     set_db_path(str(fpath))
     return jsonify({"ok": True, "db_path": str(fpath)})
 
@@ -931,28 +988,14 @@ def admin_delete():
     filename = data.get("filename")
     if not filename:
         return jsonify({"error": "filename required"}), 400
-    safe = sanitize_filename(filename)
-    if not safe:
-        return jsonify({"error": "invalid filename or path"}), 400
-    target = UPLOAD_DIR / safe
     try:
-        target.resolve().relative_to(UPLOAD_DIR.resolve())
-    except Exception:
-        return jsonify({"error": "invalid filename or path"}), 400
+        target = resolve_upload_target(filename)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if not target.exists():
         return jsonify({"error": "arquivo não encontrado"}), 404
     try:
-        current = get_db_path()
-        if current and Path(current).resolve() == target.resolve():
-            clear_db_path()
-        target.unlink()
-        # remove converted duckdb with same stem
-        duck_out = UPLOAD_DIR / f"{target.stem}.duckdb"
-        if duck_out.exists():
-            try:
-                duck_out.unlink()
-            except Exception:
-                pass
+        delete_upload_target(target)
         return jsonify({"ok": True, "deleted": str(target.name)})
     except Exception as e:
         return jsonify({"error": f"falha ao apagar: {e}"}), 500
