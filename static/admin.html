@@ -254,6 +254,9 @@
 
 <script src="/shell.js"></script>
 <script>
+let lastUploadsPayload = null;
+let lastStatusPayload = null;
+
 function messageText(payload) {
   if (!payload) return '';
   if (typeof payload === 'string') return payload;
@@ -266,6 +269,17 @@ function setMessage(elId, payload, kind) {
   el.textContent = messageText(payload);
   el.className = 'message';
   if (kind) el.classList.add(kind);
+}
+
+function setBusyButton(btn, busyText, idleText) {
+  if (!btn) return () => {};
+  const original = idleText || btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyText;
+  return () => {
+    btn.disabled = false;
+    btn.textContent = original;
+  };
 }
 
 function basename(path) {
@@ -291,6 +305,7 @@ async function refreshAll() {
 document.getElementById('uploadForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const fi = document.getElementById('fileInput');
+  const uploadBtn = document.getElementById('uploadBtn');
   if (!fi.files.length) {
     setMessage('uploadMsg', 'Selecione um arquivo antes de enviar.', 'warn');
     return;
@@ -298,6 +313,7 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
   const fd = new FormData();
   fd.append('file', fi.files[0]);
   setMessage('uploadMsg', 'Enviando arquivo...', '');
+  const restoreBtn = setBusyButton(uploadBtn, 'Enviando...', uploadBtn ? uploadBtn.textContent : 'Enviar arquivo');
   try {
     const data = await apiJSON('/admin/upload', { method: 'POST', body: fd });
     setMessage('uploadMsg', data, data.error ? 'err' : 'ok');
@@ -305,6 +321,8 @@ document.getElementById('uploadForm').addEventListener('submit', async (e) => {
     await refreshAll();
   } catch (err) {
     setMessage('uploadMsg', err.payload || err.message, 'err');
+  } finally {
+    restoreBtn();
   }
 });
 
@@ -313,6 +331,7 @@ async function refreshUploads() {
   const listEl = document.getElementById('uploadsList');
   try {
     const data = await apiJSON('/admin/list_uploads');
+    lastUploadsPayload = data;
     const currentName = basename(data.current_db || '');
     currentDbEl.textContent = currentName ? 'DB atual: ' + currentName : 'DB atual: nenhum';
     if (!data.uploads || !data.uploads.length) {
@@ -335,6 +354,7 @@ async function refreshUploads() {
         </div>`;
     }).join('');
   } catch (err) {
+    lastUploadsPayload = null;
     currentDbEl.textContent = 'DB atual: erro';
     listEl.innerHTML = `<div class="status-panel">Erro ao listar uploads: ${messageText(err.payload || err.message)}</div>`;
   }
@@ -342,6 +362,7 @@ async function refreshUploads() {
 
 async function selectUpload(nameEnc) {
   const filename = decodeURIComponent(nameEnc);
+  setMessage('uploadMsg', 'Selecionando DB: ' + filename, '');
   try {
     const data = await apiJSON('/admin/select', {
       method: 'POST',
@@ -389,7 +410,7 @@ async function loadPriorityTables() {
       listEl.appendChild(li);
     });
     enableDragAndDrop(listEl);
-    setMessage('priorityMsg', '');
+    setMessage('priorityMsg', `Tabelas disponiveis: ${tables.length}. Prioritarias salvas: ${saved.length}.`, '');
   } catch (err) {
     listEl.innerHTML = '<li class="status-panel">Erro ao carregar tabelas.</li>';
     setMessage('priorityMsg', err.payload || err.message, 'err');
@@ -442,6 +463,8 @@ function removePriority(btn) {
 
 document.getElementById('savePriorityBtn').addEventListener('click', async () => {
   const tables = Array.from(document.querySelectorAll('#priorityList li')).map((li) => li.dataset.table);
+  const saveBtn = document.getElementById('savePriorityBtn');
+  const restoreBtn = setBusyButton(saveBtn, 'Salvando...', saveBtn ? saveBtn.textContent : 'Salvar ordem');
   try {
     const data = await apiJSON('/admin/set_priority', {
       method: 'POST',
@@ -452,6 +475,8 @@ document.getElementById('savePriorityBtn').addEventListener('click', async () =>
     await refreshAll();
   } catch (err) {
     setMessage('priorityMsg', err.payload || err.message, 'err');
+  } finally {
+    restoreBtn();
   }
 });
 
@@ -462,7 +487,22 @@ document.getElementById('startIndex').addEventListener('click', async () => {
   const drop = document.getElementById('dropCheckbox').checked;
   const chunk = parseInt(document.getElementById('chunk').value, 10) || 2000;
   const batch = parseInt(document.getElementById('batch').value, 10) || 1000;
+  const currentDb = lastUploadsPayload && lastUploadsPayload.current_db ? basename(lastUploadsPayload.current_db) : '';
+  if (!currentDb) {
+    setMessage('indexMsg', 'Selecione um DB ativo antes de iniciar a indexacao.', 'warn');
+    return;
+  }
+  if (lastStatusPayload && lastStatusPayload.indexer_error) {
+    setMessage('indexMsg', 'Indexador indisponivel: ' + lastStatusPayload.indexer_error, 'warn');
+    return;
+  }
+  if (lastStatusPayload && lastStatusPayload.indexing) {
+    setMessage('indexMsg', 'A indexacao ja esta em andamento.', 'warn');
+    return;
+  }
   setMessage('indexMsg', 'Indexacao iniciada...', '');
+  const startBtn = document.getElementById('startIndex');
+  const restoreBtn = setBusyButton(startBtn, 'Rodando...', startBtn ? startBtn.textContent : 'Rodar indexacao');
   try {
     const data = await apiJSON('/admin/start_index', {
       method: 'POST',
@@ -473,6 +513,8 @@ document.getElementById('startIndex').addEventListener('click', async () => {
     await refreshStatus();
   } catch (err) {
     setMessage('indexMsg', err.payload || err.message, 'err');
+  } finally {
+    restoreBtn();
   }
 });
 
@@ -480,6 +522,7 @@ async function refreshStatus() {
   const el = document.getElementById('statusBox');
   try {
     const status = await apiJSON('/admin/status');
+    lastStatusPayload = status;
     const dbName = basename(status.db || '');
     const fulltextCount = status.fulltext_count || 0;
     const conversion = status.conversion || null;
@@ -504,6 +547,7 @@ async function refreshStatus() {
       ${conversionHtml}
       ${topHtml}`;
   } catch (err) {
+    lastStatusPayload = null;
     el.innerHTML = `<div class="status-panel">Erro ao obter status: ${messageText(err.payload || err.message)}</div>`;
   }
 }

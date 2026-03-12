@@ -21,6 +21,11 @@ Track real product debt that should not be fixed in the current slice.
 10. Continue reducing the remaining page-specific CSS duplication now that `static/index.html`, `static/track_record.html`, and `static/admin.html` all use the shared shell/component layer.
 11. Continue shrinking the compare frontend modules (`static/compare_dbs.js`, `static/compare_dbs_render.js`) after the current operator flow stabilizes.
 12. Turn the manual Playwright browser pass into a repeatable regression check once the desired coverage and artifact policy are defined.
+13. Consider adding focused frontend regression checks for the invalid-state flows now validated manually:
+   - search without active DB
+   - admin index start without DB
+   - compare without A/B paths
+   - tracking without required filters
 
 ## Do Not Pull Into Slice 1
 

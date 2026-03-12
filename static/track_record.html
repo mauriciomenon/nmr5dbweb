@@ -408,6 +408,27 @@
 
   <script>
     let currentBrowsePath = '';
+    function setStatusText(message, level) {
+      const status = document.getElementById('statusText');
+      if (!status) return;
+      status.textContent = message || '';
+      status.classList.remove('warn', 'error');
+      if (level === 'warn' || level === 'error') {
+        status.classList.add(level);
+      }
+    }
+
+    function setBusyButton(btn, busyText, idleText) {
+      if (!btn) return () => {};
+      const original = idleText || btn.textContent;
+      btn.disabled = true;
+      btn.textContent = busyText;
+      return () => {
+        btn.disabled = false;
+        btn.textContent = original;
+      };
+    }
+
     function setFlowHint(message, variant = 'info') {
       const hintEl = document.getElementById('flowHint');
       if (!hintEl) return;
@@ -458,13 +479,15 @@
       const btn = document.getElementById('runBtn');
       const status = document.getElementById('statusText');
       if (!filters) {
-        alert('Preencha os filtros (COL=VAL,...)');
+        setStatusText('Preencha os filtros antes de executar.', 'warn');
         setFlowHint('Informe os filtros obrigatórios (COL=VAL,...) antes de executar.', 'warn');
+        document.getElementById('filtersInput').focus();
         return;
       }
       if (!customPath) {
-        alert('Escolha a pasta onde estão os bancos (diretório personalizado).');
+        setStatusText('Escolha a pasta onde estao os bancos.', 'warn');
         setFlowHint('Informe ou selecione o diretório onde estão os bancos.', 'warn');
+        document.getElementById('customDirInput').focus();
         return;
       }
       // persiste o ultimo diretorio usado, para reabrir mais rapido depois
@@ -473,9 +496,9 @@
           localStorage.setItem('track_last_dir', customPath);
         }
       } catch (e) {}
-      btn.disabled = true;
-      status.textContent = 'Executando análise...';
-       setFlowHint('Executando análise nos bancos selecionados...', 'info');
+      const restoreBtn = setBusyButton(btn, 'Executando...', btn ? btn.textContent : 'Rastrear registro');
+      setStatusText('Executando analise...', '');
+      setFlowHint('Executando análise nos bancos selecionados...', 'info');
       try {
         const res = await fetch('/api/find_record_across_dbs', {
           method: 'POST',
@@ -486,10 +509,10 @@
         const results = Array.isArray(data && data.results) ? data.results : [];
         const foundCount = results.filter(r => r.found).length;
         if (!res.ok) {
-          status.textContent = 'Erro: ' + (data && data.error ? data.error : res.statusText);
+          setStatusText('Erro: ' + (data && data.error ? data.error : res.statusText), 'error');
           setFlowHint(data && data.error ? 'Erro: ' + data.error : 'Erro ao executar a análise.', 'error');
         } else {
-          status.textContent = 'Análise concluída.';
+          setStatusText('Analise concluida.', '');
           if (!results.length) {
             setFlowHint('Nenhum arquivo analisado retornou resultados para esse filtro.', 'warn');
           } else if (foundCount > 0) {
@@ -501,10 +524,10 @@
         renderResults(data);
       } catch (e) {
         console.error(e);
-        status.textContent = 'Erro durante a requisição.';
+        setStatusText('Erro durante a requisicao.', 'error');
         setFlowHint('Erro de rede ou servidor ao executar a análise.', 'error');
       } finally {
-        btn.disabled = false;
+        restoreBtn();
       }
     }
 
@@ -532,6 +555,12 @@
       } catch (e) {}
 
       document.getElementById('runBtn').addEventListener('click', runAnalysis);
+      document.getElementById('filtersInput').addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          runAnalysis();
+        }
+      });
       const browseBtn = document.getElementById('browseDirBtn');
       if (browseBtn) {
         browseBtn.addEventListener('click', () => {

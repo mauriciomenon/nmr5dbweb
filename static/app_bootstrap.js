@@ -1,6 +1,16 @@
 // ==== Modais e botoes principais ====
 
 document.addEventListener('DOMContentLoaded', () => {
+  function openSearchWorkspace() {
+    openModalById('searchModal');
+    refreshStatus();
+    const q = $('q');
+    if (q && !q.disabled) {
+      q.focus();
+      q.select();
+    }
+  }
+
   const openConfigBtn = $('openConfig');
   if (openConfigBtn) {
     openConfigBtn.addEventListener('click', () => {
@@ -85,13 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (openSearchInline) {
     openSearchInline.addEventListener('click', ev => {
       ev.preventDefault();
-      openModalById('searchModal');
-      refreshStatus();
-      const q = $('q');
-      if (q && !q.disabled) {
-        q.focus();
-        q.select();
-      }
+      openSearchWorkspace();
     });
   }
 
@@ -108,26 +112,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (stepSearch) {
     stepSearch.addEventListener('click', ev => {
       if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
-      openModalById('searchModal');
-      refreshStatus();
-      const q = $('q');
-      if (q && !q.disabled) {
-        q.focus();
-        q.select();
-      }
+      openSearchWorkspace();
     });
   }
   const dbSearchBtn = $('dbSearchBtn');
   if (dbSearchBtn) {
     dbSearchBtn.addEventListener('click', ev => {
       ev.preventDefault();
-      openModalById('searchModal');
-      refreshStatus();
-      const q = $('q');
-      if (q && !q.disabled) {
-        q.focus();
-        q.select();
-      }
+      openSearchWorkspace();
     });
   }
 
@@ -230,6 +222,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const sizeText = formatBytes(f.size || 0);
       const fd = new FormData();
       fd.append('file', f);
+      uploadBtn.disabled = true;
+      uploadBtn.textContent = 'Enviando...';
       if (msg) msg.textContent = 'Enviando...';
       try {
         const res = await fetch('/admin/upload', { method: 'POST', body: fd });
@@ -259,6 +253,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (msg) msg.textContent = 'Erro no upload';
         setFlowBanner('Erro no upload. Verifique o servidor e tente novamente.', 'error');
         logUi('ERROR', 'upload falhou');
+      } finally {
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Enviar';
       }
     });
   }
@@ -346,6 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const chunk = Number.isFinite(chunkVal) && chunkVal > 0 ? chunkVal : 2000;
       const batch = Number.isFinite(batchVal) && batchVal > 0 ? batchVal : 1000;
       if (msg) msg.textContent = 'Iniciando indexacao...';
+      startIndexBtn.disabled = true;
+      startIndexBtn.textContent = 'Iniciando...';
       try {
         const res = await apiJSON('/admin/start_index', {
           method: 'POST',
@@ -364,6 +363,9 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (e) {
         if (msg) msg.textContent = 'Erro ao iniciar indexacao';
         logUi('ERROR', 'indexacao falhou');
+      } finally {
+        startIndexBtn.disabled = false;
+        startIndexBtn.textContent = 'Iniciar indexacao';
       }
     });
   }
@@ -374,7 +376,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const qInput = $('q');
   if (qInput)
     qInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') doSearch();
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doSearch();
+      }
     });
   const refreshBtn = $('refreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', () => refreshUiState());
@@ -425,4 +430,3 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshUiState({ sync: true });
   scheduleStatusPoll();
 });
-

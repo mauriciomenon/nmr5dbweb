@@ -1,5 +1,36 @@
 // === Funcoes utilitarias exportadas para HTML / inline_handlers ===
 
+function setBusyButton(btn, busyText, idleText) {
+  if (!btn) return () => {};
+  const original = idleText || btn.textContent;
+  btn.disabled = true;
+  btn.textContent = busyText;
+  return () => {
+    btn.disabled = false;
+    btn.textContent = original;
+  };
+}
+
+function setSearchMeta(text, level) {
+  const el = $('searchMeta');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('warn', 'error');
+  if (level === 'warn' || level === 'error') {
+    el.classList.add(level);
+  }
+}
+
+function setPriorityStatus(text, level) {
+  const el = $('priorityMsg');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.remove('warn', 'error');
+  if (level === 'warn' || level === 'error') {
+    el.classList.add(level);
+  }
+}
+
 function onSelectRowClick(ev, nameEnc) {
   if (ev && ev.target && ev.target.closest && ev.target.closest('.file-actions')) return;
   selectUpload(nameEnc, null);
@@ -9,11 +40,7 @@ async function deleteUpload(nameEnc, btn) {
   if (!confirm('Deseja realmente excluir este arquivo?')) return;
   const name = decodeURIComponent(nameEnc);
   const msg = $('uploadMsg');
-  const prevText = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Excluindo...';
-  }
+  const restoreBtn = setBusyButton(btn, 'Excluindo...', btn ? btn.textContent : 'Excluir');
   if (msg) msg.textContent = 'Excluindo: ' + name;
   try {
     const j = await apiJSON('/admin/delete', {
@@ -22,34 +49,27 @@ async function deleteUpload(nameEnc, btn) {
       body: JSON.stringify({ filename: name })
     });
     if (j && j.ok) {
-      alert('Arquivo apagado');
+      if (msg) msg.textContent = 'Arquivo excluido: ' + name;
       setFlowBanner('', '');
       await refreshUiState();
     } else {
       const err = (j && j.error) || 'falha ao excluir';
+      if (msg) msg.textContent = 'Erro ao excluir: ' + err;
       setFlowBanner('Nao foi possivel excluir. Verifique se o arquivo esta em uso.', 'warn');
-      alert('Erro: ' + err);
     }
   } catch (e) {
     if (msg) msg.textContent = 'Erro ao excluir';
     setFlowBanner('Erro ao excluir. Tente novamente.', 'error');
     logUi('ERROR', 'delete falhou');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = prevText || 'Excluir';
-    }
+    restoreBtn();
   }
 }
 
 async function selectUpload(nameEnc, btn) {
   const name = decodeURIComponent(nameEnc);
   const msg = $('uploadMsg');
-  const prevText = btn ? btn.textContent : '';
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = 'Selecionando...';
-  }
+  const restoreBtn = setBusyButton(btn, 'Selecionando...', btn ? btn.textContent : 'Selecionar');
   if (msg) msg.textContent = 'Selecionando: ' + name;
   try {
     const j = await apiJSON('/admin/select', {
@@ -71,13 +91,10 @@ async function selectUpload(nameEnc, btn) {
     }
   } catch (e) {
     if (msg) msg.textContent = 'Erro ao selecionar DB';
-    setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-    logUi('ERROR', 'select db falhou');
+      setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
+      logUi('ERROR', 'select db falhou');
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = prevText || 'Selecionar';
-    }
+    restoreBtn();
   }
 }
 
@@ -116,18 +133,21 @@ async function loadPriorityModal() {
   if (!hasDbSelected()) {
     allEl.innerHTML = '<li class="muted">Nenhum DB selecionado</li>';
     selEl.innerHTML = '';
-    $('priorityMsg').textContent = 'Nenhum DB selecionado';
+    setPriorityStatus('Nenhum DB selecionado', 'warn');
+    setModalBanner('priorityModalBanner', 'Selecione um DB antes de editar a ordem das tabelas.', 'warn');
     return;
   }
   allEl.innerHTML = '';
   selEl.innerHTML = '';
-  $('priorityMsg').textContent = 'Carregando...';
+  setPriorityStatus('Carregando...', '');
+  setModalBanner('priorityModalBanner', 'Carregando tabelas do DB ativo...', 'info');
   try {
     const t = await apiJSON('/api/tables');
     if (t.error) {
       allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
       selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-      $('priorityMsg').textContent = '';
+      setPriorityStatus('Erro ao listar tabelas.', 'error');
+      setModalBanner('priorityModalBanner', 'Nao foi possivel listar as tabelas do DB ativo.', 'error');
       logUi('ERROR', 'priority tabelas ' + t.error);
       return;
     }
@@ -156,11 +176,13 @@ async function loadPriorityModal() {
       selEl.appendChild(li);
     });
     enableDragAndDrop(selEl);
-    $('priorityMsg').textContent = '';
+    setPriorityStatus(`Tabelas carregadas: ${visible.length}. Prioritarias: ${saved.length}.`, '');
+    setModalBanner('priorityModalBanner', 'Ajuste a ordem e salve quando terminar.', 'info');
   } catch (e) {
     allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
     selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-    $('priorityMsg').textContent = '';
+    setPriorityStatus('Erro ao listar tabelas.', 'error');
+    setModalBanner('priorityModalBanner', 'Falha ao carregar as tabelas prioritarias.', 'error');
     logUi('ERROR', 'priority modal falhou');
   }
 }
@@ -236,31 +258,42 @@ function prioRemove(btn) {
 async function savePriority() {
   const listEl = $('priorityListModal');
   const tables = Array.from(listEl.querySelectorAll('li')).map(li => li.dataset.table);
-  const res = await fetch('/admin/set_priority', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ tables })
-  });
-  const j = await res.json();
-  const msg = $('priorityMsg');
-  if (j && j.ok) {
-    if (msg) msg.textContent = 'Prioridades salvas: ' + tables.length;
-  } else if (msg) {
-    msg.textContent = 'Erro ao salvar prioridades';
+  setPriorityStatus('Salvando prioridades...', '');
+  setModalBanner('priorityModalBanner', 'Salvando a nova ordem das tabelas...', 'info');
+  try {
+    const res = await fetch('/admin/set_priority', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tables })
+    });
+    const j = await res.json();
+    if (j && j.ok) {
+      setPriorityStatus('Prioridades salvas: ' + tables.length, '');
+      setModalBanner('priorityModalBanner', 'Ordem salva com sucesso.', 'info');
+    } else {
+      setPriorityStatus('Erro ao salvar prioridades.', 'error');
+      setModalBanner('priorityModalBanner', 'Nao foi possivel salvar a ordem das tabelas.', 'error');
+    }
+    await refreshUiState();
+  } catch (e) {
+    setPriorityStatus('Erro ao salvar prioridades.', 'error');
+    setModalBanner('priorityModalBanner', 'Falha de rede ao salvar prioridades.', 'error');
   }
-  await refreshUiState();
 }
 
 async function doSearch(opts) {
   const q = $('q').value.trim();
   if (!q) {
-    alert('Digite um termo para pesquisar');
+    setSearchMeta('Digite um termo para pesquisar.', 'warn');
+    setFlowBanner('Digite um termo antes de iniciar a busca.', 'warn');
+    if ($('q')) $('q').focus();
     return;
   }
   if (!hasDbSelected()) {
     setNoDbState({ showHint: true });
     logUi('WARN', 'acao exige DB');
-    alert('Selecione um DB primeiro');
+    setSearchMeta('Selecione um DB antes de pesquisar.', 'warn');
+    setFlowBanner('Selecione um DB ativo antes de abrir a busca.', 'warn');
     return;
   }
   const btn = $('searchBtn');
@@ -269,11 +302,13 @@ async function doSearch(opts) {
   if (exportBtn) exportBtn.disabled = true;
   try {
     if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
-      alert('Aguarde a conversao do banco terminar antes de pesquisar.');
+      setSearchMeta('Busca bloqueada: conversao em andamento.', 'warn');
+      setFlowBanner('Aguarde a conversao do banco terminar antes de pesquisar.', 'warn');
       return;
     }
     if (lastStatus && lastStatus.indexing) {
-      alert('Aguarde a indexacao (_fulltext) terminar antes de pesquisar.');
+      setSearchMeta('Busca bloqueada: indexacao em andamento.', 'warn');
+      setFlowBanner('Aguarde a indexacao (_fulltext) terminar antes de pesquisar.', 'warn');
       return;
     }
     if (
@@ -282,13 +317,12 @@ async function doSearch(opts) {
       lastStatus.db.toLowerCase().endsWith('.duckdb') &&
       !lastStatus.fulltext_count
     ) {
-      alert(
-        'Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.'
-      );
+      setSearchMeta('Busca bloqueada: indice _fulltext ausente.', 'warn');
+      setFlowBanner('Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.', 'warn');
       return;
     }
   } catch (e) {
-    // ignore
+    logUi('WARN', 'falha ao validar status antes da busca');
   }
   const per_table = parseInt($('per_table').value, 10) || 10;
   const candidate_limit = parseInt($('candidate_limit').value, 10) || 1000;
@@ -296,7 +330,8 @@ async function doSearch(opts) {
   const token_mode = $('token_mode').value;
   const min_score = parseInt($('min_score').value, 10) || null;
   lastQuery = q;
-  $('searchMeta').textContent = `Buscando: "${q}" ...`;
+  setSearchMeta(`Buscando: "${q}" ...`, '');
+  setFlowBanner('Busca em andamento. Aguarde os resultados.', 'info');
   const tablesSel = $('tablesFilter');
   let tablesParam = '';
   let selectedTables = [];
@@ -318,7 +353,9 @@ async function doSearch(opts) {
     const res = await fetch(url);
     const data = await res.json();
     if (data.error) {
-      $('searchMeta').textContent = 'Erro: ' + data.error;
+      setSearchMeta('Erro: ' + data.error, 'error');
+      $('resultsArea').innerHTML = '<div class="card small">Nao foi possivel concluir a busca.</div>';
+      setFlowBanner('A busca retornou erro. Revise o termo ou o estado do DB.', 'error');
       logUi('ERROR', 'search ' + data.error);
       return;
     }
@@ -331,13 +368,19 @@ async function doSearch(opts) {
         // ignore
       }
     }
-    $('searchMeta').textContent = `Resultados: ${data.returned_count} (candidatos: ${
-      data.candidate_count
-    })`;
+    if (!data.returned_count) {
+      setSearchMeta(`Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}.`, 'warn');
+      setFlowBanner('Nenhum resultado encontrado. Ajuste o termo, a pontuacao minima ou as tabelas selecionadas.', 'warn');
+    } else {
+      setSearchMeta(`Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`, '');
+      setFlowBanner(`Busca concluida. ${data.returned_count} resultado(s) retornado(s).`, 'info');
+    }
     if (exportBtn) exportBtn.disabled = !(data && data.returned_count);
     renderResults(q, data.results || {}, per_table);
   } catch (e) {
-    $('searchMeta').textContent = 'Erro na busca';
+    setSearchMeta('Erro na busca.', 'error');
+    $('resultsArea').innerHTML = '<div class="card small">Erro de rede ou servidor ao executar a busca.</div>';
+    setFlowBanner('Erro na busca. Verifique o servidor e tente novamente.', 'error');
     logUi('ERROR', 'search falhou');
   } finally {
     btn.disabled = false;

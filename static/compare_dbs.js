@@ -98,6 +98,26 @@
       return document.getElementById('runCompareBtn');
     }
 
+    function getCompareActionButtons() {
+      return {
+        loadTables: document.getElementById('btnLoadTables'),
+        runCompare: document.getElementById('runCompareBtn'),
+        tablesOverview: document.getElementById('btnTablesOverview'),
+        exportComparison: document.getElementById('btnExportComparison'),
+      };
+    }
+
+    function setButtonBusy(btn, busyText, idleText) {
+      if (!btn) return () => {};
+      const original = idleText || btn.textContent;
+      btn.disabled = true;
+      btn.textContent = busyText;
+      return () => {
+        btn.disabled = false;
+        btn.textContent = original;
+      };
+    }
+
     async function postJson(path, payload) {
       const resp = await fetch(path, {
         method: 'POST',
@@ -147,6 +167,16 @@
       if (btn) {
         btn.disabled = false;
         btn.textContent = buttonText;
+      }
+    }
+
+    function setCompareStatus(text, level = 'info') {
+      const statusEl = document.getElementById('statusCompare');
+      if (!statusEl) return;
+      statusEl.textContent = text || '';
+      statusEl.classList.remove('warn', 'error');
+      if (level === 'warn' || level === 'error') {
+        statusEl.classList.add(level);
       }
     }
 
@@ -422,11 +452,7 @@
       updateTablesOverviewVisibility();
       tableSelect.innerHTML = '<option value="">carregando...</option>';
       statusEl.textContent = 'Carregando tabelas em comum...';
-
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = 'Carregando...';
-      }
+      const restoreBtn = setButtonBusy(btn, 'Carregando...', btn ? btn.textContent : 'Mapear tabelas comuns');
 
       if (tablesTimeout) {
         clearTimeout(tablesTimeout);
@@ -443,10 +469,6 @@
         setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
         setStepState('stepLoadTables', 'Aguardando', null);
         tableSelect.innerHTML = '<option value="">-- informe os caminhos acima --</option>';
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Mapear tabelas comuns';
-        }
         if (tablesTimeout) {
           clearTimeout(tablesTimeout);
           tablesTimeout = null;
@@ -498,10 +520,7 @@
         setFlowHint('Erro ao carregar tabelas: ' + err.message, 'error');
         setStepState('stepLoadTables', 'Erro ao carregar', 'warn');
       } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = 'Mapear tabelas comuns';
-        }
+        restoreBtn();
         if (tablesTimeout) {
           clearTimeout(tablesTimeout);
           tablesTimeout = null;
@@ -591,17 +610,16 @@
     }
 
     async function runCompare() {
-      const statusEl = document.getElementById('statusCompare');
       const summaryEl = document.getElementById('summary');
       const resultsEl = document.getElementById('results');
       const compareRequest = collectCompareRequest(1);
 
       summaryEl.innerHTML = '';
       resultsEl.innerHTML = '';
-      statusEl.textContent = '';
+      setCompareStatus('', 'info');
 
       if (!compareRequest.db1 || !compareRequest.db2) {
-        statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
+        setCompareStatus('Informe os caminhos de ambos os bancos (.duckdb).', 'warn');
         setFlowHint('Informe os caminhos de ambos os bancos A e B para conseguir comparar.', 'warn');
         setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
         setStepState('stepLoadTables', 'Aguardando', null);
@@ -609,14 +627,14 @@
         return;
       }
       if (!compareRequest.table) {
-        statusEl.textContent = 'Selecione uma tabela.';
+        setCompareStatus('Selecione uma tabela.', 'warn');
         setFlowHint('Carregue as tabelas em comum e selecione uma tabela antes de comparar.', 'warn');
         setStepState('stepLoadTables', 'Tabela nao selecionada', 'warn');
         setStepState('stepCompare', 'Aguardando', null);
         return;
       }
       if (!compareRequest.keyColsStr) {
-        statusEl.textContent = 'Informe pelo menos uma coluna-chave K.';
+        setCompareStatus('Informe pelo menos uma coluna-chave K.', 'warn');
         setFlowHint('Informe pelo menos uma coluna-chave K para identificar os registros unicos.', 'warn');
         setStepState('stepCompare', 'Chave K faltando', 'warn');
         return;
@@ -638,13 +656,13 @@
         renderResult(data);
         updateLastCompareMeta(data, 1);
         saveCompareState();
-        statusEl.textContent = 'Comparacao concluida.';
+        setCompareStatus('Comparacao concluida.', 'info');
         setFlowHint('Comparacao concluida. Revise o resumo e os detalhes de diferencas abaixo.', 'info');
         setStepState('stepCompare', 'Concluido', 'done');
         setStepOpen(3);
       } catch (err) {
         console.error(err);
-        statusEl.textContent = 'Erro ao comparar: ' + (err && err.message ? err.message : String(err));
+        setCompareStatus('Erro ao comparar: ' + (err && err.message ? err.message : String(err)), 'error');
         setFlowHint('Erro ao comparar bancos: ' + (err && err.message ? err.message : String(err)), 'error');
         setStepState('stepCompare', 'Erro ao comparar', 'warn');
       } finally {
@@ -654,7 +672,6 @@
 
     async function changePage(newPage) {
       if (!lastComparePayload) return;
-      const statusEl = document.getElementById('statusCompare');
 
       const payload = { ...lastComparePayload, page: newPage };
       lastComparePayload = payload;
@@ -672,12 +689,12 @@
         renderResult(data);
         updateLastCompareMeta(data, newPage);
         saveCompareState();
-        statusEl.textContent = 'Comparacao concluida.';
+        setCompareStatus('Comparacao concluida.', 'info');
         setFlowHint('Resultados atualizados. Continue revisando as diferencas.', 'info');
         setStepState('stepCompare', 'Concluido', 'done');
       } catch (err) {
         console.error(err);
-        statusEl.textContent = 'Erro ao carregar pagina: ' + (err && err.message ? err.message : String(err));
+        setCompareStatus('Erro ao carregar pagina: ' + (err && err.message ? err.message : String(err)), 'error');
         setFlowHint('Erro ao buscar pagina de resultados: ' + (err && err.message ? err.message : String(err)), 'error');
         setStepState('stepCompare', 'Erro ao carregar pagina', 'warn');
       } finally {
@@ -686,13 +703,15 @@
     }
 
     async function exportComparison() {
+      const exportBtn = document.getElementById('btnExportComparison');
+      const restoreBtn = setButtonBusy(exportBtn, 'Exportando...', exportBtn ? exportBtn.textContent : 'Exportar CSV');
       if (!lastComparePayload) {
-        alert('Nenhuma comparação para exportar. Execute a comparação primeiro.');
+        setCompareStatus('Nenhuma comparacao para exportar. Execute a comparacao primeiro.', 'warn');
+        restoreBtn();
         return;
       }
-      const statusEl = document.getElementById('statusCompare');
       try {
-        statusEl.textContent = 'Preparando exportação (carregando todas as páginas)...';
+        setCompareStatus('Preparando exportacao (carregando todas as paginas)...', 'info');
         const basePayload = { ...lastComparePayload };
         let page = 1;
         let totalPages = 1;
@@ -711,7 +730,7 @@
         }
 
         if (!meta) {
-          alert('Nenhum dado para exportar.');
+          setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
           return;
         }
 
@@ -762,10 +781,14 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        statusEl.textContent = 'Exportação concluída. Arquivo CSV baixado.';
+        setCompareStatus('Exportacao concluida. Arquivo CSV baixado.', 'info');
+        setFlowHint('Exportacao concluida. O CSV foi baixado com o recorte atual.', 'info');
       } catch (err) {
         console.error(err);
-        alert('Erro inesperado ao exportar: ' + (err && err.message ? err.message : String(err)));
+        setCompareStatus('Erro inesperado ao exportar: ' + (err && err.message ? err.message : String(err)), 'error');
+        setFlowHint('Falha ao exportar a comparacao.', 'error');
+      } finally {
+        restoreBtn();
       }
     }
 
@@ -781,13 +804,17 @@
       const container = document.getElementById('tablesOverview');
       const db1Input = document.getElementById('db1Path');
       const db2Input = document.getElementById('db2Path');
+      const overviewBtn = document.getElementById('btnTablesOverview');
+      const restoreBtn = setButtonBusy(overviewBtn, 'Gerando mapa...', overviewBtn ? overviewBtn.textContent : 'Mapa geral das tabelas');
 
       if (!db1Input || !db2Input || !db1Input.value.trim() || !db2Input.value.trim()) {
-        alert('Informe os caminhos de ambos os bancos (.duckdb) e carregue as tabelas em comum antes de gerar o mapa.');
+        setCompareStatus('Informe os caminhos de ambos os bancos e carregue as tabelas antes de gerar o mapa.', 'warn');
+        restoreBtn();
         return;
       }
       if (!tablesMeta || !tablesMeta.length) {
-        alert('Carregue as tabelas em comum primeiro (passo 1).');
+        setCompareStatus('Carregue as tabelas em comum primeiro.', 'warn');
+        restoreBtn();
         return;
       }
 
@@ -795,6 +822,7 @@
 
       if (tablesOverviewCache && tablesOverviewCache.db1 === db1Input.value && tablesOverviewCache.db2 === db2Input.value) {
         renderTablesOverview(tablesOverviewCache.result);
+        restoreBtn();
         return;
       }
 
@@ -827,6 +855,7 @@
 
       tablesOverviewCache = { db1: db1, db2: db2, result: overview };
       renderTablesOverview(overview);
+      restoreBtn();
     }
 
     async function toggleTablesOverview() {

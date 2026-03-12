@@ -191,6 +191,10 @@
       ];
 
       resultsEl.innerHTML = '';
+      if (!rows.length) {
+        resultsEl.innerHTML = '<div class="tables-overview-card">Nenhuma diferenca encontrada para o recorte atual. Ajuste filtros apenas se precisar inspecao mais especifica.</div>';
+        return;
+      }
       const maxPerSection = 50;
       let rowCounter = 0;
       window.lastCompareResult = data;
@@ -445,4 +449,3 @@
         pagEl.appendChild(controls);
       }
     }
-

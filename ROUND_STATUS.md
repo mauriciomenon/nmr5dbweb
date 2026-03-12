@@ -276,6 +276,62 @@ Reduce frontend maintenance risk by splitting the two largest page scripts and t
 - The upload and search paths now fail earlier and more explicitly on bad input.
 - Optional backend dependencies are now guarded without silent fallback.
 
+## Follow-up Slice: Frontend Flow Hardening And Browser UX Pass
+
+### Goal
+
+Harden the user-facing web flows so search, admin, compare, and tracking expose clear inline state for empty, loading, success, and error conditions without broad backend changes.
+
+### Applied
+
+1. Hardened the search flow in `static/app_search.js`:
+   - added inline search-meta status updates for empty query, no DB, blocked search, error, empty result, and success
+   - removed several alert-driven branches where the page already had visible status areas
+   - improved priority modal status text and save feedback
+   - reduced noisy success/error handling for DB select/delete actions
+2. Hardened the page bootstrap in `static/app_bootstrap.js`:
+   - unified search-modal opening into one path
+   - disabled upload and index buttons during in-flight actions
+   - normalized Enter-to-search behavior in the modal
+3. Hardened the admin flow in `static/admin.html`:
+   - stored the latest uploads/status payloads locally
+   - blocked index start when no DB is active
+   - blocked index start when the indexer is unavailable or already running
+   - added button-busy handling and better inline feedback for upload, priority save, and index start
+4. Hardened compare in `static/compare_dbs.js` and `static/compare_dbs_render.js`:
+   - added button-busy handling for load tables, export, and overview generation
+   - improved compare status messages for missing input, paging, export, and failures
+   - added a clearer no-difference result state for the current filter/page
+5. Hardened tracking in `static/track_record.html`:
+   - moved missing-input validation to inline status/flow hints
+   - added button-busy handling during execution
+   - added Ctrl/Cmd+Enter as a fast trigger for running the analysis
+6. Ran browser validation on real page interactions:
+   - opened search modal without DB
+   - triggered admin index action without DB
+   - triggered compare table mapping without A/B paths
+   - triggered track analysis without required filters
+
+### What Was Proved
+
+- The web UI now handles the most common invalid states inline instead of relying on alert popups.
+- The admin page no longer makes an avoidable failing index request when no DB is active.
+- Compare and track now surface validation failures directly in the page flow, which is easier to audit and less disruptive.
+- The browser pass confirms the flows above without console errors in the validated scenarios.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `node --check static/app.js static/app_search.js static/app_bootstrap.js static/ui_utils.js static/shell.js static/compare_dbs.js static/compare_dbs_render.js`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- Playwright browser validation:
+  - search modal opens with disabled search and no console error when no DB is active
+  - admin index action is blocked locally with a visible warning when no DB is active
+  - compare "Mapear tabelas comuns" now reports the missing A/B paths inline
+  - track "Rastrear registro" now reports missing filters inline
+
 ### Validation After Changes
 
 - `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed

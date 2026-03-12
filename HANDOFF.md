@@ -83,6 +83,9 @@ The first stabilization slice is intentionally narrow:
   - `/track_record`
   - `/admin.html`
 - The admin page no longer requests `/api/tables` when there is no active DB selected
+- The admin page also no longer attempts to start indexing from an obviously invalid no-DB state
+- The search modal, compare flow, and tracking flow now prefer inline status messaging over alert-driven validation in the most common invalid states
+- Compare actions now disable their own buttons while requests are in flight for load/export/overview paths
 - Browser validation found only one non-blocking asset issue on the main page:
   - missing `favicon.ico`
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
@@ -103,6 +106,7 @@ The first stabilization slice is intentionally narrow:
 - Natural next slices are:
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
   - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility when there is measured gain
+  - add focused frontend regression tests for the browser-validated invalid-state flows if the team wants them automated
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today
