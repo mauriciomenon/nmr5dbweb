@@ -30,6 +30,13 @@ The first stabilization slice is intentionally narrow:
 
 ## Setup Status
 
+- ESLint compatibility is intentionally dual-path now:
+  - `eslint.config.mjs` remains the local flat-config baseline
+  - `.eslintrc.cjs` and `.eslintignore` exist to keep older analyzers such as `ESLint 8.15.0` working
+- The compare report UI now surfaces:
+  - keys to review first
+  - columns most impacted
+  without changing the fast compare engine
 - Clean Python setup now uses `uv`
 - Use `requirements.txt` for runtime
 - Use `requirements-dev.txt` for runtime plus validation tools

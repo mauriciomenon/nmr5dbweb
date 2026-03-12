@@ -1,0 +1,5 @@
+interface/uploads/**
+output/**
+node_modules/**
+bkp_limpeza/**
+.venv/**

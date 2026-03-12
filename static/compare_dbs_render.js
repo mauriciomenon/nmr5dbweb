@@ -94,8 +94,51 @@ function buildCompareAlerts(data, changedRows) {
   return alerts;
 }
 
+function buildComparePriorityReview(data, changedRows) {
+  const compareColumns = data.compare_columns || [];
+  const keyColumns = data.key_columns || [];
+  const keyImpacts = {};
+  const columnImpacts = {};
+
+  for (const row of changedRows) {
+    const keyText =
+      keyColumns
+        .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+        .join(', ') || 'sem chave visivel';
+    let rowImpact = 0;
+    const changedColumns = [];
+
+    for (const column of compareColumns) {
+      if (!valuesDifferent((row.a || {})[column], (row.b || {})[column])) {
+        continue;
+      }
+      rowImpact += 1;
+      changedColumns.push(column);
+      columnImpacts[column] = (columnImpacts[column] || 0) + 1;
+    }
+
+    if (!rowImpact) continue;
+    keyImpacts[keyText] = {
+      count: rowImpact,
+      columns: changedColumns,
+    };
+  }
+
+  return {
+    topKeys: Object.entries(keyImpacts)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 5),
+    topColumns: Object.entries(columnImpacts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6),
+  };
+}
+
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
+  const changedRows = data.rows
+    ? data.rows.filter((row) => row.type === 'changed')
+    : [];
   const highlights = buildCompareHighlights(
     data,
     {
@@ -107,12 +150,26 @@ function renderCompareSummary(data, summaryData) {
         ? data.rows.filter((row) => row.type === 'changed')
         : [],
     },
-    data.rows ? data.rows.filter((row) => row.type === 'changed') : []
+    changedRows
   );
-  const alerts = buildCompareAlerts(
-    data,
-    data.rows ? data.rows.filter((row) => row.type === 'changed') : []
-  );
+  const alerts = buildCompareAlerts(data, changedRows);
+  const review = buildComparePriorityReview(data, changedRows);
+  const topKeysHtml = review.topKeys.length
+    ? `<div class="report-review-list">${review.topKeys
+        .map(
+          ([keyText, meta]) =>
+            `<div class="report-review-item"><strong>${keyText}</strong><span>${meta.count} campos mudaram${meta.columns.length ? ' · ' + meta.columns.slice(0, 5).join(', ') : ''}</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const topColumnsHtml = review.topColumns.length
+    ? `<div class="report-review-list">${review.topColumns
+        .map(
+          ([column, count]) =>
+            `<div class="report-review-item"><strong>${column}</strong><span>${count} chaves alteradas</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -130,6 +187,8 @@ function renderCompareSummary(data, summaryData) {
         ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${summaryData.colDiffList}</div>` : ''}
         ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.join('<br>')}</div>` : ''}
         ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.join('<br>')}</div>` : ''}
+        ${topKeysHtml ? `<div class="result-col-diff"><strong>Chaves para revisar primeiro:</strong>${topKeysHtml}</div>` : ''}
+        ${topColumnsHtml ? `<div class="result-col-diff"><strong>Colunas mais impactadas:</strong>${topColumnsHtml}</div>` : ''}
       </div>
     </div>
   `;

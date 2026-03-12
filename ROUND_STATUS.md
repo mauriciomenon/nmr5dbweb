@@ -1,5 +1,41 @@
 # Round Status
 
+## Current Slice: ESLint Legacy Compatibility And Better Diff Reading
+
+### Goal
+
+1. Make the repo lintable both locally and in older analyzers still pinned to `ESLint 8.15.0`
+2. Improve diff readability for operator review without touching the fast compare engine
+
+### Applied
+
+1. Added legacy ESLint fallback files:
+   - `.eslintrc.cjs`
+   - `.eslintignore`
+2. Kept `eslint.config.mjs` as the local flat-config baseline.
+3. Improved compare diff reading in:
+   - `static/compare_dbs_render.js`
+   - `static/compare_dbs.html`
+4. New report blocks now show:
+   - keys to review first
+   - columns most impacted
+
+### What Was Proved
+
+- Local lint still works with the flat config baseline.
+- Legacy `eslint@8.15.0` can now lint the repo successfully.
+- The compare UI now surfaces a more actionable first-pass reading of the diff without changing the compare SQL path.
+
+### Validation After Changes
+
+- `pnpm exec eslint static`: passed
+- `pnpm dlx eslint@8.15.0 static --ext .js`: passed
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+- `node --check static/compare_dbs_render.js`: passed
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `ruff`, `ty`: passed
+- focused `pytest`: `62 passed`
+
 ## Current Slice: JS Tooling, SQLite Search, And Stable Operator Flows
 
 ### Goal

@@ -45,6 +45,7 @@ Track real product debt that should not be fixed in the current slice.
    - avoid broad engine abstraction layers
    - keep row serialization and result ordering behavior stable
 21. If `output/` grows further, define retention rules so the local validation area does not become an unbounded dump of operator samples.
+22. Reassess the legacy `.eslintrc.cjs` fallback only after external analyzers stop depending on old `ESLint 8.x` behavior.
 
 ## Do Not Pull Into Slice 1
 
