@@ -1,5 +1,66 @@
 # Round Status
 
+## Current Slice: JS Tooling, SQLite Search, And Stable Operator Flows
+
+### Goal
+
+1. Add a real JS validation baseline to the product repo
+2. Remove the remaining immediate-use block for SQLite search on the main screen
+3. Reduce backend route repetition without broad refactor
+4. Expand browser validation into a more reliable operator suite
+5. Improve diff reading without touching the fast compare engine
+
+### Applied
+
+1. Added JS tooling in the product repo:
+   - `package.json`
+   - `eslint.config.js`
+   - `.prettierrc.json`
+   - `.prettierignore`
+2. Installed and validated:
+   - `eslint`
+   - `prettier`
+   - `@eslint/js`
+   - `globals`
+3. Tuned the ESLint baseline to the repo's current browser-script model:
+   - no fake failures for cross-file globals
+   - no forced `var` cleanup in this stabilization slice
+4. Hardened `interface/app_flask_local_search.py` with smaller shared helpers for:
+   - current DB resolution mapped to route responses
+   - integer query parsing
+   - search and table request parsing
+5. Enabled SQLite search on the main search screen through a real backend path:
+   - `fallback_search_sqlite(...)`
+   - `/api/search` now serves DuckDB, SQLite, and Access with explicit engine handling
+6. Returned `db_engine` in `/api/tables` and `/api/table` responses for clearer frontend behavior.
+7. Updated the frontend to stop blocking SQLite search in the main UI.
+8. Expanded browser coverage for:
+   - invalid inline feedback
+   - DuckDB search success
+   - SQLite search success
+   - DuckDB compare success
+   - compare pagination visibility plus CSV export
+   - SQLite tracking success
+9. Improved compare summary rendering with an extra "Colunas sensiveis para revisar" block based on current diff output only.
+10. Added `node_modules/` to `.gitignore` as part of the JS tooling baseline.
+
+### What Was Proved
+
+- The product repo now has enforceable JS formatting and lint checks via `pnpm`.
+- SQLite can now be searched from the main UI instead of being blocked after selection.
+- The Flask backend now repeats less current-DB validation logic across its main operator routes.
+- The compare report UI is more useful for fast anomaly review without changing the fast compare backend path.
+- The browser suite now exercises a broader set of real success paths.
+
+### Validation After Changes
+
+- `pnpm exec eslint static`: passed
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `45 passed`
+
 ## Current Slice: Immediate-Use Hardening And Stable Browser Smoke
 
 ### Goal

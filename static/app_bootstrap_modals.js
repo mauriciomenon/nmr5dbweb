@@ -43,38 +43,38 @@ function setupModalBindings() {
     openModalById('indexModal');
     refreshStatus();
   });
-  bindClick('openIndexInline', ev => {
+  bindClick('openIndexInline', (ev) => {
     ev.preventDefault();
     openModalById('indexModal');
     refreshStatus();
   });
-  bindClick('openSelectInline', ev => {
+  bindClick('openSelectInline', (ev) => {
     ev.preventDefault();
     openModalById('configModal');
     refreshUiState({ sync: true });
   });
-  bindClick('openConvertInline', async ev => {
+  bindClick('openConvertInline', async (ev) => {
     ev.preventDefault();
     await openStatusModal();
   });
-  bindClick('stepConvert', async ev => {
+  bindClick('stepConvert', async (ev) => {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
     await openStatusModal();
   });
-  bindClick('openSearchInline', ev => {
+  bindClick('openSearchInline', (ev) => {
     ev.preventDefault();
     openSearchWorkspace();
   });
-  bindClick('stepIndex', ev => {
+  bindClick('stepIndex', (ev) => {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
     openModalById('indexModal');
     refreshStatus();
   });
-  bindClick('stepSearch', ev => {
+  bindClick('stepSearch', (ev) => {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
     openSearchWorkspace();
   });
-  bindClick('dbSearchBtn', ev => {
+  bindClick('dbSearchBtn', (ev) => {
     ev.preventDefault();
     openSearchWorkspace();
   });
@@ -91,13 +91,19 @@ function setupModalBindings() {
     box.style.display = isHidden ? 'block' : 'none';
   });
 
-  ['closeStatus', 'closeConfig', 'closePriority', 'closeIndex', 'closeSearch'].forEach(id => {
+  [
+    'closeStatus',
+    'closeConfig',
+    'closePriority',
+    'closeIndex',
+    'closeSearch',
+  ].forEach((id) => {
     bindClick(id, () => closeModal());
   });
 
   const overlayEl = $('overlay');
   if (overlayEl) {
-    const closeHandler = e => {
+    const closeHandler = (e) => {
       e.preventDefault();
       e.stopPropagation();
       forceCloseModals();
@@ -110,12 +116,19 @@ function setupModalBindings() {
     overlayEl.addEventListener('pointerup', closeHandler, true);
   }
 
-  ['openConfig', 'openPriority', 'openIndex', 'closeConfig', 'closePriority', 'closeIndex', 'closeSearch', 'overlay'].forEach(
-    id => {
-      const el = $(id);
-      if (el) el.addEventListener('click', () => scheduleStatusPoll());
-    }
-  );
+  [
+    'openConfig',
+    'openPriority',
+    'openIndex',
+    'closeConfig',
+    'closePriority',
+    'closeIndex',
+    'closeSearch',
+    'overlay',
+  ].forEach((id) => {
+    const el = $(id);
+    if (el) el.addEventListener('click', () => scheduleStatusPoll());
+  });
 }
 
 window.openSearchWorkspace = openSearchWorkspace;

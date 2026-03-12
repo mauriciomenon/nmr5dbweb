@@ -253,6 +253,82 @@ def build_admin_status():
     return status
 
 
+def get_current_db_context_response(*, require_selected=False, require_exists=False, allowed_engines=None):
+    try:
+        return get_current_db_context(
+            require_selected=require_selected,
+            require_exists=require_exists,
+            allowed_engines=allowed_engines,
+        ), None
+    except (ValueError, FileNotFoundError) as exc:
+        return None, (jsonify({"error": str(exc)}), 400)
+
+
+def parse_int_query_arg(raw_value, field_name, *, default=None, minimum=None):
+    if raw_value is None or raw_value == "":
+        return default
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field_name} must be an integer") from exc
+    if minimum is not None and value < minimum:
+        raise ValueError(f"{field_name} must be >= {minimum}")
+    return value
+
+
+def parse_search_request_args(args):
+    q = (args.get("q") or "").strip()
+    if not q:
+        raise ValueError("query param q required")
+    per_table = parse_int_query_arg(args.get("per_table", 10), "per_table", default=10, minimum=1)
+    candidate_limit = parse_int_query_arg(
+        args.get("candidate_limit", 1000),
+        "candidate_limit",
+        default=1000,
+        minimum=1,
+    )
+    total_limit = parse_int_query_arg(args.get("total_limit", 500), "total_limit", default=500, minimum=1)
+    token_mode = (args.get("token_mode", "any") or "any").lower()
+    if token_mode not in ("any", "all"):
+        token_mode = "any"
+    min_score_raw = args.get("min_score")
+    min_score = None
+    if min_score_raw not in (None, ""):
+        min_score = parse_int_query_arg(min_score_raw, "min_score", minimum=0)
+    tables_param = args.get("tables")
+    tables = None
+    if tables_param:
+        tables = [t.strip() for t in tables_param.split(",") if t.strip()]
+    return {
+        "q": q,
+        "per_table": per_table,
+        "candidate_limit": candidate_limit,
+        "total_limit": total_limit,
+        "token_mode": token_mode,
+        "min_score": min_score,
+        "tables": tables,
+    }
+
+
+def parse_table_request_args(args):
+    try:
+        limit = parse_int_query_arg(args.get("limit", 50), "limit", default=50, minimum=0)
+        offset = parse_int_query_arg(args.get("offset", 0), "offset", default=0, minimum=0)
+    except ValueError as exc:
+        raise ValueError(str(exc)) from exc
+    order = (args.get("order", "ASC") or "ASC").upper()
+    if order not in ("ASC", "DESC"):
+        order = "ASC"
+    return {
+        "limit": limit,
+        "offset": offset,
+        "col": args.get("col"),
+        "q": args.get("q"),
+        "sort": args.get("sort"),
+        "order": order,
+    }
+
+
 def sanitize_filename(value):
     if value is None:
         return ""
@@ -509,6 +585,111 @@ def read_table_page_for_path(path, table, limit, offset, col, q, sort, order):
     if engine == "sqlite":
         return read_table_page_sqlite(path, table, limit, offset, col, q, sort, order)
     raise ValueError(f"Table view only supported for DuckDB/SQLite. Current DB: {path}")
+
+
+def build_sqlite_search_where(columns, tokens, token_mode):
+    if not tokens or not columns:
+        return "", []
+    token_clauses = []
+    params = []
+    for token in tokens:
+        column_checks = []
+        for column in columns:
+            column_checks.append(f"CAST({quote_identifier(column)} AS TEXT) LIKE ? COLLATE NOCASE")
+            params.append(f"%{token}%")
+        token_clauses.append("(" + " OR ".join(column_checks) + ")")
+    joiner = " OR " if token_mode == "any" else " AND "
+    return "WHERE " + joiner.join(token_clauses), params
+
+
+def fallback_search_sqlite(
+    sqlite_path,
+    q,
+    per_table=10,
+    candidate_limit=1000,
+    total_limit=500,
+    token_mode="any",
+    min_score=None,
+    tables=None,
+    max_tables=250,
+    max_rows_per_table=2000,
+):
+    q_norm = normalize_text(q)
+    tokens = [t for t in q_norm.split() if t]
+    allowed_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+    results = {}
+    candidate_count = 0
+    returned_count = 0
+    conn = None
+    try:
+        conn = sqlite_connect(sqlite_path)
+        table_names = list_tables_sqlite(sqlite_path)
+        if allowed_tables is not None:
+            table_names = [name for name in table_names if name in allowed_tables]
+        table_names = table_names[:max_tables]
+        if not table_names:
+            return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+
+        for table_name in table_names:
+            pragma_rows = conn.execute(f"PRAGMA table_info({quote_identifier(table_name)})").fetchall()
+            cols = [row[1] for row in pragma_rows if len(row) > 1 and row[1]]
+            if not cols:
+                continue
+            where_sql, params = build_sqlite_search_where(cols, tokens, token_mode)
+            sql = f"SELECT * FROM {quote_identifier(table_name)}"
+            if where_sql:
+                sql += f" {where_sql}"
+            sql += f" LIMIT {max_rows_per_table}"
+            rows = conn.execute(sql, params).fetchall()
+            if not rows:
+                continue
+
+            table_results = []
+            for row in rows:
+                row_json = {}
+                row_text_parts = []
+                for index, column in enumerate(cols):
+                    value = row[index] if index < len(row) else None
+                    row_json[column] = value
+                    row_text_parts.append(normalize_text(serialize_value(value)))
+                row_text = " ".join(part for part in row_text_parts if part)
+                score = fuzz.token_set_ratio(q_norm, row_text)
+                if min_score is not None and score < min_score:
+                    continue
+                table_results.append({"score": int(score), "row": row_json})
+                candidate_count += 1
+                if candidate_count >= candidate_limit:
+                    break
+            if table_results:
+                table_results.sort(key=lambda item: item["score"], reverse=True)
+                results[table_name] = table_results[:per_table]
+                returned_count += len(results[table_name])
+                if returned_count >= total_limit or candidate_count >= candidate_limit:
+                    break
+
+        priority_tables = cfg.get("priority_tables", []) or []
+        ordered = {}
+        for table_name in priority_tables:
+            if table_name in results:
+                ordered[table_name] = results.pop(table_name)
+        for table_name in sorted(
+            results.keys(),
+            key=lambda name: max([item["score"] for item in results[name]]) if results[name] else 0,
+            reverse=True,
+        ):
+            ordered[table_name] = results[table_name]
+        return {
+            "q": q,
+            "q_norm": q_norm,
+            "candidate_count": candidate_count,
+            "returned_count": returned_count,
+            "results": ordered,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+    finally:
+        if conn is not None:
+            conn.close()
 
 def list_tables_access(path):
     """Lista tabelas de um banco Access via ODBC (pyodbc)."""
@@ -819,12 +1000,9 @@ def admin_start_index():
     with index_lock:
         if index_thread and index_thread.is_alive():
             return jsonify({"error": "indexação já em execução"}), 409
-        try:
-            ctx = get_current_db_context(require_selected=True, require_exists=True)
-        except ValueError as exc:
-            return jsonify({"error": str(exc)}), 400
-        except FileNotFoundError as exc:
-            return jsonify({"error": str(exc)}), 400
+        ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+        if error_response is not None:
+            return error_response
         if ctx["db_engine"] != "duckdb":
             return jsonify({"error": "indexacao _fulltext disponivel apenas para DuckDB"}), 400
         indexer = create_or_resume_fulltext
@@ -1108,14 +1286,12 @@ def api_compare_db_rows():
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
 def api_tables():
+    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    if error_response is not None:
+        return error_response
     try:
-        ctx = get_current_db_context(require_selected=True, require_exists=True)
         tables = list_tables_for_path(ctx["db_path"])
-        return jsonify({"tables": tables})
-    except FileNotFoundError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        return jsonify({"tables": tables, "db_engine": ctx["db_engine"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1125,37 +1301,26 @@ def api_table():
     table = request.args.get("name")
     if not table:
         return jsonify({"error": "table name required (?name=TABLE_NAME)"}), 400
-    try:
-        ctx = get_current_db_context(require_selected=True, require_exists=True)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except FileNotFoundError as exc:
-        return jsonify({"error": str(exc)}), 400
+    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    if error_response is not None:
+        return error_response
     if ctx["db_engine"] not in {"duckdb", "sqlite"}:
         return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {ctx['db_path']}"}), 400
     try:
-        limit = int(request.args.get("limit", 50))
-        offset = int(request.args.get("offset", 0))
-    except Exception:
-        return jsonify({"error": "limit and offset must be integers"}), 400
-
-    col = request.args.get("col")
-    q = request.args.get("q")
-    sort = request.args.get("sort")
-    order = request.args.get("order", "ASC").upper()
-    if order not in ("ASC", "DESC"):
-        order = "ASC"
+        page_args = parse_table_request_args(request.args)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
     try:
         cols, rows, total = read_table_page_for_path(
             ctx["db_path"],
             table,
-            limit,
-            offset,
-            col,
-            q,
-            sort,
-            order,
+            page_args["limit"],
+            page_args["offset"],
+            page_args["col"],
+            page_args["q"],
+            page_args["sort"],
+            page_args["order"],
         )
 
         data = []
@@ -1171,10 +1336,11 @@ def api_table():
         return jsonify({
             "table": table,
             "total": int(total),
-            "limit": limit,
-            "offset": offset,
+            "limit": page_args["limit"],
+            "offset": page_args["offset"],
             "columns": cols,
             "rows": data,
+            "db_engine": ctx["db_engine"],
         })
     except LookupError as exc:
         return jsonify({"error": str(exc)}), 404
@@ -1489,41 +1655,48 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
 
 @app.route("/api/search", methods=["GET"])
 def api_search():
-    q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify({"error": "query param q required"}), 400
     try:
-        per_table = int(request.args.get("per_table", 10))
-        candidate_limit = int(request.args.get("candidate_limit", 1000))
-        total_limit = int(request.args.get("total_limit", 500))
-    except (TypeError, ValueError):
-        return jsonify({"error": "per_table/candidate_limit/total_limit must be integers"}), 400
-    token_mode = request.args.get("token_mode", "any").lower()
-    if token_mode not in ("any", "all"):
-        token_mode = "any"
-    try:
-        min_score = request.args.get("min_score", None)
-        min_score = int(min_score) if min_score is not None else None
-    except (TypeError, ValueError):
-        min_score = None
-
-    # Filtro opcional de tabelas: ?tables=TAB1,TAB2
-    tables_param = request.args.get("tables")
-    tables = None
-    if tables_param:
-        tables = [t.strip() for t in tables_param.split(",") if t.strip()]
-    try:
-        ctx = get_current_db_context(require_selected=True, require_exists=True)
+        search_args = parse_search_request_args(request.args)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except FileNotFoundError as exc:
-        return jsonify({"error": str(exc)}), 400
+    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    if error_response is not None:
+        return error_response
     if ctx["db_engine"] == "duckdb":
-        return jsonify(api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=tables))
+        return jsonify(
+            api_search_duckdb(
+                search_args["q"],
+                search_args["per_table"],
+                search_args["candidate_limit"],
+                search_args["total_limit"],
+                search_args["token_mode"],
+                search_args["min_score"],
+                tables=search_args["tables"],
+            )
+        )
     if ctx["db_engine"] == "sqlite":
-        return jsonify({"error": "Search on this screen is only supported for DuckDB _fulltext or Access fallback. Current DB engine: sqlite"}), 400
+        return jsonify(
+            fallback_search_sqlite(
+                ctx["db_path"],
+                search_args["q"],
+                per_table=search_args["per_table"],
+                candidate_limit=search_args["candidate_limit"],
+                total_limit=search_args["total_limit"],
+                token_mode=search_args["token_mode"],
+                min_score=search_args["min_score"],
+                tables=search_args["tables"],
+            )
+        )
     if ctx["db_engine"] == "access":
-        fb = fallback_search_access(ctx["db_path"], q, per_table=per_table, candidate_limit=candidate_limit, total_limit=total_limit, token_mode=token_mode, min_score=min_score)
+        fb = fallback_search_access(
+            ctx["db_path"],
+            search_args["q"],
+            per_table=search_args["per_table"],
+            candidate_limit=search_args["candidate_limit"],
+            total_limit=search_args["total_limit"],
+            token_mode=search_args["token_mode"],
+            min_score=search_args["min_score"],
+        )
         if isinstance(fb, dict) and fb.get("error"):
             return jsonify({"error": fb.get("error")}), 500
         return jsonify(fb)

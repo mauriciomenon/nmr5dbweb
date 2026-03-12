@@ -1,0 +1,16 @@
+{
+  "name": "nmr5dbweb",
+  "private": true,
+  "packageManager": "pnpm@10.30.0",
+  "scripts": {
+    "lint:js": "eslint static",
+    "format:check": "prettier --check \"static/**/*.js\" \"*.{js,json}\"",
+    "format:write": "prettier --write \"static/**/*.js\" \"*.{js,json}\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1"
+  }
+}

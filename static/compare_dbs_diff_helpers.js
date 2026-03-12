@@ -31,8 +31,8 @@ function showRowSegment(rowId, which) {
 
 function guessKeyColumnsForTable(tableName, columns) {
   const upperName = (tableName || '').toUpperCase();
-  const cols = (columns || []).map(c => String(c));
-  const upperCols = cols.map(c => c.toUpperCase());
+  const cols = (columns || []).map((c) => String(c));
+  const upperCols = cols.map((c) => c.toUpperCase());
 
   if (upperName === 'RANGER_SOSTAT') {
     const idxRtuno = upperCols.indexOf('RTUNO');
@@ -47,7 +47,7 @@ function guessKeyColumnsForTable(tableName, columns) {
     return [cols[idxId]];
   }
 
-  const candidates = cols.filter(c => /_id$/i.test(c));
+  const candidates = cols.filter((c) => /_id$/i.test(c));
   if (candidates.length === 1) {
     return [candidates[0]];
   }

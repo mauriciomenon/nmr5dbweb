@@ -107,7 +107,7 @@ def test_api_search_rejeita_parametros_invalidos():
     resp = client.get("/api/search?q=test&per_table=abc")
 
     assert resp.status_code == 400
-    assert resp.get_json()["error"] == "per_table/candidate_limit/total_limit must be integers"
+    assert resp.get_json()["error"] == "per_table must be an integer"
 
 
 def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
@@ -217,16 +217,20 @@ def test_api_tables_detecta_duckdb_em_extensao_db(tmp_path, monkeypatch):
     assert resp.get_json()["tables"] == ["duck_table"]
 
 
-def test_api_search_rejeita_sqlite_na_busca_textual(tmp_path, monkeypatch):
+def test_api_search_busca_textual_sqlite(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.sqlite3"
     conn = sqlite3.connect(db_path)
     conn.execute("CREATE TABLE alpha (id INTEGER, name TEXT)")
+    conn.execute("INSERT INTO alpha VALUES (1, 'alpha unit')")
+    conn.execute("INSERT INTO alpha VALUES (2, 'beta unit')")
     conn.commit()
     conn.close()
     monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
 
     resp = client.get("/api/search?q=alpha")
 
-    assert resp.status_code == 400
-    assert "Current DB engine: sqlite" in resp.get_json()["error"]
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["returned_count"] == 1
+    assert payload["results"]["alpha"][0]["row"]["name"] == "alpha unit"

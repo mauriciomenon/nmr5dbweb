@@ -28,9 +28,11 @@ Track real product debt that should not be fixed in the current slice.
    - explicit status messaging in the UI
    - predictable table browsing behavior
    - no accidental DuckDB fallback when the active file is really SQLite
+   - evaluate whether SQLite search should gain its own lighter index path later
 14. Add a richer report layer for database differences, based on real anomaly-reading needs, while preserving the current fast keyed compare path unchanged.
 15. Review whether the browser regression should manage its own Playwright browser bootstrap or stay environment-driven.
 16. Continue reducing the backend global-state concentration in `interface/app_flask_local_search.py` now that startup/runtime DB handling and active-DB resolution are safer.
+17. Review whether the JS lint baseline should be tightened in phases after the current legacy global-script model is reduced.
 
 ## Do Not Pull Into Slice 1
 

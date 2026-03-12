@@ -2,7 +2,9 @@ function setupFilePanelBindings() {
   const openFilesBtn = $('openFilesBtn');
   if (openFilesBtn) {
     openFilesBtn.addEventListener('click', () => {
-      try { forceCloseModals(); } catch (e) {}
+      try {
+        forceCloseModals();
+      } catch (e) {}
       setFilesPanelOpen(!filesPanelOpen);
       if (filesPanelOpen) {
         const panel = $('filesPanel');
@@ -17,7 +19,8 @@ function setupFilePanelBindings() {
     closeFilesBtn.addEventListener('click', () => setFilesPanelOpen(false));
   }
   const refreshFilesBtn = $('refreshFilesBtn');
-  if (refreshFilesBtn) refreshFilesBtn.addEventListener('click', () => refreshUiState());
+  if (refreshFilesBtn)
+    refreshFilesBtn.addEventListener('click', () => refreshUiState());
   const filesSort = $('filesSort');
   if (filesSort) filesSort.addEventListener('change', () => renderFilesMain());
   const dbSort = $('dbSort');
@@ -59,15 +62,24 @@ function setupUploadBindings() {
       if (j && j.ok) {
         if (msg) {
           if (j.status === 'converting') {
-            msg.textContent = 'Conversao iniciada: ' + (nameHint || f.name) + ' (' + sizeText + ')';
+            msg.textContent =
+              'Conversao iniciada: ' +
+              (nameHint || f.name) +
+              ' (' +
+              sizeText +
+              ')';
           } else {
-            msg.textContent = 'Upload ok: ' + (nameHint || f.name) + ' (' + sizeText + ')';
+            msg.textContent =
+              'Upload ok: ' + (nameHint || f.name) + ' (' + sizeText + ')';
           }
         }
         setFlowBanner('', '');
       } else if (j && j.error) {
         if (msg) msg.textContent = 'Erro: ' + j.error;
-        setFlowBanner('Falha no upload. Verifique o arquivo e tente novamente.', 'error');
+        setFlowBanner(
+          'Falha no upload. Verifique o arquivo e tente novamente.',
+          'error'
+        );
       } else {
         if (msg) msg.textContent = 'Falha no upload';
         setFlowBanner('Falha ao enviar arquivo. Tente novamente.', 'error');
@@ -75,7 +87,10 @@ function setupUploadBindings() {
       await refreshUiState();
     } catch (e) {
       if (msg) msg.textContent = 'Erro no upload';
-      setFlowBanner('Erro no upload. Verifique o servidor e tente novamente.', 'error');
+      setFlowBanner(
+        'Erro no upload. Verifique o servidor e tente novamente.',
+        'error'
+      );
       logUi('ERROR', 'upload falhou');
     } finally {
       uploadBtn.disabled = false;
@@ -86,7 +101,7 @@ function setupUploadBindings() {
 
 function setupFlowBindings() {
   const flowTabButtons = document.querySelectorAll('#flowTabs .tab-btn');
-  flowTabButtons.forEach(btn => {
+  flowTabButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       const flow = btn.getAttribute('data-flow') || 'duckdb';
       manualFlowOverride = normalizeFlow(flow);
@@ -109,13 +124,14 @@ function setupIndexBindings() {
       const res = await fetch('/admin/set_auto_index', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ enabled })
+        body: JSON.stringify({ enabled }),
       });
       const j = await res.json();
       const msg = $('autoIndexMsg');
       if (j && j.ok) {
         if (msg) {
-          msg.textContent = 'Auto indexacao: ' + (j.auto_index_after_convert ? 'on' : 'off');
+          msg.textContent =
+            'Auto indexacao: ' + (j.auto_index_after_convert ? 'on' : 'off');
         }
       } else if (msg) {
         msg.textContent = 'Erro ao atualizar auto indexacao';
@@ -149,7 +165,8 @@ function setupIndexBindings() {
     }
     const statusDbFlow = lastStatus ? getFlowFromName(lastStatus.db || '') : '';
     if (lastStatus && statusDbFlow !== 'duckdb') {
-      if (msg) msg.textContent = 'Indice _fulltext disponivel apenas para DuckDB.';
+      if (msg)
+        msg.textContent = 'Indice _fulltext disponivel apenas para DuckDB.';
       return;
     }
     if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
@@ -168,7 +185,7 @@ function setupIndexBindings() {
       const res = await apiJSON('/admin/start_index', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ drop, chunk, batch })
+        body: JSON.stringify({ drop, chunk, batch }),
       });
       if (res && res.ok) {
         if (msg) msg.textContent = 'Indexacao iniciada.';
@@ -194,7 +211,7 @@ function setupSearchBindings() {
   if (searchBtn) searchBtn.addEventListener('click', () => doSearch());
   const qInput = $('q');
   if (qInput) {
-    qInput.addEventListener('keydown', e => {
+    qInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         doSearch();
@@ -204,11 +221,14 @@ function setupSearchBindings() {
   const refreshBtn = $('refreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', () => refreshUiState());
   const refreshTablesBtn = $('refreshTables');
-  if (refreshTablesBtn) refreshTablesBtn.addEventListener('click', () => refreshTables());
+  if (refreshTablesBtn)
+    refreshTablesBtn.addEventListener('click', () => refreshTables());
   const filterTablesInput = $('filterTables');
-  if (filterTablesInput) filterTablesInput.addEventListener('input', () => refreshTables());
+  if (filterTablesInput)
+    filterTablesInput.addEventListener('input', () => refreshTables());
   const exportAllBtn = $('exportAllBtn');
-  if (exportAllBtn) exportAllBtn.addEventListener('click', () => exportResultsCsv());
+  if (exportAllBtn)
+    exportAllBtn.addEventListener('click', () => exportResultsCsv());
   const minScoreInput = $('min_score');
   if (minScoreInput) {
     minScoreInput.addEventListener('input', () => {
@@ -221,7 +241,7 @@ function setupSearchBindings() {
     clearTablesBtn.addEventListener('click', () => {
       const sel = $('tablesFilter');
       if (!sel) return;
-      Array.from(sel.options).forEach(o => (o.selected = false));
+      Array.from(sel.options).forEach((o) => (o.selected = false));
     });
   }
   const resetAdvancedBtn = $('resetAdvanced');
@@ -240,7 +260,7 @@ function setupSearchBindings() {
 }
 
 function setupBootstrapGlobalHandlers() {
-  window.addEventListener('popstate', e => {
+  window.addEventListener('popstate', (e) => {
     if (e.state && e.state.q) {
       applySearchState(e.state);
       doSearch({ skipHistory: true });

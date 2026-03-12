@@ -1,17 +1,19 @@
 // Compare page state and shared helpers.
 
-const compareDbState = window.compareDbState || (window.compareDbState = {
-  tablesMeta: [],
-  lastComparePayload: null,
-  lastCompareMeta: null,
-  uploadTimeouts: { A: null, B: null },
-  tablesTimeout: null,
-  currentOpenStep: 1,
-  tablesLoadedOnce: false,
-  compareStateKey: 'duckdb_compare_dbs_state_v1',
-  tablesOverviewCache: null,
-  tablesOverviewVisible: false,
-});
+const compareDbState =
+  window.compareDbState ||
+  (window.compareDbState = {
+    tablesMeta: [],
+    lastComparePayload: null,
+    lastCompareMeta: null,
+    uploadTimeouts: { A: null, B: null },
+    tablesTimeout: null,
+    currentOpenStep: 1,
+    tablesLoadedOnce: false,
+    compareStateKey: 'duckdb_compare_dbs_state_v1',
+    tablesOverviewCache: null,
+    tablesOverviewVisible: false,
+  });
 
 function setFlowHint(message, variant = 'info') {
   const hintEl = document.getElementById('flowHint');
@@ -52,7 +54,7 @@ function setStepState(stepId, statusText, state) {
 
 function setStepOpen(step) {
   compareDbState.currentOpenStep = step;
-  [1, 2, 3].forEach(n => {
+  [1, 2, 3].forEach((n) => {
     const card = document.getElementById('step' + n + 'Card');
     if (!card) return;
     if (step === n) card.classList.add('step-open');
@@ -130,7 +132,7 @@ async function postJson(path, payload) {
   }
   if (!resp.ok) {
     const apiMsg = data && (data.message || data.error);
-    const err = new Error(apiMsg || ('resposta HTTP ' + resp.status));
+    const err = new Error(apiMsg || 'resposta HTTP ' + resp.status);
     err.payload = data;
     err.status = resp.status;
     throw err;
@@ -174,7 +176,10 @@ function setCompareStatus(text, level = 'info') {
 
 function updateLastCompareMeta(data, fallbackPage = 1) {
   compareDbState.lastCompareMeta = {
-    total_filtered_rows: typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0),
+    total_filtered_rows:
+      typeof data.total_filtered_rows === 'number'
+        ? data.total_filtered_rows
+        : data.row_count || 0,
     page: data.page || fallbackPage,
     total_pages: data.total_pages || 1,
   };
@@ -223,8 +228,12 @@ function updateTablesOverviewVisibility() {
   const container = document.getElementById('tablesOverview');
   const btn = document.getElementById('btnTablesOverview');
   if (!container || !btn) return;
-  container.style.display = compareDbState.tablesOverviewVisible ? 'block' : 'none';
-  btn.textContent = compareDbState.tablesOverviewVisible ? 'Ocultar mapa das tabelas' : 'Mapa geral das tabelas';
+  container.style.display = compareDbState.tablesOverviewVisible
+    ? 'block'
+    : 'none';
+  btn.textContent = compareDbState.tablesOverviewVisible
+    ? 'Ocultar mapa das tabelas'
+    : 'Mapa geral das tabelas';
 }
 
 document.addEventListener('DOMContentLoaded', async () => {

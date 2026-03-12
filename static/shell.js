@@ -27,7 +27,9 @@
     }
     button.dataset.shellBound = '1';
     button.addEventListener('click', function () {
-      var current = normalizeTheme(localStorage.getItem(STORAGE_KEY) || saved || 'system');
+      var current = normalizeTheme(
+        localStorage.getItem(STORAGE_KEY) || saved || 'system'
+      );
       var idx = THEMES.indexOf(current);
       var next = THEMES[(idx + 1) % THEMES.length];
       localStorage.setItem(STORAGE_KEY, next);
@@ -59,7 +61,10 @@
 
   function initShellChrome() {
     initThemeButton(document.getElementById('themeToggle'));
-    initOptionsMenu(document.getElementById('optionsBtn'), document.getElementById('optionsMenu'));
+    initOptionsMenu(
+      document.getElementById('optionsBtn'),
+      document.getElementById('optionsMenu')
+    );
   }
 
   window.applyShellTheme = applyTheme;

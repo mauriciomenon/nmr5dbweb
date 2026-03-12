@@ -4,7 +4,7 @@ function buildCompareSummary(data, rows, changedRows) {
   const onlyInB = s.added_count ?? rows.added.length;
   const onlyInA = s.removed_count ?? rows.removed.length;
   const changed = s.changed_count ?? changedRows.length;
-  const totalKeys = s.keys_total ?? (same + onlyInA + onlyInB + changed);
+  const totalKeys = s.keys_total ?? same + onlyInA + onlyInB + changed;
   const colDiffCounts = {};
 
   for (const row of changedRows) {
@@ -32,20 +32,33 @@ function buildCompareHighlights(data, rows, changedRows) {
   const keyColumns = data.key_columns || [];
   if (rows.added.length) {
     const first = rows.added[0];
-    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((first.key || {})[key])}`).join(', ');
-    highlights.push(`Primeiro registro removido do banco novo: ${keyText || 'sem chave visivel'}`);
+    const keyText = keyColumns
+      .map((key) => `${key}=${JSON.stringify((first.key || {})[key])}`)
+      .join(', ');
+    highlights.push(
+      `Primeiro registro removido do banco novo: ${keyText || 'sem chave visivel'}`
+    );
   }
   if (rows.removed.length) {
     const first = rows.removed[0];
-    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((first.key || {})[key])}`).join(', ');
-    highlights.push(`Primeiro registro novo no banco atual: ${keyText || 'sem chave visivel'}`);
+    const keyText = keyColumns
+      .map((key) => `${key}=${JSON.stringify((first.key || {})[key])}`)
+      .join(', ');
+    highlights.push(
+      `Primeiro registro novo no banco atual: ${keyText || 'sem chave visivel'}`
+    );
   }
   if (changedRows.length) {
     const firstChanged = changedRows[0];
-    const changedCols = (data.compare_columns || []).filter(column =>
-      valuesDifferent((firstChanged.a || {})[column], (firstChanged.b || {})[column])
+    const changedCols = (data.compare_columns || []).filter((column) =>
+      valuesDifferent(
+        (firstChanged.a || {})[column],
+        (firstChanged.b || {})[column]
+      )
     );
-    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((firstChanged.key || {})[key])}`).join(', ');
+    const keyText = keyColumns
+      .map((key) => `${key}=${JSON.stringify((firstChanged.key || {})[key])}`)
+      .join(', ');
     highlights.push(
       `Primeira chave alterada: ${keyText || 'sem chave visivel'}${changedCols.length ? ' · colunas: ' + changedCols.join(', ') : ''}`
     );
@@ -53,13 +66,53 @@ function buildCompareHighlights(data, rows, changedRows) {
   return highlights;
 }
 
+function buildCompareAlerts(data, changedRows) {
+  const alerts = [];
+  const columnExamples = {};
+  const compareColumns = data.compare_columns || [];
+  const keyColumns = data.key_columns || [];
+
+  for (const row of changedRows) {
+    const keyText = keyColumns
+      .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+      .join(', ');
+    for (const column of compareColumns) {
+      if (!valuesDifferent((row.a || {})[column], (row.b || {})[column]))
+        continue;
+      if (!columnExamples[column]) {
+        columnExamples[column] = keyText || 'sem chave visivel';
+      }
+    }
+  }
+
+  Object.entries(columnExamples)
+    .slice(0, 4)
+    .forEach(([column, example]) => {
+      alerts.push(`${column}: primeira chave impactada ${example}`);
+    });
+
+  return alerts;
+}
+
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
-  const highlights = buildCompareHighlights(data, {
-    added: data.rows ? data.rows.filter(row => row.type === 'added') : [],
-    removed: data.rows ? data.rows.filter(row => row.type === 'removed') : [],
-    changed: data.rows ? data.rows.filter(row => row.type === 'changed') : [],
-  }, data.rows ? data.rows.filter(row => row.type === 'changed') : []);
+  const highlights = buildCompareHighlights(
+    data,
+    {
+      added: data.rows ? data.rows.filter((row) => row.type === 'added') : [],
+      removed: data.rows
+        ? data.rows.filter((row) => row.type === 'removed')
+        : [],
+      changed: data.rows
+        ? data.rows.filter((row) => row.type === 'changed')
+        : [],
+    },
+    data.rows ? data.rows.filter((row) => row.type === 'changed') : []
+  );
+  const alerts = buildCompareAlerts(
+    data,
+    data.rows ? data.rows.filter((row) => row.type === 'changed') : []
+  );
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -76,6 +129,7 @@ function renderCompareSummary(data, summaryData) {
         </div>
         ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${summaryData.colDiffList}</div>` : ''}
         ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.join('<br>')}</div>` : ''}
+        ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.join('<br>')}</div>` : ''}
       </div>
     </div>
   `;
@@ -139,16 +193,31 @@ function syncFilterColumnOptions(compareColumns) {
     opt.textContent = column;
     colSelect.appendChild(opt);
   }
-  if (previousValue && Array.from(colSelect.options).some(o => o.value === previousValue)) {
+  if (
+    previousValue &&
+    Array.from(colSelect.options).some((o) => o.value === previousValue)
+  ) {
     colSelect.value = previousValue;
   }
 }
 
 function buildCompareSections(data, rows) {
   return [
-    { type: 'changed', title: 'Alteradas (existem em A e B, mas com diferencas)', rows: rows.changed },
-    { type: 'added', title: 'Novas - so em A (banco NOVO)', rows: rows.removed },
-    { type: 'removed', title: 'Removidas - so em B (banco ANTIGO)', rows: rows.added }
+    {
+      type: 'changed',
+      title: 'Alteradas (existem em A e B, mas com diferencas)',
+      rows: rows.changed,
+    },
+    {
+      type: 'added',
+      title: 'Novas - so em A (banco NOVO)',
+      rows: rows.removed,
+    },
+    {
+      type: 'removed',
+      title: 'Removidas - so em B (banco ANTIGO)',
+      rows: rows.added,
+    },
   ];
 }
 
@@ -161,7 +230,7 @@ function buildRowSummary(data, row, isRangerSostat) {
   const extraParts = [];
   if (isRangerSostat) {
     const primaryFields = ['SUBNAM', 'PNTNAM', 'BITBYT', 'UNIQID', 'ITEMNB'];
-    const pickSide = column => {
+    const pickSide = (column) => {
       const oldValue = (row.b || {})[column];
       const newValue = (row.a || {})[column];
       return typeof oldValue !== 'undefined' ? oldValue : newValue;
@@ -188,7 +257,15 @@ function appendFieldLine(target, column, valueA, valueB, changed) {
   target.appendChild(line);
 }
 
-function appendSectionFields(targetAll, importantDiv, importantCols, sectionType, compareColumns, row, isRangerSostat) {
+function appendSectionFields(
+  targetAll,
+  importantDiv,
+  importantCols,
+  sectionType,
+  compareColumns,
+  row,
+  isRangerSostat
+) {
   for (const column of compareColumns || []) {
     if (sectionType === 'changed') {
       const valueA = row.a[column];
@@ -198,7 +275,12 @@ function appendSectionFields(targetAll, importantDiv, importantCols, sectionType
         if (!changed) continue;
       }
       appendFieldLine(targetAll, column, valueA, valueB, changed);
-      if (importantDiv && importantCols && importantCols.has(column) && changed) {
+      if (
+        importantDiv &&
+        importantCols &&
+        importantCols.has(column) &&
+        changed
+      ) {
         appendFieldLine(importantDiv, column, valueA, valueB, true);
       }
       continue;
@@ -218,7 +300,14 @@ function appendSectionFields(targetAll, importantDiv, importantCols, sectionType
   }
 }
 
-function buildRowBody(data, sectionType, row, rowId, viewModeNow, isRangerSostat) {
+function buildRowBody(
+  data,
+  sectionType,
+  row,
+  rowId,
+  viewModeNow,
+  isRangerSostat
+) {
   const body = document.createElement('div');
   body.className = 'diff-row-body';
   if (viewModeNow === 'grid') {
@@ -269,16 +358,44 @@ function buildRowBody(data, sectionType, row, rowId, viewModeNow, isRangerSostat
 
   const targetAll = allDiv || body;
   const importantCols = isRangerSostat
-    ? new Set(['PSEUDO','STTYPE','STACON','CLASS','PRIORT','ACRONM','NORMST','CTLFLG','HISFLG','HWADR2','HWTYPE','SOEHIS','INHPRO','PNLNAM','DEVNAM'])
+    ? new Set([
+        'PSEUDO',
+        'STTYPE',
+        'STACON',
+        'CLASS',
+        'PRIORT',
+        'ACRONM',
+        'NORMST',
+        'CTLFLG',
+        'HISFLG',
+        'HWADR2',
+        'HWTYPE',
+        'SOEHIS',
+        'INHPRO',
+        'PNLNAM',
+        'DEVNAM',
+      ])
     : null;
 
-  appendSectionFields(targetAll, importantDiv, importantCols, sectionType, data.compare_columns, row, isRangerSostat);
+  appendSectionFields(
+    targetAll,
+    importantDiv,
+    importantCols,
+    sectionType,
+    data.compare_columns,
+    row,
+    isRangerSostat
+  );
 
   if (importantDiv) {
-    if (!importantDiv.childElementCount || importantDiv.childElementCount === 1) {
+    if (
+      !importantDiv.childElementCount ||
+      importantDiv.childElementCount === 1
+    ) {
       const none = document.createElement('div');
       none.style.color = '#9ca3af';
-      none.textContent = 'Nenhuma diferenca relevante nos campos principais selecionados.';
+      none.textContent =
+        'Nenhuma diferenca relevante nos campos principais selecionados.';
       importantDiv.appendChild(none);
     }
     importantDiv.style.display = 'block';
@@ -298,7 +415,13 @@ function buildRowBody(data, sectionType, row, rowId, viewModeNow, isRangerSostat
   return body;
 }
 
-function renderCompareSection(data, section, resultsEl, viewModeNow, rowCounterRef) {
+function renderCompareSection(
+  data,
+  section,
+  resultsEl,
+  viewModeNow,
+  rowCounterRef
+) {
   if (!section.rows.length) return;
 
   const isRangerSostat = (data.table || '').toUpperCase() === 'RANGER_SOSTAT';
@@ -309,9 +432,10 @@ function renderCompareSection(data, section, resultsEl, viewModeNow, rowCounterR
   }
 
   const maxPerSection = 50;
-  const extraInfo = section.rows.length > maxPerSection
-    ? ` · mostrando primeiras ${maxPerSection} chaves`
-    : '';
+  const extraInfo =
+    section.rows.length > maxPerSection
+      ? ` · mostrando primeiras ${maxPerSection} chaves`
+      : '';
   const summary = document.createElement('summary');
   summary.className = 'diff-section-header';
   summary.innerHTML = `<span class="diff-section-title">${section.title} (${section.rows.length})</span>${extraInfo ? `<span class="diff-section-extra">${extraInfo}</span>` : ''}`;
@@ -325,14 +449,26 @@ function renderCompareSection(data, section, resultsEl, viewModeNow, rowCounterR
     const rowId = `row-${++rowCounterRef.value}`;
     const rowSummary = document.createElement('summary');
     const summaryData = buildRowSummary(data, row, isRangerSostat);
-    const visualType = row.type === 'removed' ? 'added' : row.type === 'added' ? 'removed' : 'changed';
-    const typeLabel = row.type === 'removed' ? 'Nova' : row.type === 'added' ? 'Removida' : 'Alterada';
+    const visualType =
+      row.type === 'removed'
+        ? 'added'
+        : row.type === 'added'
+          ? 'removed'
+          : 'changed';
+    const typeLabel =
+      row.type === 'removed'
+        ? 'Nova'
+        : row.type === 'added'
+          ? 'Removida'
+          : 'Alterada';
     rowSummary.innerHTML = `
       <span class="badge ${visualType}" style="margin-right:6px;">${typeLabel}</span>
       <span style="font-size:12px;">${summaryData.keyParts.join(', ')}${isRangerSostat && summaryData.extraParts.length ? ' · ' + summaryData.extraParts.join(' · ') : ''}</span>
     `;
     rowDetails.appendChild(rowSummary);
-    rowDetails.appendChild(buildRowBody(data, section.type, row, rowId, viewModeNow, isRangerSostat));
+    rowDetails.appendChild(
+      buildRowBody(data, section.type, row, rowId, viewModeNow, isRangerSostat)
+    );
     listContainer.appendChild(rowDetails);
   }
 
@@ -358,10 +494,16 @@ function renderResult(data) {
     else groupedRows.changed.push(row);
   }
 
-  const summaryData = buildCompareSummary(data, groupedRows, groupedRows.changed);
+  const summaryData = buildCompareSummary(
+    data,
+    groupedRows,
+    groupedRows.changed
+  );
   renderCompareSummary(data, summaryData);
   const controls = createViewModeControls();
-  const summaryCard = document.querySelector('.result-summary-card .result-summary-grid > div:nth-child(3)');
+  const summaryCard = document.querySelector(
+    '.result-summary-card .result-summary-grid > div:nth-child(3)'
+  );
   if (summaryCard) {
     summaryCard.appendChild(controls);
   }
@@ -371,7 +513,8 @@ function renderResult(data) {
 
   resultsEl.innerHTML = '';
   if (!rows.length) {
-    resultsEl.innerHTML = '<div class="tables-overview-card">Nenhuma diferenca encontrada para o recorte atual. Ajuste filtros apenas se precisar inspecao mais especifica.</div>';
+    resultsEl.innerHTML =
+      '<div class="tables-overview-card">Nenhuma diferenca encontrada para o recorte atual. Ajuste filtros apenas se precisar inspecao mais especifica.</div>';
     return;
   }
 
@@ -387,7 +530,10 @@ function renderPaginationControls(data) {
   const pagEl = document.getElementById('pagination');
   if (!pagEl) return;
 
-  const totalRows = typeof data.total_filtered_rows === 'number' ? data.total_filtered_rows : (data.row_count || 0);
+  const totalRows =
+    typeof data.total_filtered_rows === 'number'
+      ? data.total_filtered_rows
+      : data.row_count || 0;
   const page = data.page || 1;
   const totalPages = data.total_pages || 1;
 
@@ -395,7 +541,9 @@ function renderPaginationControls(data) {
   if (!totalRows) return;
 
   const info = document.createElement('span');
-  info.textContent = `Total de ${totalRows} registros com diferenca` + (totalPages > 1 ? ` · pagina ${page} de ${totalPages}` : '');
+  info.textContent =
+    `Total de ${totalRows} registros com diferenca` +
+    (totalPages > 1 ? ` · pagina ${page} de ${totalPages}` : '');
   pagEl.appendChild(info);
 
   if (totalPages > 1) {

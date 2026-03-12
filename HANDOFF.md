@@ -101,7 +101,7 @@ The first stabilization slice is intentionally narrow:
 - The main Flask UI/backend path now treats `SQLite` explicitly:
   - `/api/tables` can list SQLite tables directly
   - `/api/table` can read/filter/sort SQLite tables directly
-  - `/api/search` now rejects SQLite with a clear message instead of failing implicitly in DuckDB code
+  - `/api/search` now also serves SQLite search explicitly instead of blocking it in the main UI
 - `.db` files now follow a predictable rule:
   - if the file header matches SQLite, the backend treats it as SQLite
   - otherwise the backend keeps the file on the DuckDB path
@@ -113,13 +113,20 @@ The first stabilization slice is intentionally narrow:
   - backend capabilities for Access fallback, Access conversion, and DuckDB `_fulltext`
 - Active DB resolution and engine eligibility in the Flask backend are now funneled through shared internal helpers instead of being repeated independently by each route.
 - API paths that depend on the active DB now fail more consistently when the selected file no longer exists on disk.
+- The repo now has a real JS validation baseline with `pnpm`, `eslint`, and `prettier`.
+- `node_modules/` is now ignored in the product repo as part of that tooling baseline.
 - `_fulltext` indexing is now rejected server-side for non-DuckDB engines instead of depending only on UI-side blocking.
 - Browser success smoke now also exists in repo coverage for:
   - DuckDB `_fulltext` search success
   - DuckDB compare success
   - SQLite tracking success
 - Browser regression coverage now also includes invalid inline feedback on the four main pages and the current no-active-DB admin indexing message.
+- Browser regression coverage now also includes:
+  - SQLite search success on the main page
+  - compare pagination visibility
+  - compare CSV export
 - `static/compare_dbs_render.js` now derives extra operator hints from current compare results, without changing the fast compare engine or its API contract.
+- `static/compare_dbs_render.js` now also highlights sensitive changed columns with example impacted keys for faster review.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored

@@ -22,7 +22,13 @@ function setSearchMeta(text, level) {
 }
 
 function onSelectRowClick(ev, nameEnc) {
-  if (ev && ev.target && ev.target.closest && ev.target.closest('.file-actions')) return;
+  if (
+    ev &&
+    ev.target &&
+    ev.target.closest &&
+    ev.target.closest('.file-actions')
+  )
+    return;
   selectUpload(nameEnc, null);
 }
 
@@ -30,13 +36,17 @@ async function deleteUpload(nameEnc, btn) {
   if (!confirm('Deseja realmente excluir este arquivo?')) return;
   const name = decodeURIComponent(nameEnc);
   const msg = $('uploadMsg');
-  const restoreBtn = setBusyButton(btn, 'Excluindo...', btn ? btn.textContent : 'Excluir');
+  const restoreBtn = setBusyButton(
+    btn,
+    'Excluindo...',
+    btn ? btn.textContent : 'Excluir'
+  );
   if (msg) msg.textContent = 'Excluindo: ' + name;
   try {
     const j = await apiJSON('/admin/delete', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
+      body: JSON.stringify({ filename: name }),
     });
     if (j && j.ok) {
       if (msg) msg.textContent = 'Arquivo excluido: ' + name;
@@ -45,7 +55,10 @@ async function deleteUpload(nameEnc, btn) {
     } else {
       const err = (j && j.error) || 'falha ao excluir';
       if (msg) msg.textContent = 'Erro ao excluir: ' + err;
-      setFlowBanner('Nao foi possivel excluir. Verifique se o arquivo esta em uso.', 'warn');
+      setFlowBanner(
+        'Nao foi possivel excluir. Verifique se o arquivo esta em uso.',
+        'warn'
+      );
     }
   } catch (e) {
     if (msg) msg.textContent = 'Erro ao excluir';
@@ -59,13 +72,17 @@ async function deleteUpload(nameEnc, btn) {
 async function selectUpload(nameEnc, btn) {
   const name = decodeURIComponent(nameEnc);
   const msg = $('uploadMsg');
-  const restoreBtn = setBusyButton(btn, 'Selecionando...', btn ? btn.textContent : 'Selecionar');
+  const restoreBtn = setBusyButton(
+    btn,
+    'Selecionando...',
+    btn ? btn.textContent : 'Selecionar'
+  );
   if (msg) msg.textContent = 'Selecionando: ' + name;
   try {
     const j = await apiJSON('/admin/select', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
+      body: JSON.stringify({ filename: name }),
     });
     if (j && j.ok) {
       if (msg) msg.textContent = 'DB selecionado: ' + name;
@@ -76,7 +93,10 @@ async function selectUpload(nameEnc, btn) {
     } else {
       const err = (j && j.error) || 'falha ao selecionar';
       if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-      setFlowBanner('Nao foi possivel selecionar o arquivo. Tente novamente.', 'error');
+      setFlowBanner(
+        'Nao foi possivel selecionar o arquivo. Tente novamente.',
+        'error'
+      );
       logUi('ERROR', 'select db falhou');
     }
   } catch (e) {
@@ -96,7 +116,7 @@ async function selectDbFromTab(nameEnc) {
     const j = await apiJSON('/admin/select', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
+      body: JSON.stringify({ filename: name }),
     });
     if (j && j.ok) {
       if (msg) msg.textContent = 'DB selecionado: ' + name;
@@ -106,7 +126,10 @@ async function selectDbFromTab(nameEnc) {
     } else {
       const err = (j && j.error) || 'falha ao selecionar';
       if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-      setFlowBanner('Nao foi possivel selecionar o arquivo. Tente novamente.', 'error');
+      setFlowBanner(
+        'Nao foi possivel selecionar o arquivo. Tente novamente.',
+        'error'
+      );
       logUi('ERROR', 'select db falhou');
     }
   } catch (e) {
@@ -138,17 +161,18 @@ async function doSearch(opts) {
   try {
     if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
       setSearchMeta('Busca bloqueada: conversao em andamento.', 'warn');
-      setFlowBanner('Aguarde a conversao do banco terminar antes de pesquisar.', 'warn');
+      setFlowBanner(
+        'Aguarde a conversao do banco terminar antes de pesquisar.',
+        'warn'
+      );
       return;
     }
     if (lastStatus && lastStatus.indexing) {
       setSearchMeta('Busca bloqueada: indexacao em andamento.', 'warn');
-      setFlowBanner('Aguarde a indexacao (_fulltext) terminar antes de pesquisar.', 'warn');
-      return;
-    }
-    if (lastStatus && lastStatus.db_engine === 'sqlite') {
-      setSearchMeta('Busca bloqueada: SQLite nao usa _fulltext nesta tela.', 'warn');
-      setFlowBanner('Use DuckDB para a busca textual. SQLite continua disponivel para tabela, comparacao e rastreio.', 'warn');
+      setFlowBanner(
+        'Aguarde a indexacao (_fulltext) terminar antes de pesquisar.',
+        'warn'
+      );
       return;
     }
     if (
@@ -158,7 +182,10 @@ async function doSearch(opts) {
       !lastStatus.fulltext_count
     ) {
       setSearchMeta('Busca bloqueada: indice _fulltext ausente.', 'warn');
-      setFlowBanner('Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.', 'warn');
+      setFlowBanner(
+        'Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.',
+        'warn'
+      );
       return;
     }
   } catch (e) {
@@ -177,7 +204,7 @@ async function doSearch(opts) {
   let selectedTables = [];
   if (tablesSel) {
     selectedTables = Array.from(tablesSel.selectedOptions)
-      .map(o => o.value)
+      .map((o) => o.value)
       .filter(Boolean);
     if (selectedTables.length) {
       tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
@@ -194,8 +221,12 @@ async function doSearch(opts) {
     const data = await res.json();
     if (data.error) {
       setSearchMeta('Erro: ' + data.error, 'error');
-      $('resultsArea').innerHTML = '<div class="card small">Nao foi possivel concluir a busca.</div>';
-      setFlowBanner('A busca retornou erro. Revise o termo ou o estado do DB.', 'error');
+      $('resultsArea').innerHTML =
+        '<div class="card small">Nao foi possivel concluir a busca.</div>';
+      setFlowBanner(
+        'A busca retornou erro. Revise o termo ou o estado do DB.',
+        'error'
+      );
       logUi('ERROR', 'search ' + data.error);
       return;
     }
@@ -209,18 +240,34 @@ async function doSearch(opts) {
       }
     }
     if (!data.returned_count) {
-      setSearchMeta(`Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}.`, 'warn');
-      setFlowBanner('Nenhum resultado encontrado. Ajuste o termo, a pontuacao minima ou as tabelas selecionadas.', 'warn');
+      setSearchMeta(
+        `Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}.`,
+        'warn'
+      );
+      setFlowBanner(
+        'Nenhum resultado encontrado. Ajuste o termo, a pontuacao minima ou as tabelas selecionadas.',
+        'warn'
+      );
     } else {
-      setSearchMeta(`Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`, '');
-      setFlowBanner(`Busca concluida. ${data.returned_count} resultado(s) retornado(s).`, 'info');
+      setSearchMeta(
+        `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`,
+        ''
+      );
+      setFlowBanner(
+        `Busca concluida. ${data.returned_count} resultado(s) retornado(s).`,
+        'info'
+      );
     }
     if (exportBtn) exportBtn.disabled = !(data && data.returned_count);
     renderResults(q, data.results || {}, per_table);
   } catch (e) {
     setSearchMeta('Erro na busca.', 'error');
-    $('resultsArea').innerHTML = '<div class="card small">Erro de rede ou servidor ao executar a busca.</div>';
-    setFlowBanner('Erro na busca. Verifique o servidor e tente novamente.', 'error');
+    $('resultsArea').innerHTML =
+      '<div class="card small">Erro de rede ou servidor ao executar a busca.</div>';
+    setFlowBanner(
+      'Erro na busca. Verifique o servidor e tente novamente.',
+      'error'
+    );
     logUi('ERROR', 'search falhou');
   } finally {
     btn.disabled = false;

@@ -16,29 +16,41 @@ async function loadPriorityModal() {
     allEl.innerHTML = '<li class="muted">Nenhum DB selecionado</li>';
     selEl.innerHTML = '';
     setPriorityStatus('Nenhum DB selecionado', 'warn');
-    setModalBanner('priorityModalBanner', 'Selecione um DB antes de editar a ordem das tabelas.', 'warn');
+    setModalBanner(
+      'priorityModalBanner',
+      'Selecione um DB antes de editar a ordem das tabelas.',
+      'warn'
+    );
     return;
   }
   allEl.innerHTML = '';
   selEl.innerHTML = '';
   setPriorityStatus('Carregando...', '');
-  setModalBanner('priorityModalBanner', 'Carregando tabelas do DB ativo...', 'info');
+  setModalBanner(
+    'priorityModalBanner',
+    'Carregando tabelas do DB ativo...',
+    'info'
+  );
   try {
     const t = await apiJSON('/api/tables');
     if (t.error) {
       allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
       selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
       setPriorityStatus('Erro ao listar tabelas.', 'error');
-      setModalBanner('priorityModalBanner', 'Nao foi possivel listar as tabelas do DB ativo.', 'error');
+      setModalBanner(
+        'priorityModalBanner',
+        'Nao foi possivel listar as tabelas do DB ativo.',
+        'error'
+      );
       logUi('ERROR', 'priority tabelas ' + t.error);
       return;
     }
     const tables = t.tables || [];
-    const visible = tables.filter(n => !/^MSys/i.test(n));
+    const visible = tables.filter((n) => !/^MSys/i.test(n));
     const st = await apiJSON('/admin/list_uploads');
     const saved = st.priority_tables || [];
-    const remaining = visible.filter(x => !saved.includes(x));
-    remaining.forEach(name => {
+    const remaining = visible.filter((x) => !saved.includes(x));
+    remaining.forEach((name) => {
       const li = document.createElement('li');
       li.dataset.table = name;
       li.innerHTML = `<label style="display:flex;align-items:center;gap:8px;width:100%"><input type="checkbox" data-name="${encodeURIComponent(
@@ -48,7 +60,7 @@ async function loadPriorityModal() {
       )}</span></label>`;
       allEl.appendChild(li);
     });
-    saved.forEach(name => {
+    saved.forEach((name) => {
       const li = document.createElement('li');
       li.draggable = true;
       li.dataset.table = name;
@@ -58,13 +70,24 @@ async function loadPriorityModal() {
       selEl.appendChild(li);
     });
     enableDragAndDrop(selEl);
-    setPriorityStatus(`Tabelas carregadas: ${visible.length}. Prioritarias: ${saved.length}.`, '');
-    setModalBanner('priorityModalBanner', 'Ajuste a ordem e salve quando terminar.', 'info');
+    setPriorityStatus(
+      `Tabelas carregadas: ${visible.length}. Prioritarias: ${saved.length}.`,
+      ''
+    );
+    setModalBanner(
+      'priorityModalBanner',
+      'Ajuste a ordem e salve quando terminar.',
+      'info'
+    );
   } catch (e) {
     allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
     selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
     setPriorityStatus('Erro ao listar tabelas.', 'error');
-    setModalBanner('priorityModalBanner', 'Falha ao carregar as tabelas prioritarias.', 'error');
+    setModalBanner(
+      'priorityModalBanner',
+      'Falha ao carregar as tabelas prioritarias.',
+      'error'
+    );
     logUi('ERROR', 'priority modal falhou');
   }
 }
@@ -84,15 +107,17 @@ function onTableCheckboxChange(chk) {
     enableDragAndDrop(selEl);
   } else {
     const selEl = $('priorityListModal');
-    const it = Array.from(selEl.children).find(li => li.dataset.table === name);
+    const it = Array.from(selEl.children).find(
+      (li) => li.dataset.table === name
+    );
     if (it) selEl.removeChild(it);
   }
 }
 
 function enableDragAndDrop(listEl) {
   let dragSrc = null;
-  Array.from(listEl.children).forEach(li => {
-    li.addEventListener('dragstart', e => {
+  Array.from(listEl.children).forEach((li) => {
+    li.addEventListener('dragstart', (e) => {
       dragSrc = li;
       li.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
@@ -100,7 +125,7 @@ function enableDragAndDrop(listEl) {
     li.addEventListener('dragend', () => {
       li.classList.remove('dragging');
     });
-    li.addEventListener('dragover', e => {
+    li.addEventListener('dragover', (e) => {
       e.preventDefault();
       const target = e.currentTarget;
       if (target === dragSrc) return;
@@ -109,7 +134,7 @@ function enableDragAndDrop(listEl) {
       if (next) target.parentNode.insertBefore(dragSrc, target.nextSibling);
       else target.parentNode.insertBefore(dragSrc, target);
     });
-    li.addEventListener('drop', e => {
+    li.addEventListener('drop', (e) => {
       e.preventDefault();
     });
   });
@@ -133,20 +158,26 @@ function prioRemove(btn) {
   li.parentNode.removeChild(li);
   const leftChk = Array.from(
     document.querySelectorAll('#allTablesList input[type=checkbox]')
-  ).find(c => c.getAttribute('data-name') === encodeURIComponent(name));
+  ).find((c) => c.getAttribute('data-name') === encodeURIComponent(name));
   if (leftChk) leftChk.checked = false;
 }
 
 async function savePriority() {
   const listEl = $('priorityListModal');
-  const tables = Array.from(listEl.querySelectorAll('li')).map(li => li.dataset.table);
+  const tables = Array.from(listEl.querySelectorAll('li')).map(
+    (li) => li.dataset.table
+  );
   setPriorityStatus('Salvando prioridades...', '');
-  setModalBanner('priorityModalBanner', 'Salvando a nova ordem das tabelas...', 'info');
+  setModalBanner(
+    'priorityModalBanner',
+    'Salvando a nova ordem das tabelas...',
+    'info'
+  );
   try {
     const res = await fetch('/admin/set_priority', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tables })
+      body: JSON.stringify({ tables }),
     });
     const j = await res.json();
     if (j && j.ok) {
@@ -154,12 +185,20 @@ async function savePriority() {
       setModalBanner('priorityModalBanner', 'Ordem salva com sucesso.', 'info');
     } else {
       setPriorityStatus('Erro ao salvar prioridades.', 'error');
-      setModalBanner('priorityModalBanner', 'Nao foi possivel salvar a ordem das tabelas.', 'error');
+      setModalBanner(
+        'priorityModalBanner',
+        'Nao foi possivel salvar a ordem das tabelas.',
+        'error'
+      );
     }
     await refreshUiState();
   } catch (e) {
     setPriorityStatus('Erro ao salvar prioridades.', 'error');
-    setModalBanner('priorityModalBanner', 'Falha de rede ao salvar prioridades.', 'error');
+    setModalBanner(
+      'priorityModalBanner',
+      'Falha de rede ao salvar prioridades.',
+      'error'
+    );
   }
 }
 
