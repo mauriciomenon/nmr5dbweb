@@ -1163,3 +1163,54 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `55 passed`
+
+## Current Slice
+
+### Scope Completed
+
+1. Reduced `search/table browsing` concentration in `interface/app_flask_local_search.py`.
+2. Hardened the `record tracking flow` request parsing in `interface/app_flask_local_search.py`.
+3. Tightened the boundary between persisted config and runtime DB state.
+4. Performed a conservative file-organization review with real Access samples from `output/`.
+
+### What Changed
+
+- Added shared config/runtime helpers for:
+  - config defaults
+  - config sanitization at startup
+  - persisted DB path introspection
+- Added shared flow helpers for:
+  - browseable DB context resolution
+  - searchable DB context resolution
+  - record-tracking request parsing
+- Rewired these routes to shared helpers:
+  - `/api/tables`
+  - `/api/table`
+  - `/api/search`
+  - `/api/find_record_across_dbs`
+- `admin/status` now exposes `persisted_db` separately from the active runtime `db`.
+- Added focused API coverage for:
+  - Access DB rejection on browse endpoints
+  - invalid `max_files` on record tracking
+  - persisted-vs-runtime DB status visibility
+
+### Real Data Proof
+
+- Used the real file [2025-11-05 DB4.accdb](/Users/menon/git/nmr5dbweb/output/2025-11-05%20DB4.accdb) for a local proof of use.
+- Confirmed:
+  - `detect_db_engine(...)` returns `access`
+  - `/api/tables` rejects it cleanly for browse with `Engine nao suportada para esta operacao: access`
+- This proves the product is not silently misrouting real operator Access files through the DuckDB/SQLite browse path.
+
+### File Organization Review
+
+- Reviewed tracked garbage candidates such as `.DS_Store`, `__pycache__/`, and `.pyc`.
+- No tracked leftovers of that class were found in the repo index during this slice.
+- No cleanup move was needed in this pass.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g '*.py')`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `57 passed`

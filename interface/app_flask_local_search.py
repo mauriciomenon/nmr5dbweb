@@ -124,6 +124,35 @@ RECORD_DIRS = {
     },
 }
 
+
+def ensure_config_defaults(config):
+    if "db_path" not in config:
+        config["db_path"] = ""
+    if "priority_tables" not in config:
+        config["priority_tables"] = []
+    if "auto_index_after_convert" not in config:
+        config["auto_index_after_convert"] = True
+    return config
+
+
+def sanitize_loaded_config(config):
+    config = ensure_config_defaults(dict(config))
+    if not isinstance(config.get("priority_tables"), list):
+        config["priority_tables"] = []
+    else:
+        config["priority_tables"] = [item for item in config["priority_tables"] if item and item != "None"]
+
+    db_path = config.get("db_path") or ""
+    try:
+        if db_path and not Path(db_path).exists():
+            startup_warnings.append(f"db_path configurado nao existe mais: {db_path}")
+            config["db_path"] = ""
+    except Exception:
+        startup_warnings.append("db_path configurado e invalido e foi descartado")
+        config["db_path"] = ""
+    return config
+
+
 def load_config():
     if CONFIG_FILE.exists():
         try:
@@ -132,36 +161,12 @@ def load_config():
             cfg = {}
     else:
         cfg = {}
-
-    # valores padrão seguros para novo ambiente
-    if "db_path" not in cfg:
-        cfg["db_path"] = ""
-    if "priority_tables" not in cfg:
-        cfg["priority_tables"] = []
-    if "auto_index_after_convert" not in cfg:
-        cfg["auto_index_after_convert"] = True
-    return cfg
+    return ensure_config_defaults(cfg)
 
 def save_config(cfg):
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
-cfg = load_config()
-# sanitize priority_tables
-if not isinstance(cfg.get("priority_tables"), list):
-    cfg["priority_tables"] = []
-else:
-    cfg["priority_tables"] = [t for t in cfg["priority_tables"] if t and t != "None"]
-
-# se o caminho do DB configurado não existir (por exemplo, em outro computador),
-# limpamos para evitar erros ao abrir a interface em um ambiente novo
-db_cfg = cfg.get("db_path") or ""
-try:
-    if db_cfg and not Path(db_cfg).exists():
-        startup_warnings.append(f"db_path configurado nao existe mais: {db_cfg}")
-        cfg["db_path"] = ""
-except Exception:
-    startup_warnings.append("db_path configurado e invalido e foi descartado")
-    cfg["db_path"] = ""
+cfg = sanitize_loaded_config(load_config())
 runtime_state = {"db_path": str(cfg.get("db_path") or "")}
 
 def get_db_path():
@@ -191,6 +196,10 @@ def get_runtime_capabilities():
     }
 
 
+def get_persisted_db_path():
+    return str(cfg.get("db_path") or "")
+
+
 def get_current_db_context(*, require_selected=False, require_exists=False, allowed_engines=None):
     db_path = get_db_path()
     if not db_path:
@@ -214,6 +223,7 @@ def build_admin_status():
     status = {
         "indexing": False,
         "db": ctx["db_path"],
+        "persisted_db": get_persisted_db_path(),
         "db_exists": ctx["db_exists"],
         "db_engine": ctx["db_engine"],
         "fulltext_count": 0,
@@ -349,6 +359,22 @@ def get_current_db_context_response(*, require_selected=False, require_exists=Fa
         return None, (jsonify({"error": str(exc)}), 400)
 
 
+def get_browse_db_context_response():
+    return get_current_db_context_response(
+        require_selected=True,
+        require_exists=True,
+        allowed_engines={"duckdb", "sqlite"},
+    )
+
+
+def get_search_db_context_response():
+    return get_current_db_context_response(
+        require_selected=True,
+        require_exists=True,
+        allowed_engines={"duckdb", "sqlite", "access"},
+    )
+
+
 def parse_int_query_arg(raw_value, field_name, *, default=None, minimum=None):
     if raw_value is None or raw_value == "":
         return default
@@ -411,6 +437,36 @@ def parse_table_request_args(args):
         "q": args.get("q"),
         "sort": args.get("sort"),
         "order": order,
+    }
+
+
+def parse_track_request_args(data):
+    filters_str = (data.get("filters") or "").strip()
+    if not filters_str:
+        raise ValueError("filters obrigatorio")
+
+    custom_path = (data.get("custom_path") or "").strip()
+    if not custom_path:
+        raise ValueError("custom_path obrigatorio")
+
+    table = (data.get("table") or "").strip() or None
+    max_files = data.get("max_files", 500)
+    try:
+        max_files = int(max_files)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("max_files deve ser inteiro") from exc
+    if max_files <= 0:
+        raise ValueError("max_files deve ser > 0")
+
+    base_dir = Path(custom_path).expanduser().resolve()
+    if not base_dir.exists() or not base_dir.is_dir():
+        raise ValueError(f"diretorio invalido: {base_dir}")
+
+    return {
+        "base_dir": base_dir,
+        "filters": filters_str,
+        "table": table,
+        "max_files": max_files,
     }
 
 
@@ -1106,22 +1162,17 @@ def api_find_record_across_dbs():
       - table (opcional): restringe a busca a uma tabela específica
     """
     data = request.get_json() or {}
-    custom_path = (data.get("custom_path") or "").strip() or None
-    filters_str = (data.get("filters") or "").strip()
-    table = (data.get("table") or "").strip() or None
-    max_files = int(data.get("max_files", 500))
+    try:
+        track_args = parse_track_request_args(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
-    if not filters_str:
-        return jsonify({"error": "filters obrigatorio"}), 400
-
-    if not custom_path:
-        return jsonify({"error": "custom_path obrigatorio"}), 400
-
-    base_dir = Path(custom_path).expanduser().resolve()
-    if not base_dir.exists() or not base_dir.is_dir():
-        return jsonify({"error": f"diretorio invalido: {base_dir}"}), 400
-
-    res = find_record_across_dbs(base_dir, filters_str, table=table, max_files=max_files)
+    res = find_record_across_dbs(
+        track_args["base_dir"],
+        track_args["filters"],
+        table=track_args["table"],
+        max_files=track_args["max_files"],
+    )
     if isinstance(res, dict) and res.get("error"):
         return jsonify(res), 400
     return jsonify(res)
@@ -1330,7 +1381,7 @@ def api_compare_db_rows():
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
 def api_tables():
-    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    ctx, error_response = get_browse_db_context_response()
     if error_response is not None:
         return error_response
     try:
@@ -1345,11 +1396,9 @@ def api_table():
     table = request.args.get("name")
     if not table:
         return jsonify({"error": "table name required (?name=TABLE_NAME)"}), 400
-    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    ctx, error_response = get_browse_db_context_response()
     if error_response is not None:
         return error_response
-    if ctx["db_engine"] not in {"duckdb", "sqlite"}:
-        return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {ctx['db_path']}"}), 400
     try:
         page_args = parse_table_request_args(request.args)
     except ValueError as exc:
@@ -1703,7 +1752,7 @@ def api_search():
         search_args = parse_search_request_args(request.args)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    ctx, error_response = get_current_db_context_response(require_selected=True, require_exists=True)
+    ctx, error_response = get_search_db_context_response()
     if error_response is not None:
         return error_response
     if ctx["db_engine"] == "duckdb":

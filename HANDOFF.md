@@ -142,6 +142,15 @@ The first stabilization slice is intentionally narrow:
   - compare input validation (`/api/compare_db_tables`, `/api/compare_db_table_content`, `/api/compare_db_rows`)
 - Shared compare-path validation now owns the repeated `db1_path`/`db2_path` existence checks, which reduces drift risk across the compare routes.
 - Record-directory listing and browse enumeration are now isolated enough to be moved later without route rewrites.
+- Search/table browsing now also uses shared context helpers:
+  - browse endpoints only admit `duckdb` and `sqlite`
+  - search endpoints admit `duckdb`, `sqlite`, and `access`
+- Record tracking request parsing is now centralized, including validation of `filters`, `custom_path`, and `max_files`.
+- Startup/config/runtime boundaries are now clearer:
+  - loaded config is sanitized once
+  - runtime active DB remains independent
+  - admin status now exposes `persisted_db` separately from current runtime `db`
+- Real operator Access samples in `output/` were used to confirm safe Access detection and correct rejection of unsupported browse operations.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -166,4 +175,5 @@ The first stabilization slice is intentionally narrow:
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - continue reducing the remaining operator islands in `interface/app_flask_local_search.py` after upload, settings, browsing, and compare validation
+  - continue reducing backend concentration in table/search implementation and record-tracking execution, not just request parsing
   - expand compare API payload-type validation if external callers send non-string fields today

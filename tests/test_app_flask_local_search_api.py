@@ -151,11 +151,13 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     client = app.test_client()
     monkeypatch.setattr(local_search, "startup_warnings", ["db_path configurado nao existe mais: /tmp/lost.duckdb"])
     monkeypatch.setitem(local_search.runtime_state, "db_path", "")
+    monkeypatch.setitem(local_search.cfg, "db_path", "/tmp/persisted.duckdb")
 
     resp = client.get("/admin/status")
 
     assert resp.status_code == 200
     payload = resp.get_json()
+    assert payload["persisted_db"] == "/tmp/persisted.duckdb"
     assert payload["startup_warnings"] == ["db_path configurado nao existe mais: /tmp/lost.duckdb"]
     assert payload["capabilities"]["duckdb_fulltext"] in {True, False}
     assert payload["capabilities"]["access_conversion"] in {True, False}
@@ -255,6 +257,18 @@ def test_api_tables_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
     assert resp.get_json()["error"] == f"DB ativo nao encontrado: {missing}"
 
 
+def test_api_tables_rejeita_access_para_browse(tmp_path, monkeypatch):
+    client = app.test_client()
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(access_path))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "Engine nao suportada para esta operacao: access"
+
+
 def test_api_search_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
     client = app.test_client()
     missing = tmp_path / "missing.duckdb"
@@ -264,6 +278,18 @@ def test_api_search_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
 
     assert resp.status_code == 400
     assert resp.get_json()["error"] == f"DB ativo nao encontrado: {missing}"
+
+
+def test_api_find_record_across_dbs_rejeita_max_files_invalido(tmp_path):
+    client = app.test_client()
+
+    resp = client.post(
+        "/api/find_record_across_dbs",
+        json={"custom_path": str(tmp_path), "filters": "RTUNO=1", "max_files": "bad"},
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "max_files deve ser inteiro"
 
 
 def test_api_tables_lista_tabelas_sqlite(tmp_path, monkeypatch):

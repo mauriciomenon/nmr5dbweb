@@ -40,6 +40,7 @@ Track real product debt that should not be fixed in the current slice.
    - search/table browsing
    - record tracking flow
    - startup/config persistence boundaries
+20. Decide whether real operator sample files under `output/` should remain as local validation fixtures only or move to a more explicit non-product sample-data convention.
 
 ## Do Not Pull Into Slice 1
 
