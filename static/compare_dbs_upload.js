@@ -1,0 +1,194 @@
+async function restoreFromSavedState() {
+  resetFlowToInitial();
+  let saved = null;
+  try {
+    const raw = localStorage.getItem(compareDbState.compareStateKey);
+    if (!raw) return;
+    saved = JSON.parse(raw);
+  } catch (e) {
+    console.warn('Estado salvo invalido, ignorando.', e);
+    return;
+  }
+
+  const db1Input = document.getElementById('db1Path');
+  const db2Input = document.getElementById('db2Path');
+  const tableSelect = document.getElementById('tableSelect');
+  const keyCols = document.getElementById('keyColumns');
+  const cmpCols = document.getElementById('compareColumns');
+  const keyFilterEl = document.getElementById('keyFilter');
+  const cbChanged = document.getElementById('filterChanged');
+  const cbAdded = document.getElementById('filterAdded');
+  const cbRemoved = document.getElementById('filterRemoved');
+  const colSelect = document.getElementById('filterColumn');
+  const rowLimitEl = document.getElementById('rowLimit');
+  const rowLimitEnabledEl = document.getElementById('rowLimitEnabled');
+
+  if (db1Input && typeof saved.db1Path === 'string') db1Input.value = saved.db1Path;
+  if (db2Input && typeof saved.db2Path === 'string') db2Input.value = saved.db2Path;
+  if (keyCols && typeof saved.keyColumns === 'string') keyCols.value = saved.keyColumns;
+  if (cmpCols && typeof saved.compareColumns === 'string') cmpCols.value = saved.compareColumns;
+  if (keyFilterEl && typeof saved.keyFilter === 'string') keyFilterEl.value = saved.keyFilter;
+  if (cbChanged && typeof saved.filterChanged === 'boolean') cbChanged.checked = saved.filterChanged;
+  if (cbAdded && typeof saved.filterAdded === 'boolean') cbAdded.checked = saved.filterAdded;
+  if (cbRemoved && typeof saved.filterRemoved === 'boolean') cbRemoved.checked = saved.filterRemoved;
+  if (colSelect && typeof saved.filterColumn === 'string') colSelect.value = saved.filterColumn;
+  if (rowLimitEl && typeof saved.rowLimit === 'string') rowLimitEl.value = saved.rowLimit;
+  if (rowLimitEnabledEl && typeof saved.rowLimitEnabled === 'boolean') rowLimitEnabledEl.checked = saved.rowLimitEnabled;
+
+  compareDbState.tablesLoadedOnce = !!saved.tablesLoadedOnce;
+  compareDbState.currentOpenStep = saved.currentOpenStep || 1;
+  compareDbState.lastComparePayload = saved.lastComparePayload || null;
+  compareDbState.lastCompareMeta = saved.lastCompareMeta || null;
+
+  updateRowLimitState();
+  if (compareDbState.currentOpenStep) {
+    setStepOpen(compareDbState.currentOpenStep);
+  } else {
+    setStepOpen(1);
+  }
+
+  if (saved.tablesLoadedOnce && db1Input && db2Input && db1Input.value && db2Input.value) {
+    try {
+      const headData = await postJson('/api/compare_db_tables', {
+        db1_path: db1Input.value,
+        db2_path: db2Input.value,
+      });
+      compareDbState.tablesMeta = headData.tables || [];
+      if (compareDbState.tablesMeta.length) {
+        tableSelect.innerHTML = '';
+        for (const t of compareDbState.tablesMeta) {
+          const opt = document.createElement('option');
+          opt.value = t.name;
+          opt.textContent = t.name;
+          tableSelect.appendChild(opt);
+        }
+      }
+    } catch (e) {
+      console.warn('Falha ao recarregar tabelas em comum a partir do estado salvo.', e);
+    }
+  }
+
+  if (compareDbState.lastComparePayload && compareDbState.lastComparePayload.table) {
+    try {
+      const data = await postJson('/api/compare_db_rows', compareDbState.lastComparePayload);
+      renderResult(data);
+      setFlowHint('Ultima comparacao restaurada. Voce pode ajustar filtros ou comparar novamente.', 'info');
+      setStepState('stepPickFiles', 'Concluido', 'done');
+      setStepState('stepLoadTables', compareDbState.tablesLoadedOnce ? 'Concluido' : 'Aguardando', compareDbState.tablesLoadedOnce ? 'done' : null);
+      setStepState('stepCompare', 'Concluido', 'done');
+      setStepOpen(3);
+    } catch (e) {
+      console.warn('Nao foi possivel restaurar resultado anterior da comparacao.', e);
+    }
+  }
+}
+
+async function handleFileUpload(side) {
+  const input = document.getElementById(side === 'A' ? 'fileInputA' : 'fileInputB');
+  const nameSpan = document.getElementById(side === 'A' ? 'fileNameA' : 'fileNameB');
+  const pathInput = document.getElementById(side === 'A' ? 'db1Path' : 'db2Path');
+  const btn = document.getElementById(side === 'A' ? 'btnUploadA' : 'btnUploadB');
+  if (!input || !input.files || !input.files.length) return;
+  const file = input.files[0];
+  nameSpan.textContent = file.name;
+
+  const fd = new FormData();
+  fd.append('file', file);
+  nameSpan.textContent = file.name + ' (enviando...)';
+  setUploadStatus(`Enviando "${file.name}" para Banco ${side}... Aguarde, o upload pode levar alguns segundos ou minutos dependendo do tamanho.`);
+  setFlowHint(`Enviando arquivo do Banco ${side}...`, 'info');
+  setStepState('stepPickFiles', 'Enviando arquivo...', 'active');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Enviando...';
+  }
+
+  if (compareDbState.uploadTimeouts[side]) {
+    clearTimeout(compareDbState.uploadTimeouts[side]);
+  }
+  compareDbState.uploadTimeouts[side] = setTimeout(() => {
+    setUploadStatus(`O upload do Banco ${side} esta levando mais de 60 segundos. Se continuar assim, pode ter havido um travamento. Verifique a conexao e o tamanho do arquivo.`, true);
+  }, 60000);
+
+  try {
+    const res = await fetch('/admin/upload', { method: 'POST', body: fd });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || res.statusText);
+    }
+    if (data.db_path) {
+      pathInput.value = data.db_path;
+      nameSpan.textContent = file.name + ' (carregado)';
+      setUploadStatus(`Upload do Banco ${side} concluido com sucesso.`);
+    } else if (data.output) {
+      pathInput.value = data.output;
+      nameSpan.textContent = file.name + ' (carregado)';
+      setUploadStatus(`Upload do Banco ${side} concluido com sucesso.`);
+    } else {
+      nameSpan.textContent = file.name + ' (enviado)';
+      setUploadStatus(`Upload do Banco ${side} concluido.`);
+    }
+
+    const otherPathInput = document.getElementById(side === 'A' ? 'db2Path' : 'db1Path');
+    if (pathInput.value.trim() && otherPathInput && otherPathInput.value.trim()) {
+      setFlowHint('Arquivos A e B ja informados. Agora carregue as tabelas em comum.', 'info');
+      setStepState('stepPickFiles', 'Concluido', 'done');
+      setStepState('stepLoadTables', 'Pronto para carregar', 'active');
+    }
+    saveCompareState();
+  } catch (err) {
+    console.error(err);
+    nameSpan.textContent = file.name + ' (erro ao enviar)';
+    setUploadStatus(`Erro ao enviar Banco ${side}: ${err.message}`, true);
+    setFlowHint(`Erro ao enviar Banco ${side}: ${err.message}`, 'error');
+    setStepState('stepPickFiles', 'Erro no upload', 'warn');
+    alert('Erro ao enviar arquivo: ' + err.message);
+  } finally {
+    if (compareDbState.uploadTimeouts[side]) {
+      clearTimeout(compareDbState.uploadTimeouts[side]);
+      compareDbState.uploadTimeouts[side] = null;
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Escolher arquivo...';
+    }
+  }
+}
+
+function setupCompareUploadBindings() {
+  const fa = document.getElementById('fileInputA');
+  const fb = document.getElementById('fileInputB');
+  if (fa) fa.addEventListener('change', () => handleFileUpload('A'));
+  if (fb) fb.addEventListener('change', () => handleFileUpload('B'));
+
+  const rowLimitCb = document.getElementById('rowLimitEnabled');
+  if (rowLimitCb) {
+    rowLimitCb.addEventListener('change', updateRowLimitState);
+    updateRowLimitState();
+  }
+  const statefulInputs = [
+    'db1Path','db2Path','keyColumns','compareColumns','keyFilter',
+    'filterChanged','filterAdded','filterRemoved','filterColumn',
+    'rowLimit','rowLimitEnabled','tableSelect'
+  ];
+  for (const id of statefulInputs) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    const evt = el.tagName === 'SELECT' || el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(evt, () => saveCompareState());
+  }
+
+  const helpBtn = document.getElementById('openHelpCompare');
+  if (helpBtn) {
+    helpBtn.addEventListener('click', () => {
+      const box = document.getElementById('helpCompareBox');
+      if (!box) return;
+      const isHidden = box.style.display === 'none' || box.style.display === '';
+      box.style.display = isHidden ? 'block' : 'none';
+    });
+  }
+}
+
+window.restoreFromSavedState = restoreFromSavedState;
+window.handleFileUpload = handleFileUpload;
+window.setupCompareUploadBindings = setupCompareUploadBindings;

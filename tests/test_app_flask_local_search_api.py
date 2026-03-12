@@ -84,6 +84,23 @@ def test_admin_start_index_rejeita_chunk_invalido(tmp_path, monkeypatch):
     assert resp.get_json()["error"] == "chunk/batch must be integers"
 
 
+def test_admin_start_index_rejeita_sqlite(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE alpha (id INTEGER)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(local_search, "create_or_resume_fulltext", lambda *args, **kwargs: None)
+    monkeypatch.setattr(local_search, "index_thread", None)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.post("/admin/start_index", json={})
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "indexacao _fulltext disponivel apenas para DuckDB"
+
+
 def test_api_search_rejeita_parametros_invalidos():
     client = app.test_client()
 
@@ -91,6 +108,21 @@ def test_api_search_rejeita_parametros_invalidos():
 
     assert resp.status_code == 400
     assert resp.get_json()["error"] == "per_table/candidate_limit/total_limit must be integers"
+
+
+def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "startup_warnings", ["db_path configurado nao existe mais: /tmp/lost.duckdb"])
+    monkeypatch.setitem(local_search.runtime_state, "db_path", "")
+
+    resp = client.get("/admin/status")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["startup_warnings"] == ["db_path configurado nao existe mais: /tmp/lost.duckdb"]
+    assert payload["capabilities"]["duckdb_fulltext"] in {True, False}
+    assert payload["capabilities"]["access_conversion"] in {True, False}
+    assert payload["capabilities"]["access_fallback"] in {True, False}
 
 
 def test_api_tables_lista_tabelas_sqlite(tmp_path, monkeypatch):

@@ -877,3 +877,68 @@ Automate the main invalid frontend flows, keep shrinking the JS modules that sti
 - The product now has a clearer `DuckDB` vs `SQLite` contract in the main UI/backend path, but the search feature remains intentionally DuckDB-first.
 - The browser regression file exists and covers the right invalid flows, but local pytest execution still depends on a Playwright browser binary being present on the machine.
 - The next heavy backend target remains `interface/app_flask_local_search.py`, but its format/engine edge handling is now less ambiguous than before.
+
+## Follow-up Slice: Immediate-Use Hardening, Success Smoke, And Runtime Startup Cleanup
+
+### Goal
+
+Remove the highest-risk immediate-use issues in the Flask runtime/startup path, expand browser coverage from invalid-only to success smoke, and keep splitting the frontend operator files without changing the fast compare contract.
+
+### Applied
+
+1. Hardened runtime/startup behavior in `interface/app_flask_local_search.py`:
+   - stopped persisting `config.json` during module import/startup
+   - introduced explicit runtime DB state separate from startup sanitization
+   - exposed `startup_warnings`, `db_exists`, and backend capabilities in `/admin/status`
+   - moved indexing/conversion failure reporting from `print(...)` to Flask logging
+   - rejected `_fulltext` indexing for non-DuckDB engines at the API level
+2. Continued frontend responsibility split on the main search page:
+   - added `static/app_bootstrap_modals.js`
+   - added `static/app_bootstrap_actions.js`
+   - reduced `static/app_bootstrap.js` to orchestration only
+   - rewired `static/index.html` to load the new files explicitly
+3. Continued frontend responsibility split on compare:
+   - added `static/compare_dbs_upload.js`
+   - added `static/compare_dbs_actions.js`
+   - reduced `static/compare_dbs.js` to shared compare state and helper functions
+   - rewired `static/compare_dbs.html` to load the new files explicitly
+4. Expanded browser regression coverage:
+   - kept the invalid-flow browser test
+   - added a success smoke covering:
+     - main search with `_fulltext`
+     - compare between two DuckDB files
+     - tracking over a SQLite file
+5. Added focused backend regression coverage for the new startup/runtime behavior:
+   - `/admin/start_index` now rejects SQLite explicitly
+   - `/admin/status` exposes capabilities and startup warnings
+6. Ran a real Playwright MCP smoke on the local Flask server with generated test data in `output/smoke/`.
+
+### What Was Proved
+
+- The app no longer rewrites runtime config on import just to sanitize startup state.
+- The active DB remains available through explicit runtime state while still being persisted only on real user actions.
+- Browser success flows now exist for the three main operator paths:
+  - search
+  - compare
+  - track
+- `static/app_bootstrap.js` and `static/compare_dbs.js` are both smaller and cleaner entry points than before this slice.
+- The fast keyed compare flow remains intact; no contract or behavior change was made there.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g '*.py')`: passed
+- `timeout 60s node --check static/app.js static/app_search.js static/app_priority.js static/app_results.js static/app_bootstrap_modals.js static/app_bootstrap_actions.js static/app_bootstrap.js static/compare_dbs.js static/compare_dbs_upload.js static/compare_dbs_actions.js static/compare_dbs_diff_helpers.js static/compare_dbs_render.js static/ui_utils.js static/shell.js`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `37 passed, 2 skipped`
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- Real browser smoke via Playwright MCP on `127.0.0.1:5081`:
+  - `/` with successful DuckDB upload and search
+  - `/compare_dbs` with successful keyed compare
+  - `/track_record` with successful SQLite tracking
+  - `/admin.html` with active DB visible and no browser console errors
+
+### Findings From This Slice
+
+- The most immediate runtime risk was not in compare speed anymore; it was startup/config/runtime-state coupling in the Flask layer.
+- Browser regression is now materially more useful because it covers a success path instead of only validation failures.
+- The next backend target should stay inside `interface/app_flask_local_search.py`, but now around reducing concentration of responsibilities, not around startup safety.

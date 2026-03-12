@@ -1,6 +1,8 @@
 import threading
 
 import pytest
+import duckdb
+import sqlite3
 from playwright.sync_api import sync_playwright
 from playwright._impl._errors import Error as PlaywrightError
 from werkzeug.serving import make_server
@@ -37,6 +39,8 @@ def ui_server(tmp_path, monkeypatch):
     monkeypatch.setitem(local_search.cfg, "auto_index_after_convert", True)
     monkeypatch.setattr(local_search, "index_thread", None)
     monkeypatch.setattr(local_search, "convert_thread", None)
+    monkeypatch.setitem(local_search.runtime_state, "db_path", "")
+    monkeypatch.setattr(local_search, "startup_warnings", [])
     monkeypatch.setitem(local_search.convert_status, "running", False)
     monkeypatch.setitem(local_search.convert_status, "ok", None)
     monkeypatch.setitem(local_search.convert_status, "msg", None)
@@ -95,5 +99,93 @@ def test_invalid_frontend_flows_render_inline_feedback(ui_server):
             "() => document.getElementById('statusText').textContent.includes('Preencha os filtros antes de executar.')"
         )
         assert "Preencha os filtros antes de executar." in (page.locator("#statusText").text_content() or "")
+
+        browser.close()
+
+
+def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, monkeypatch):
+    search_db = tmp_path / "search.duckdb"
+    conn = duckdb.connect(str(search_db))
+    conn.execute(
+        "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
+    )
+    conn.execute(
+        "INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)",
+        ["signals", "id", "1", 0, "alpha aux_unidad svp", '{"id": 1, "name": "alpha"}'],
+    )
+    conn.close()
+
+    db_a = tmp_path / "compare_a.duckdb"
+    db_b = tmp_path / "compare_b.duckdb"
+    for path, rows in (
+        (db_a, [(1, "alpha"), (2, "beta-new")]),
+        (db_b, [(1, "alpha"), (2, "beta-old")]),
+    ):
+        compare_conn = duckdb.connect(str(path))
+        compare_conn.execute("CREATE TABLE items (id INTEGER, name VARCHAR)")
+        compare_conn.executemany("INSERT INTO items VALUES (?, ?)", rows)
+        compare_conn.close()
+
+    track_dir = tmp_path / "track"
+    track_dir.mkdir()
+    track_db = track_dir / "sample.sqlite3"
+    sqlite_conn = sqlite3.connect(track_db)
+    sqlite_conn.execute("CREATE TABLE RANGER_SOSTAT (RTUNO INTEGER, PNTNO INTEGER, PNTNAM TEXT)")
+    sqlite_conn.execute("INSERT INTO RANGER_SOSTAT VALUES (1, 2304, 'aux unidad')")
+    sqlite_conn.commit()
+    sqlite_conn.close()
+
+    monkeypatch.setitem(local_search.runtime_state, "db_path", str(search_db))
+    monkeypatch.setitem(local_search.cfg, "db_path", str(search_db))
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch(headless=True)
+        except PlaywrightError as exc:
+            if "Executable doesn't exist" in str(exc):
+                pytest.skip("Playwright browser not installed")
+            raise
+        page = browser.new_page()
+
+        page.goto(ui_server + "/")
+        page.wait_for_selector("#searchBtn:not([disabled])")
+        page.locator("#q").fill("alpha")
+        page.locator("#searchBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('searchMeta').textContent || '').includes('Resultados: 1')"
+        )
+        assert "signals" in (page.locator("#resultsArea").text_content() or "")
+
+        page.goto(ui_server + "/admin.html")
+        page.wait_for_selector("#statusBox")
+        page.wait_for_function(
+            "() => (document.getElementById('statusBox').textContent || '').includes('search.duckdb')"
+        )
+
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        page.locator("#db1Path").fill(str(db_a))
+        page.locator("#db2Path").fill(str(db_b))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id")
+        page.locator("#runCompareBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusCompare').textContent || '').includes('Comparacao concluida.')"
+        )
+        assert "items" in (page.locator("#summary").text_content() or "")
+        assert "beta-old" in (page.locator("#results").text_content() or "")
+
+        page.goto(ui_server + "/track_record")
+        page.wait_for_selector("#runBtn")
+        page.locator("#customDirInput").fill(str(track_dir))
+        page.locator("#filtersInput").fill("RTUNO=1,PNTNO=2304")
+        page.locator("#runBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('summary').textContent || '').includes('Encontrado em 1 arquivo')"
+        )
+        assert "sample.sqlite3" in (page.locator("#resultsTable").text_content() or "")
 
         browser.close()

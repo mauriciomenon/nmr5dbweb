@@ -106,6 +106,16 @@ The first stabilization slice is intentionally narrow:
   - if the file header matches SQLite, the backend treats it as SQLite
   - otherwise the backend keeps the file on the DuckDB path
 - The current reports are useful for triage and anomaly detection, but they still have room to evolve toward more explicit grouped-difference reports.
+- Startup no longer persists `config.json` during import-time sanitization; runtime DB state now lives separately and is only persisted on explicit user actions.
+- `/admin/status` now exposes:
+  - `db_exists`
+  - `startup_warnings`
+  - backend capabilities for Access fallback, Access conversion, and DuckDB `_fulltext`
+- `_fulltext` indexing is now rejected server-side for non-DuckDB engines instead of depending only on UI-side blocking.
+- Browser success smoke now also exists in repo coverage for:
+  - DuckDB `_fulltext` search success
+  - DuckDB compare success
+  - SQLite tracking success
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -124,7 +134,7 @@ The first stabilization slice is intentionally narrow:
 - Natural next slices are:
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
   - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility where there is measured gain
-  - expand the new browser regression coverage beyond invalid states into success-path smoke checks
+  - decide whether the browser regression should bootstrap its own browser binary or remain environment-driven
   - keep hardening the main SQLite contract in the Flask UI/backend layer without weakening DuckDB-first behavior
   - design richer diff/report outputs on top of the current compare results, preserving the fast path
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics

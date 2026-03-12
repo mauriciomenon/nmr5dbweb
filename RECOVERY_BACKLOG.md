@@ -20,13 +20,14 @@ Track real product debt that should not be fixed in the current slice.
 9. Expand compare endpoint validation for non-string payload fields if external callers are sending mixed JSON types in practice.
 10. Continue reducing the remaining page-specific CSS duplication now that `static/index.html`, `static/track_record.html`, and `static/admin.html` all use the shared shell/component layer.
 11. Continue shrinking the compare frontend modules (`static/compare_dbs.js`, `static/compare_dbs_render.js`) after the current operator flow stabilizes.
-12. Expand the new browser regression check beyond invalid-state coverage into a stable success-path smoke suite.
+12. Turn the new browser regression into a broader stable smoke suite beyond the current success/invalid core paths.
 13. Keep hardening the SQLite contract across the main Flask UI/backend flow:
    - explicit status messaging in the UI
    - predictable table browsing behavior
    - no accidental DuckDB fallback when the active file is really SQLite
 14. Add a richer report layer for database differences, based on real anomaly-reading needs, while preserving the current fast keyed compare path unchanged.
 15. Review whether the browser regression should manage its own Playwright browser bootstrap or stay environment-driven.
+16. Continue reducing the backend global-state concentration in `interface/app_flask_local_search.py` now that startup/runtime DB handling is safer.
 
 ## Do Not Pull Into Slice 1
 

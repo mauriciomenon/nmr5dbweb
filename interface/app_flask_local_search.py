@@ -36,27 +36,28 @@ from interface.compare_dbs import (
 )
 
 # Optional modules
+OPTIONAL_IMPORT_ERRORS = {}
 pyodbc: Any | None = None
 try:
     import pyodbc as _pyodbc
-except Exception:
-    pass
+except Exception as exc:
+    OPTIONAL_IMPORT_ERRORS["pyodbc"] = str(exc)
 else:
     pyodbc = _pyodbc
 
 convert_access_to_duckdb: Callable[..., Any] | None = None
 try:
     from access_convert import convert_access_to_duckdb as _convert_access_to_duckdb
-except Exception:
-    pass
+except Exception as exc:
+    OPTIONAL_IMPORT_ERRORS["access_convert"] = str(exc)
 else:
     convert_access_to_duckdb = _convert_access_to_duckdb
 
 create_or_resume_fulltext: Callable[..., Any] | None = None
 try:
     from interface.create_fulltext import create_or_resume_fulltext as _create_or_resume_fulltext
-except Exception:
-    pass
+except Exception as exc:
+    OPTIONAL_IMPORT_ERRORS["create_fulltext"] = str(exc)
 else:
     create_or_resume_fulltext = _create_or_resume_fulltext
 
@@ -102,6 +103,8 @@ convert_thread = None
 
 index_lock = threading.Lock()
 index_thread = None
+runtime_lock = threading.Lock()
+startup_warnings = []
 
 
 # Diretórios "seguros" para varrer bancos ao rastrear registros.
@@ -154,18 +157,38 @@ else:
 db_cfg = cfg.get("db_path") or ""
 try:
     if db_cfg and not Path(db_cfg).exists():
+        startup_warnings.append(f"db_path configurado nao existe mais: {db_cfg}")
         cfg["db_path"] = ""
 except Exception:
+    startup_warnings.append("db_path configurado e invalido e foi descartado")
     cfg["db_path"] = ""
-
-save_config(cfg)
+runtime_state = {"db_path": str(cfg.get("db_path") or "")}
 
 def get_db_path():
-    return os.environ.get("DB_PATH") or cfg.get("db_path")
+    env_path = os.environ.get("DB_PATH")
+    if env_path:
+        return env_path
+    with runtime_lock:
+        return runtime_state.get("db_path", "")
 
 def set_db_path(p):
-    cfg["db_path"] = str(p)
+    value = str(p) if p else ""
+    with runtime_lock:
+        runtime_state["db_path"] = value
+    cfg["db_path"] = value
     save_config(cfg)
+
+
+def clear_db_path():
+    set_db_path("")
+
+
+def get_runtime_capabilities():
+    return {
+        "access_fallback": pyodbc is not None,
+        "access_conversion": convert_access_to_duckdb is not None,
+        "duckdb_fulltext": create_or_resume_fulltext is not None,
+    }
 
 
 def sanitize_filename(value):
@@ -484,7 +507,7 @@ def admin_list_uploads():
             })
     return jsonify({
         "uploads": files,
-        "current_db": cfg.get("db_path"),
+        "current_db": get_db_path(),
         "priority_tables": cfg.get("priority_tables", []),
         "auto_index_after_convert": cfg.get("auto_index_after_convert", True),
     })
@@ -496,9 +519,12 @@ def admin_status():
     status = {
         "indexing": False,
         "db": db_path,
+        "db_exists": bool(db_path and Path(db_path).exists()),
         "db_engine": db_engine,
         "fulltext_count": 0,
         "top_tables": [],
+        "startup_warnings": list(startup_warnings),
+        "capabilities": get_runtime_capabilities(),
     }
     with index_lock:
         if index_thread and index_thread.is_alive():
@@ -667,7 +693,7 @@ def admin_upload():
                                         try:
                                             indexer(str(out_duckdb), drop=False, chunk=2000, batch_insert=1000)
                                         except Exception as e:
-                                            print("auto index failed:", e)
+                                            app.logger.exception("auto index failed: %s", e)
                                     index_thread = threading.Thread(target=run_index_auto, daemon=True)
                                     index_thread.start()
                 except Exception as e:
@@ -713,10 +739,9 @@ def admin_delete():
     if not target.exists():
         return jsonify({"error": "arquivo não encontrado"}), 404
     try:
-        current = cfg.get("db_path")
+        current = get_db_path()
         if current and Path(current).resolve() == target.resolve():
-            cfg["db_path"] = ""
-            save_config(cfg)
+            clear_db_path()
         target.unlink()
         # remove converted duckdb with same stem
         duck_out = UPLOAD_DIR / f"{target.stem}.duckdb"
@@ -775,12 +800,14 @@ def admin_start_index():
         dbpath = get_db_path()
         if not dbpath:
             return jsonify({"error": "No DB selected"}), 400
+        if detect_db_engine(dbpath) != "duckdb":
+            return jsonify({"error": "indexacao _fulltext disponivel apenas para DuckDB"}), 400
         indexer = create_or_resume_fulltext
         def run_index():
             try:
                 indexer(dbpath, drop=drop, chunk=chunk, batch_insert=batch)
             except Exception as e:
-                print("Indexação falhou:", e)
+                app.logger.exception("Indexação falhou: %s", e)
         index_thread = threading.Thread(target=run_index, daemon=True)
         index_thread.start()
     return jsonify({"ok": True, "started": True, "db": get_db_path()})
@@ -1474,5 +1501,4 @@ def api_search():
     return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
 
 if __name__ == "__main__":
-    save_config(cfg)
     app.run(host="127.0.0.1", port=5000, debug=True)
