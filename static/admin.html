@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Busca em bancos - Admin</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="stylesheet" href="/shell.css" />
   <style>
     :root {
       --bg: #12161c;
@@ -521,7 +522,7 @@
     }
   </style>
 </head>
-<body>
+<body class="shell-admin">
   <header>
     <div class="header-row">
       <div class="brand">
@@ -693,34 +694,8 @@
     </aside>
   </div>
 
+<script src="/shell.js"></script>
 <script>
-const STORAGE_KEY = 'mdb_theme';
-
-function applyTheme(pref) {
-  const root = document.documentElement;
-  if (!pref || pref === 'system') {
-    root.removeAttribute('data-theme');
-  } else {
-    root.setAttribute('data-theme', pref === 'light' ? 'light' : 'dark');
-  }
-}
-
-function initThemeToggle() {
-  const themeBtn = document.getElementById('themeToggle');
-  let saved = localStorage.getItem(STORAGE_KEY) || 'system';
-  if (!['system', 'light', 'dark'].includes(saved)) saved = 'system';
-  applyTheme(saved);
-  if (!themeBtn) return;
-  themeBtn.addEventListener('click', () => {
-    const current = localStorage.getItem(STORAGE_KEY) || saved || 'system';
-    const order = ['system', 'dark', 'light'];
-    const idx = Math.max(0, order.indexOf(current));
-    const next = order[(idx + 1) % order.length];
-    localStorage.setItem(STORAGE_KEY, next);
-    applyTheme(next);
-  });
-}
-
 function messageText(payload) {
   if (!payload) return '';
   if (typeof payload === 'string') return payload;
@@ -969,7 +944,6 @@ async function refreshStatus() {
   }
 }
 
-initThemeToggle();
 setInterval(refreshStatus, 3000);
 refreshAll();
 </script>

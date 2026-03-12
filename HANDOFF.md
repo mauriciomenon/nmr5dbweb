@@ -56,6 +56,8 @@ The first stabilization slice is intentionally narrow:
 - The route still preserves the same JSON contract expected by `static/compare_dbs.html`
 - `static/index.html`, `static/admin.html`, `static/compare_dbs.html`, and `static/track_record.html` were reorganized around task-oriented navigation and clearer information hierarchy
 - The page refresh preserved the existing DOM ids expected by `static/app.js` and the inline page scripts
+- `static/shell.css` and `static/shell.js` now centralize the shared web shell/theme behavior used by the static pages
+- The repeated inline theme/options blocks were removed from the page HTML files
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -72,7 +74,7 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
-  - reduce the duplicated shell/theme CSS now repeated across the static HTML pages
+  - continue reducing page-specific CSS duplication now that the shared shell exists
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today

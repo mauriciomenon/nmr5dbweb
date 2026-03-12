@@ -504,3 +504,49 @@ Reorganize the Flask/static web pages to make the operational flow clearer witho
 - The frontend now has better task separation, but visual shell/theme rules are still duplicated across multiple static HTML files.
 - Browser-level validation with Playwright is currently blocked on this machine because the Chromium binary is not installed.
 - Port `5000` is occupied by another local service on this machine, so local UI smoke checks should prefer an alternate port such as `5081`.
+
+## Follow-up Slice: Shared Frontend Shell Extraction
+
+### Goal
+
+Reduce the duplicated shell/theme code across the static web pages without changing Flask routes, frontend ids, or backend behavior.
+
+### Applied
+
+1. Added shared frontend assets:
+   - `static/shell.css`
+   - `static/shell.js`
+2. Updated the four web pages to use the shared shell assets:
+   - `static/index.html`
+   - `static/admin.html`
+   - `static/compare_dbs.html`
+   - `static/track_record.html`
+3. Removed the repeated theme/options JavaScript blocks from:
+   - `static/index.html`
+   - `static/compare_dbs.html`
+   - `static/track_record.html`
+   - `static/admin.html`
+4. Moved shared theme/menu behavior into `static/shell.js`.
+5. Moved the shared layout shell rules used by the search/compare/track pages into `static/shell.css`.
+6. Kept all existing ids and page-specific scripts intact so the current JS wiring remains stable.
+
+### What Was Proved
+
+- The shared shell assets are served correctly by Flask as `/shell.css` and `/shell.js`.
+- The extracted shell did not break the compare/search/backend-focused validation baseline.
+- The four pages still render through the expected routes while now depending on one shared shell entrypoint.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `node --check static/app.js && node --check static/ui_utils.js && node --check static/shell.js`: passed
+- Flask route smoke check on alternate port `5081`: passed for `/`, `/admin.html`, `/compare_dbs`, `/track_record`
+- Shared asset smoke check on alternate port `5081`: passed for `/shell.css` and `/shell.js`
+
+### Findings From This Slice
+
+- The shared theme/options behavior is now centralized, which lowers the cost of future UI changes.
+- CSS duplication still exists in page-specific styles, but the shell-level drift risk is lower than before.

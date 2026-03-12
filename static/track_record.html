@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>Busca em bancos - Rastrear registro</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="/shell.css" />
   <style>
     :root {
       --bg: #171a1f;
@@ -436,157 +437,8 @@
       .card { padding: 12px 12px 16px; }
     }
   </style>
-  <style>
-    body {
-      font-family: "Aptos", "Bahnschrift", "IBM Plex Sans", "Segoe UI", sans-serif;
-    }
-    header.track-shell {
-      display: grid;
-      gap: 14px;
-    }
-    .header-topline {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: 16px;
-      flex-wrap: wrap;
-    }
-    .brand-copy h1 {
-      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
-    }
-    .nav-strip {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-left: auto;
-    }
-    .tracker-hero {
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: linear-gradient(135deg, rgba(43, 92, 255, 0.14), rgba(13, 18, 27, 0.18) 46%, rgba(56, 189, 248, 0.08));
-      box-shadow: var(--shadow-soft);
-      padding: 18px;
-      display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
-      gap: 16px;
-    }
-    html[data-theme="light"] .tracker-hero {
-      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.96) 48%, rgba(37, 99, 235, 0.05));
-    }
-    .hero-kicker {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--accent);
-      margin-bottom: 6px;
-    }
-    .hero-title {
-      margin: 0 0 8px 0;
-      font-size: 30px;
-      line-height: 1.04;
-      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
-    }
-    .hero-copy {
-      margin: 0;
-      color: var(--muted);
-      max-width: 62ch;
-      line-height: 1.6;
-      font-size: 14px;
-    }
-    .hero-metrics {
-      display: grid;
-      gap: 10px;
-      align-content: start;
-    }
-    .metric-card,
-    .tracker-guide {
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      background: rgba(8, 12, 18, 0.16);
-      padding: 14px;
-    }
-    html[data-theme="light"] .metric-card,
-    html[data-theme="light"] .tracker-guide {
-      background: rgba(255, 255, 255, 0.82);
-    }
-    .metric-label {
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-    .metric-value {
-      margin-top: 8px;
-      font-size: 18px;
-      font-weight: 800;
-    }
-    .tracker-main-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
-      gap: 16px;
-      align-items: start;
-    }
-    .tracker-left,
-    .tracker-right {
-      display: grid;
-      gap: 14px;
-      align-content: start;
-    }
-    .tracker-guide ul {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: 13px;
-    }
-    .tracker-guide strong {
-      color: var(--ink);
-    }
-    .tracker-links {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-top: 12px;
-    }
-    .pill-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      text-decoration: none;
-      color: var(--ink);
-      font-size: 12px;
-      font-weight: 700;
-      background: rgba(8, 12, 18, 0.12);
-    }
-    html[data-theme="light"] .pill-link {
-      background: rgba(255, 255, 255, 0.78);
-    }
-    @media (max-width: 980px) {
-      .tracker-hero,
-      .tracker-main-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-    @media (max-width: 720px) {
-      .header-topline {
-        flex-direction: column;
-      }
-      .nav-strip {
-        margin-left: 0;
-      }
-      .hero-title {
-        font-size: 24px;
-      }
-    }
-  </style>
 </head>
-<body>
+<body class="shell-track">
   <header class="track-shell">
     <div class="header-topline">
       <div style="display:flex;align-items:center;gap:12px;">
@@ -1013,58 +865,7 @@
         status.textContent = 'Erro ao carregar diretórios.';
       }
     }
-    (function () {
-      var STORAGE_KEY = 'mdb_theme';
-      function applyTheme(pref) {
-        var root = document.documentElement;
-        if (!pref || pref === 'system') {
-          root.removeAttribute('data-theme');
-        } else {
-          root.setAttribute('data-theme', pref === 'light' ? 'light' : 'dark');
-        }
-      }
-      function initThemeAndOptions() {
-        var themeBtn = document.getElementById('themeToggle');
-        var saved = localStorage.getItem(STORAGE_KEY) || 'system';
-        if (['system', 'light', 'dark'].indexOf(saved) === -1) saved = 'system';
-        applyTheme(saved);
-        if (themeBtn) {
-          themeBtn.addEventListener('click', function () {
-            var current = localStorage.getItem(STORAGE_KEY) || saved || 'system';
-            if (['system', 'light', 'dark'].indexOf(current) === -1) current = 'system';
-            var order = ['system', 'dark', 'light'];
-            var idx = order.indexOf(current);
-            var next = order[(idx + 1) % order.length];
-            localStorage.setItem(STORAGE_KEY, next);
-            applyTheme(next);
-          });
-        }
-
-        var optionsBtn = document.getElementById('optionsBtn');
-        var optionsMenu = document.getElementById('optionsMenu');
-        if (optionsBtn && optionsMenu) {
-          function closeMenu() {
-            optionsMenu.setAttribute('hidden', 'hidden');
-          }
-          optionsBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var isHidden = optionsMenu.hasAttribute('hidden');
-            if (isHidden) {
-              optionsMenu.removeAttribute('hidden');
-            } else {
-              closeMenu();
-            }
-          });
-          document.addEventListener('click', function () {
-            closeMenu();
-          });
-          optionsMenu.addEventListener('click', function (e) {
-            e.stopPropagation();
-          });
-        }
-      }
-      document.addEventListener('DOMContentLoaded', initThemeAndOptions);
-    })();
   </script>
+  <script src="/shell.js"></script>
 </body>
 </html>
