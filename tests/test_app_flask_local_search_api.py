@@ -1,4 +1,7 @@
 from io import BytesIO
+import sqlite3
+
+import duckdb
 
 import interface.app_flask_local_search as local_search
 
@@ -88,3 +91,88 @@ def test_api_search_rejeita_parametros_invalidos():
 
     assert resp.status_code == 400
     assert resp.get_json()["error"] == "per_table/candidate_limit/total_limit must be integers"
+
+
+def test_api_tables_lista_tabelas_sqlite(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE alpha (id INTEGER, name TEXT)")
+    conn.execute("CREATE TABLE beta (id INTEGER)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["tables"] == ["alpha", "beta"]
+
+
+def test_api_table_ler_tabela_sqlite(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute('CREATE TABLE "event log" (id INTEGER, note TEXT)')
+    conn.executemany(
+        'INSERT INTO "event log" (id, note) VALUES (?, ?)',
+        [(1, "alpha"), (2, "beta"), (3, "alphabet")],
+    )
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/table?name=event%20log&col=note&q=alp&sort=id&order=DESC&limit=2&offset=0")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["columns"] == ["id", "note"]
+    assert payload["total"] == 2
+    assert payload["rows"] == [
+        {"id": 3, "note": "alphabet"},
+        {"id": 1, "note": "alpha"},
+    ]
+
+
+def test_api_tables_detecta_sqlite_em_extensao_db(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE app_table (id INTEGER)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["tables"] == ["app_table"]
+
+
+def test_api_tables_detecta_duckdb_em_extensao_db(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.db"
+    conn = duckdb.connect(str(db_path))
+    conn.execute("CREATE TABLE duck_table (id INTEGER)")
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["tables"] == ["duck_table"]
+
+
+def test_api_search_rejeita_sqlite_na_busca_textual(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE alpha (id INTEGER, name TEXT)")
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 400
+    assert "Current DB engine: sqlite" in resp.get_json()["error"]

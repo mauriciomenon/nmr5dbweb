@@ -535,19 +535,8 @@
       if (!table) return;
       const meta = tablesMeta.find(t => t.name === table);
       if (!meta) return;
-      // Se a tabela padrão RANGER_SOSTAT estiver selecionada, usa RTUNO,PNTNO como chave K
-      if (table.toUpperCase() === 'RANGER_SOSTAT') {
-        keyInput.value = 'RTUNO,PNTNO';
-      } else {
-        // sugestão simples: se houver coluna ID, assume-a como chave
-        const cols = meta.columns || [];
-        const lower = cols.map(c => c.toLowerCase());
-        let suggestedKey = '';
-        if (lower.includes('id')) {
-          suggestedKey = cols[lower.indexOf('id')];
-        }
-        keyInput.value = suggestedKey;
-      }
+      const suggestedKeys = guessKeyColumnsForTable(table, meta.columns || []);
+      keyInput.value = suggestedKeys.join(',');
       cmpInput.value = '';
     }
 

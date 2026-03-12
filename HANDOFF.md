@@ -75,9 +75,14 @@ The first stabilization slice is intentionally narrow:
   - `static/app.js`
   - `static/app_search.js`
   - `static/app_bootstrap.js`
+- The search page now also splits responsibilities into:
+  - `static/app_results.js`
+  - `static/app_priority.js`
 - `static/compare_dbs.js` is now split into:
   - `static/compare_dbs.js`
   - `static/compare_dbs_render.js`
+- The compare render layer now also uses:
+  - `static/compare_dbs_diff_helpers.js`
 - Real browser validation has now been executed with Playwright on:
   - `/`
   - `/compare_dbs`
@@ -93,6 +98,13 @@ The first stabilization slice is intentionally narrow:
   - keep `DuckDB`, `SQLite`, and `Access (.mdb/.accdb)` support
   - preserve the current fast compare flow as the main operational compare
   - any future deep report/diff layer must not break or slow the current fast compare feature
+- The main Flask UI/backend path now treats `SQLite` explicitly:
+  - `/api/tables` can list SQLite tables directly
+  - `/api/table` can read/filter/sort SQLite tables directly
+  - `/api/search` now rejects SQLite with a clear message instead of failing implicitly in DuckDB code
+- `.db` files now follow a predictable rule:
+  - if the file header matches SQLite, the backend treats it as SQLite
+  - otherwise the backend keeps the file on the DuckDB path
 - The current reports are useful for triage and anomaly detection, but they still have room to evolve toward more explicit grouped-difference reports.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
@@ -111,9 +123,9 @@ The first stabilization slice is intentionally narrow:
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
-  - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility when there is measured gain
-  - add focused frontend regression tests for the browser-validated invalid-state flows if the team wants them automated
-  - harden the main SQLite contract in the Flask UI/backend layer without weakening DuckDB-first behavior
+  - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility where there is measured gain
+  - expand the new browser regression coverage beyond invalid states into success-path smoke checks
+  - keep hardening the main SQLite contract in the Flask UI/backend layer without weakening DuckDB-first behavior
   - design richer diff/report outputs on top of the current compare results, preserving the fast path
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`

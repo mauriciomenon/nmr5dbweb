@@ -812,3 +812,68 @@ Remove the remaining duplicated search/admin bootstrap path in `static/app.js` a
 - The remaining frontend risk is now more about file size and responsibility boundaries than raw duplicate logic.
 - `static/app.js` is still large, but the duplicated search/priority/bootstrap path is now closed.
 - Search and track still keep page-specific visual rules, but the shell-level base is now centralized.
+
+## Follow-up Slice: Frontend Invalid-Flow Regression And SQLite Contract Hardening
+
+### Goal
+
+Automate the main invalid frontend flows, keep shrinking the JS modules that still carry mixed responsibilities, and harden the main Flask path so `DuckDB` and `SQLite` are treated explicitly instead of by loose extension guesses.
+
+### Applied
+
+1. Split search page responsibilities further:
+   - added `static/app_results.js` for result rendering/export/open-table behavior
+   - added `static/app_priority.js` for priority modal behavior
+   - rewired `static/index.html` to load the new files before `static/app_search.js`
+2. Split compare render helpers out of the render file:
+   - added `static/compare_dbs_diff_helpers.js`
+   - reduced `static/compare_dbs_render.js` to summary/section/render responsibilities
+   - rewired `static/compare_dbs.html` to load the helper asset explicitly
+3. Hardened the Flask backend in `interface/app_flask_local_search.py`:
+   - added explicit engine detection with support for:
+     - `DuckDB`
+     - `SQLite`
+     - `Access`
+   - treat `.db` as `SQLite` only when the file header matches SQLite, otherwise keep the path on the `DuckDB` route
+   - added explicit SQLite table listing and table-read helpers
+   - kept the fast DuckDB compare path unchanged
+   - rejected search-on-main-screen for SQLite with a clear API error instead of letting it fail implicitly in DuckDB code
+4. Added focused API regression coverage for:
+   - SQLite table listing
+   - SQLite table read with filter/sort
+   - `.db` engine detection for both SQLite and DuckDB
+   - clear rejection of main-screen search when the active DB is SQLite
+5. Added browser regression coverage for the four invalid flows already validated manually:
+   - search without active DB
+   - admin index start without DB
+   - compare without A/B paths
+   - tracking without required filters
+6. Updated the main search UI status logic to expose SQLite as a distinct state instead of silently treating it like DuckDB.
+
+### What Was Proved
+
+- `static/app_search.js` is materially smaller and now focuses on file-selection and search request flow, not on result rendering and priority modal behavior.
+- `static/compare_dbs_render.js` is materially smaller and now focuses on diff rendering, while the helper logic lives in its own file.
+- The main Flask UI/backend path now distinguishes SQLite from DuckDB in `/api/tables`, `/api/table`, and `/api/search`.
+- The keyed compare fast path in DuckDB was preserved while SQLite support became more explicit and predictable for table browsing.
+- The invalid UI flows now have repeatable browser regression coverage in the repo.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `timeout 60s node --check static/app.js ... static/compare_dbs_render.js`: passed for all touched JS assets
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `35 passed`
+- Real browser validation passed via Playwright MCP on:
+  - `/`
+  - `/admin.html`
+  - `/compare_dbs`
+  - `/track_record`
+  with the expected inline invalid-state feedback on each route
+
+### Findings From This Slice
+
+- The product now has a clearer `DuckDB` vs `SQLite` contract in the main UI/backend path, but the search feature remains intentionally DuckDB-first.
+- The browser regression file exists and covers the right invalid flows, but local pytest execution still depends on a Playwright browser binary being present on the machine.
+- The next heavy backend target remains `interface/app_flask_local_search.py`, but its format/engine edge handling is now less ambiguous than before.

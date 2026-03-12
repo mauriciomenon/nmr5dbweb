@@ -359,6 +359,10 @@ window.addEventListener('unhandledrejection', (e)=>{
       setFlowHint('Access selecionado. Converta para DuckDB antes de buscar.', shouldShow);
       return;
     }
+    if(status.db_engine === 'sqlite'){
+      setFlowHint('SQLite selecionado. Busca textual fica disponivel via DuckDB; use tabela, comparacao ou rastreio.', shouldShow);
+      return;
+    }
     if(dbType === 'duckdb' && !status.fulltext_count){
       setFlowHint('DuckDB selecionado. Crie o indice _fulltext para buscar.', shouldShow);
       return;
@@ -410,6 +414,9 @@ window.addEventListener('unhandledrejection', (e)=>{
     const converted = dbType === 'duckdb' && isConvertedDuckdb(shortName(db), accessStems);
     if(dbType === 'access' && !converted && !(status.conversion && status.conversion.running)){
       warn.push('Access selecionado: aguarde conversao ou troque para DuckDB.');
+    }
+    if(status.db_engine === 'sqlite'){
+      warn.push('SQLite selecionado: busca textual nesta tela requer DuckDB com _fulltext.');
     }
     if(dbType === 'duckdb' && !status.fulltext_count){
       warn.push('Indice _fulltext ausente: a busca esta bloqueada.');
@@ -1202,6 +1209,10 @@ async function refreshStatus(){
       setFlowBanner('Banco Access selecionado. Converta para DuckDB para liberar busca completa.', 'warn');
       setSearchControlsEnabled(false);
       searchEnabled = false;
+    } else if(s.db_engine === 'sqlite'){
+      setFlowBanner('SQLite ativo. Busca textual continua restrita a DuckDB; tabela, comparacao e rastreio seguem disponiveis.', 'info');
+      setSearchControlsEnabled(false);
+      searchEnabled = false;
     } else if(dbType === 'access' && converted && s.odbc_enabled === false){
       setFlowBanner('Conversao pura ativada. ODBC desativado no servidor.', 'info');
       setSearchControlsEnabled(false);
@@ -1250,6 +1261,8 @@ async function refreshStatus(){
         $('searchMeta').textContent = 'Busca bloqueada: conversao em andamento.';
       } else if(dbType === 'access' && !converted){
         $('searchMeta').textContent = 'Busca bloqueada: converta para DuckDB.';
+      } else if(s.db_engine === 'sqlite'){
+        $('searchMeta').textContent = 'Busca bloqueada: SQLite nao usa _fulltext nesta tela.';
       } else if(indexFlow === 'duckdb' && !s.fulltext_count){
         $('searchMeta').textContent = 'Busca bloqueada: crie o indice _fulltext.';
       } else if(s.indexing){

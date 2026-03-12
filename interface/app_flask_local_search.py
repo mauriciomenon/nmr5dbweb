@@ -17,6 +17,7 @@
 # - utils.py with normalize_text(value) and serialize_value(value) if you want custom behavior (fallbacks included)
 import os
 import json
+import sqlite3
 import threading
 from pathlib import Path
 from datetime import datetime
@@ -80,6 +81,9 @@ UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 CONFIG_FILE = BASE_DIR / "config.json"
 ALLOWED_EXTENSIONS = {".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"}
+ACCESS_EXTENSIONS = {".mdb", ".accdb"}
+SQLITE_EXTENSIONS = {".sqlite", ".sqlite3"}
+DUCKDB_EXTENSIONS = {".duckdb"}
 
 # Conversion & index state
 convert_lock = threading.Lock()
@@ -260,14 +264,166 @@ def duckdb_connect(path):
     # return connection (caller must close)
     return duckdb.connect(str(path))
 
+def sqlite_connect(path):
+    conn = sqlite3.connect(str(path))
+    conn.row_factory = None
+    return conn
+
+
+def quote_identifier(identifier):
+    return '"' + str(identifier).replace('"', '""') + '"'
+
+
+def looks_like_sqlite_file(path):
+    try:
+        with Path(path).open("rb") as fh:
+            return fh.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
+
+
+def detect_db_engine(path):
+    ext = Path(path).suffix.lower()
+    if ext in ACCESS_EXTENSIONS:
+        return "access"
+    if ext in SQLITE_EXTENSIONS:
+        return "sqlite"
+    if ext in DUCKDB_EXTENSIONS:
+        return "duckdb"
+    if ext == ".db":
+        return "sqlite" if looks_like_sqlite_file(path) else "duckdb"
+    return ""
+
+
 def list_tables_duckdb(path):
-    """Lista tabelas de um arquivo DuckDB/SQLite."""
+    """Lista tabelas de um arquivo DuckDB."""
     conn = duckdb_connect(path)
     try:
         rows = conn.execute("SHOW TABLES").fetchall()
         return [r[0] for r in rows]
     finally:
         conn.close()
+
+
+def list_tables_sqlite(path):
+    """Lista tabelas de um arquivo SQLite."""
+    conn = sqlite_connect(path)
+    try:
+        rows = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).fetchall()
+        return [r[0] for r in rows]
+    finally:
+        conn.close()
+
+
+def list_tables_for_path(path):
+    engine = detect_db_engine(path)
+    if engine == "duckdb":
+        return list_tables_duckdb(path)
+    if engine == "sqlite":
+        return list_tables_sqlite(path)
+    if engine == "access":
+        return list_tables_access(path)
+    raise ValueError(f"Unsupported DB format: {path}")
+
+
+def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
+    conn = duckdb_connect(path)
+    try:
+        tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
+        if table not in tables:
+            raise LookupError(f"table not found: {table}")
+
+        quoted_table = quote_identifier(table)
+        cur = conn.execute(f"SELECT * FROM {quoted_table} LIMIT 0")
+        cols = [c[0] for c in cur.description]
+
+        params = []
+        where_clause = ""
+        if col and q:
+            if col not in cols:
+                raise ValueError(f"column not found: {col}")
+            where_clause = f"WHERE CAST({quote_identifier(col)} AS VARCHAR) ILIKE ?"
+            params.append(f"%{q}%")
+
+        order_clause = ""
+        if sort:
+            if sort not in cols:
+                raise ValueError(f"sort column not found: {sort}")
+            order_clause = f"ORDER BY {quote_identifier(sort)} {order}"
+
+        count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
+        if where_clause:
+            count_sql += f" {where_clause}"
+        total = conn.execute(count_sql, params).fetchone()[0]
+
+        data_sql = f"SELECT * FROM {quoted_table}"
+        if where_clause:
+            data_sql += f" {where_clause}"
+        if order_clause:
+            data_sql += f" {order_clause}"
+        if limit > 0:
+            data_sql += f" LIMIT {limit} OFFSET {offset}"
+
+        rows = conn.execute(data_sql, params).fetchall()
+        return cols, rows, int(total)
+    finally:
+        conn.close()
+
+
+def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
+    conn = sqlite_connect(path)
+    try:
+        tables = list_tables_sqlite(path)
+        if table not in tables:
+            raise LookupError(f"table not found: {table}")
+
+        quoted_table = quote_identifier(table)
+        cur = conn.execute(f"SELECT * FROM {quoted_table} LIMIT 0")
+        cols = [desc[0] for desc in cur.description or []]
+
+        params = []
+        where_clause = ""
+        if col and q:
+            if col not in cols:
+                raise ValueError(f"column not found: {col}")
+            where_clause = f"WHERE CAST({quote_identifier(col)} AS TEXT) LIKE ? COLLATE NOCASE"
+            params.append(f"%{q}%")
+
+        order_clause = ""
+        if sort:
+            if sort not in cols:
+                raise ValueError(f"sort column not found: {sort}")
+            order_clause = f"ORDER BY {quote_identifier(sort)} {order}"
+
+        count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
+        if where_clause:
+            count_sql += f" {where_clause}"
+        total = conn.execute(count_sql, params).fetchone()[0]
+
+        data_sql = f"SELECT * FROM {quoted_table}"
+        if where_clause:
+            data_sql += f" {where_clause}"
+        if order_clause:
+            data_sql += f" {order_clause}"
+        if limit > 0:
+            data_sql += " LIMIT ? OFFSET ?"
+            params = [*params, limit, offset]
+
+        rows = conn.execute(data_sql, params).fetchall()
+        return cols, rows, int(total)
+    finally:
+        conn.close()
+
+
+def read_table_page_for_path(path, table, limit, offset, col, q, sort, order):
+    engine = detect_db_engine(path)
+    if engine == "duckdb":
+        return read_table_page_duckdb(path, table, limit, offset, col, q, sort, order)
+    if engine == "sqlite":
+        return read_table_page_sqlite(path, table, limit, offset, col, q, sort, order)
+    raise ValueError(f"Table view only supported for DuckDB/SQLite. Current DB: {path}")
 
 def list_tables_access(path):
     """Lista tabelas de um banco Access via ODBC (pyodbc)."""
@@ -335,11 +491,25 @@ def admin_list_uploads():
 
 @app.route("/admin/status", methods=["GET"])
 def admin_status():
-    status = {"indexing": False, "db": get_db_path(), "fulltext_count": 0, "top_tables": []}
+    db_path = get_db_path()
+    db_engine = detect_db_engine(db_path) if db_path else ""
+    status = {
+        "indexing": False,
+        "db": db_path,
+        "db_engine": db_engine,
+        "fulltext_count": 0,
+        "top_tables": [],
+    }
     with index_lock:
         if index_thread and index_thread.is_alive():
             status["indexing"] = True
     # try _fulltext info
+    if db_engine == "sqlite":
+        with convert_lock:
+            status["conversion"] = dict(convert_status)
+        status["priority_tables"] = cfg.get("priority_tables", [])
+        status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
+        return jsonify(status)
     try:
         conn = duckdb_connect(get_db_path())
         try:
@@ -889,16 +1059,11 @@ def api_tables():
     dbpath = get_db_path()
     if not dbpath:
         return jsonify({"error": "No DB selected"}), 400
-    ext = Path(dbpath).suffix.lower()
     try:
-        if ext in (".duckdb", ".db", ".sqlite", ".sqlite3"):
-            tables = list_tables_duckdb(dbpath)
-        elif ext in (".mdb", ".accdb"):
-            # Para Access, usamos o helper específico
-            tables = list_tables_access(dbpath)
-        else:
-            return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
+        tables = list_tables_for_path(dbpath)
         return jsonify({"tables": tables})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -911,8 +1076,8 @@ def api_table():
     dbpath = get_db_path()
     if not dbpath:
         return jsonify({"error": "No DB selected"}), 400
-    ext = Path(dbpath).suffix.lower()
-    if ext not in (".duckdb", ".db", ".sqlite", ".sqlite3"):
+    engine = detect_db_engine(dbpath)
+    if engine not in {"duckdb", "sqlite"}:
         return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {dbpath}"}), 400
     try:
         limit = int(request.args.get("limit", 50))
@@ -928,48 +1093,16 @@ def api_table():
         order = "ASC"
 
     try:
-        conn = duckdb_connect(dbpath)
-        tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
-        if table not in tables:
-            conn.close()
-            return jsonify({"error": f"table not found: {table}"}), 404
-
-        # obter colunas
-        cur = conn.execute(f'SELECT * FROM "{table}" LIMIT 0')
-        cols = [c[0] for c in cur.description]
-
-        params = []
-        where_clause = ""
-        if col and q:
-            if col not in cols:
-                conn.close()
-                return jsonify({"error": f"column not found: {col}"}), 400
-            where_clause = f'WHERE CAST("{col}" AS VARCHAR) ILIKE ?'
-            params.append(f"%{q}%")
-
-        order_clause = ""
-        if sort:
-            if sort not in cols:
-                conn.close()
-                return jsonify({"error": f"sort column not found: {sort}"}), 400
-            order_clause = f'ORDER BY "{sort}" {order}'
-
-        count_sql = f'SELECT COUNT(*) FROM "{table}"'
-        if where_clause:
-            count_sql += f" {where_clause}"
-        total = conn.execute(count_sql, params).fetchone()[0]
-
-        data_sql = f'SELECT * FROM "{table}"'
-        if where_clause:
-            data_sql += f" {where_clause}"
-        if order_clause:
-            data_sql += f" {order_clause}"
-        # LIMIT só se limit > 0 (0 significa ilimitado)
-        if limit > 0:
-            data_sql += f" LIMIT {limit} OFFSET {offset}"
-
-        rows = conn.execute(data_sql, params).fetchall()
-        conn.close()
+        cols, rows, total = read_table_page_for_path(
+            dbpath,
+            table,
+            limit,
+            offset,
+            col,
+            q,
+            sort,
+            order,
+        )
 
         data = []
         for r in rows:
@@ -989,11 +1122,11 @@ def api_table():
             "columns": cols,
             "rows": data,
         })
+    except LookupError as exc:
+        return jsonify({"error": str(exc)}), 404
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     except Exception as e:
-        try:
-            conn.close()
-        except Exception:
-            pass
         return jsonify({"error": str(e)}), 500
 
 
@@ -1328,16 +1461,17 @@ def api_search():
     dbpath = get_db_path()
     if not dbpath:
         return jsonify({"error": "No DB selected"}), 400
-    ext = Path(dbpath).suffix.lower()
-    if ext in (".duckdb", ".db", ".sqlite", ".sqlite3"):
+    engine = detect_db_engine(dbpath)
+    if engine == "duckdb":
         return jsonify(api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=tables))
-    elif ext in (".mdb", ".accdb"):
+    if engine == "sqlite":
+        return jsonify({"error": "Search on this screen is only supported for DuckDB _fulltext or Access fallback. Current DB engine: sqlite"}), 400
+    if engine == "access":
         fb = fallback_search_access(dbpath, q, per_table=per_table, candidate_limit=candidate_limit, total_limit=total_limit, token_mode=token_mode, min_score=min_score)
         if isinstance(fb, dict) and fb.get("error"):
             return jsonify({"error": fb.get("error")}), 500
         return jsonify(fb)
-    else:
-        return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
+    return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
 
 if __name__ == "__main__":
     save_config(cfg)
