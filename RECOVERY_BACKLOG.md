@@ -26,6 +26,8 @@ Track real product debt that should not be fixed in the current slice.
    - admin index start without DB
    - compare without A/B paths
    - tracking without required filters
+14. Harden the SQLite contract across the main Flask UI/backend flow so support is explicit and predictable, not just accepted by extension.
+15. Add a richer report layer for database differences, based on real anomaly-reading needs, while preserving the current fast keyed compare path unchanged.
 
 ## Do Not Pull Into Slice 1
 

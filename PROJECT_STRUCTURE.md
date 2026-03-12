@@ -35,6 +35,19 @@ Map the current product structure in a stable way so future rounds can update th
 6. Compare uses `interface/compare_dbs.py`.
 7. Multi-file record tracking uses `interface/find_record_across_dbs.py`.
 
+## Product Decisions
+
+- Keep support for `DuckDB`, `SQLite`, and `Access (.mdb/.accdb)`.
+- Keep DuckDB as the primary engine for:
+  - keyed compare
+  - `_fulltext` search
+  - table browsing in the main UI
+  - converted Access operational flow
+- Keep the current fast keyed compare behavior as a protected product feature.
+- If a more detailed compare/report layer is added later, it must not degrade the current fast compare path.
+- SQLite support is intentionally retained because the product can generate or receive the same logical DB in that format too.
+- Access direct support remains useful for conversion and tracking, but the main compare path is DuckDB-first.
+
 ## Main Modules
 
 - `interface/app_flask_local_search.py`
@@ -75,8 +88,28 @@ Map the current product structure in a stable way so future rounds can update th
 
 - Main backend file is too large and mixes many responsibilities.
 - Search, compare, and conversion use different data models and do not have a single clear contract.
-- Frontend client logic is duplicated in `static/app.js`.
+- Frontend duplication risk was reduced, but the client layer is still spread across large operational files.
 - Some docs still point to the student fork and old paths.
+- The main UI still works around a single active DB selection model in the backend.
+- SQLite is accepted by the product, but the main UI/backend contract around it still needs explicit hardening.
+
+## Reporting Notes
+
+- The current compare UI already provides useful triage-level reporting:
+  - table overview
+  - keyed row diff
+  - changed-column summaries
+  - record tracking across many DB files
+- These reports are already useful for spotting:
+  - unexpected row additions/removals
+  - wrong categorical values
+  - field-level drift across versions
+  - engine- or file-level access failures
+- The example report patterns provided by the user suggest a valuable next reporting layer:
+  - grouped anomaly sections
+  - field-focused difference emphasis
+  - easier visual detection of semantic errors in rows that still "exist"
+- Any future reporting work should build on the current compare output, not replace or slow down the fast compare path.
 
 ## Update Rule
 

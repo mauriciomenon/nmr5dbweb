@@ -16,6 +16,7 @@ The first stabilization slice is intentionally narrow:
 - Student source is `allysonalmeidaa/mdb2sql_fork`
 - Clone source branch was `minha-alteracao`
 - Current local/product branch is `master`
+- Current development branch is `codex/dev`
 - `origin`: `https://github.com/mauriciomenon/nmr5dbweb.git`
 - `upstream`: `https://github.com/allysonalmeidaa/mdb2sql_fork.git`
 
@@ -88,6 +89,11 @@ The first stabilization slice is intentionally narrow:
 - Compare actions now disable their own buttons while requests are in flight for load/export/overview paths
 - Browser validation found only one non-blocking asset issue on the main page:
   - missing `favicon.ico`
+- Product direction explicitly confirmed:
+  - keep `DuckDB`, `SQLite`, and `Access (.mdb/.accdb)` support
+  - preserve the current fast compare flow as the main operational compare
+  - any future deep report/diff layer must not break or slow the current fast compare feature
+- The current reports are useful for triage and anomaly detection, but they still have room to evolve toward more explicit grouped-difference reports.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -107,6 +113,8 @@ The first stabilization slice is intentionally narrow:
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
   - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility when there is measured gain
   - add focused frontend regression tests for the browser-validated invalid-state flows if the team wants them automated
+  - harden the main SQLite contract in the Flask UI/backend layer without weakening DuckDB-first behavior
+  - design richer diff/report outputs on top of the current compare results, preserving the fast path
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today
