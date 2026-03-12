@@ -63,8 +63,11 @@ The first stabilization slice is intentionally narrow:
   - flow hints
   - compare/track form and workflow primitives
   - shared search/compare button styles
+- `static/admin.html` now also sits on the same shared component layer for buttons, cards, form controls, status blocks, and responsive workbench layout
 - `static/compare_dbs.html` now groups the operator flow into clearer compare panels instead of one long flat form
 - `static/compare_dbs.html` now reuses shared request helpers for compare, pagination, export, tables overview, and restored state
+- `static/compare_dbs.html` no longer carries the large inline page script; that logic now lives in `static/compare_dbs.js`
+- Flask now serves the dedicated `/compare_dbs.js` asset successfully in local smoke validation
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -82,9 +85,8 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
-  - continue reducing page-specific CSS duplication now that the shared shell also owns more component primitives
-  - decide whether `static/admin.html` should join the same component system or remain intentionally distinct
-  - consider extracting the large inline script from `static/compare_dbs.html` once the current operator flow is stable
+  - continue reducing page-specific CSS duplication now that `static/admin.html` also sits on the shared component system
+  - split `static/compare_dbs.js` by responsibility once the compare operator flow stabilizes
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today

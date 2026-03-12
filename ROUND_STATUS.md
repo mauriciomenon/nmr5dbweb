@@ -610,3 +610,46 @@ Push the web UI beyond shell extraction by sharing more component-level rules ac
 - Component-level CSS drift is lower now for search/compare/track, but `static/admin.html` still carries a more isolated visual system than the other pages.
 - `static/compare_dbs.html` is more maintainable than before, but it still has a large inline script and remains a future extraction candidate.
 - This machine still lacks `curl` in PATH, so local HTTP smoke checks should prefer Python `urllib` or another available client.
+
+## Follow-up Slice: Admin Shell Alignment And Compare Script Extraction
+
+### Goal
+
+Pull the admin page into the same shared component system and move the large compare-page script out of the HTML file without changing ids, routes, or payload behavior.
+
+### Applied
+
+1. Expanded `static/shell.css` so it now also carries the shared admin component layer for:
+   - action buttons
+   - shell cards and section headers
+   - form controls
+   - stats, steps, status panels, and upload entries
+   - responsive admin workbench layout rules
+2. Removed the duplicated admin shell/component CSS from `static/admin.html` while preserving the page-specific theme and DOM structure.
+3. Extracted the large inline compare script from `static/compare_dbs.html` into the new dedicated asset `static/compare_dbs.js`.
+4. Rewired `static/compare_dbs.html` to load:
+   - `/shell.js`
+   - `/compare_dbs.js`
+5. Kept the current compare/search/admin ids, Flask routes, and API payload contract unchanged.
+
+### What Was Proved
+
+- `static/admin.html` now uses the same shared component foundation as the other product pages.
+- `static/compare_dbs.html` is materially smaller and easier to maintain because its page logic now lives in `static/compare_dbs.js`.
+- The extracted compare asset is served correctly by Flask and did not break the backend-focused validation baseline.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `node --check static/app.js && node --check static/ui_utils.js && node --check static/shell.js && node --check static/compare_dbs.js`: passed
+- Flask route smoke check on alternate port `5081`: passed for `/`, `/admin.html`, `/compare_dbs`, `/track_record`
+- Shared asset smoke check on alternate port `5081`: passed for `/shell.css`, `/shell.js`, `/compare_dbs.js`
+
+### Findings From This Slice
+
+- The four HTML pages now share a broader common visual/component layer, which lowers the cost of future UX cleanup.
+- `static/compare_dbs.js` is still a large page module and should eventually be split by responsibility after the operator flow settles.
+- Local UI smoke remains CLI/browser-light on this machine because Playwright still has no Chromium binary installed.

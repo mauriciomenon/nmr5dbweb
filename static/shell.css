@@ -63,6 +63,455 @@ body.shell-track {
   margin-top: 4px;
 }
 
+.shell-admin .tab-btn,
+.shell-admin .btn,
+.shell-admin .chip-btn {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.shell-admin .tab-btn {
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.shell-admin .tab-btn.active {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+  box-shadow: 0 12px 24px rgba(15, 94, 255, 0.28);
+}
+
+.shell-admin .btn,
+.shell-admin .chip-btn {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.shell-admin .btn:hover,
+.shell-admin .chip-btn:hover,
+.shell-admin .tab-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.shell-admin .btn.primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  border-color: var(--primary);
+  box-shadow: 0 12px 24px rgba(15, 94, 255, 0.28);
+}
+
+.shell-admin .btn.ghost,
+.shell-admin .chip-btn {
+  background: transparent;
+}
+
+.shell-admin .hero,
+.shell-admin .layout {
+  display: grid;
+  gap: 16px;
+}
+
+.shell-admin .hero {
+  margin-top: 16px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+}
+
+.shell-admin .hero-panel,
+.shell-admin .card {
+  position: relative;
+  z-index: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+html[data-theme="light"] .shell-admin .hero-panel,
+html[data-theme="light"] .shell-admin .card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.95));
+}
+
+.shell-admin .hero-panel {
+  padding: 22px;
+  min-height: 220px;
+}
+
+.shell-admin .hero-panel::after,
+.shell-admin .card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(15, 94, 255, 0.10), transparent 38%, rgba(56, 189, 248, 0.08));
+  opacity: 0.8;
+}
+
+.shell-admin .hero-content,
+.shell-admin .card-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.shell-admin .hero-title {
+  margin: 10px 0 6px;
+  font-size: 28px;
+  line-height: 1.08;
+  font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+}
+
+.shell-admin .hero-copy {
+  margin: 0;
+  color: var(--muted);
+  max-width: 60ch;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.shell-admin .hero-badges,
+.shell-admin .hero-actions,
+.shell-admin .section-actions,
+.shell-admin .uploads-toolbar,
+.shell-admin .index-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.shell-admin .hero-badges {
+  margin-top: 16px;
+}
+
+.shell-admin .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(15, 94, 255, 0.10);
+  border: 1px solid rgba(15, 94, 255, 0.28);
+  color: var(--ink);
+}
+
+.shell-admin .hero-side {
+  padding: 22px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.shell-admin .hero-side h2,
+.shell-admin .section-title {
+  margin: 0;
+  font-size: 18px;
+  font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+}
+
+.shell-admin .hero-side p,
+.shell-admin .section-copy,
+.shell-admin .muted,
+.shell-admin .small,
+.shell-admin .note,
+.shell-admin .status-text {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.shell-admin .layout {
+  position: relative;
+  z-index: 1;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  padding: 20px 24px 40px;
+}
+
+.shell-admin .stack {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.shell-admin .card {
+  padding: 18px;
+}
+
+.shell-admin .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.shell-admin .section-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.shell-admin .card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.shell-admin .two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.shell-admin .inline-upload {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.shell-admin input,
+.shell-admin button,
+.shell-admin select,
+.shell-admin textarea {
+  font: inherit;
+}
+
+.shell-admin input,
+.shell-admin select,
+.shell-admin textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(10, 14, 20, 0.4);
+  color: var(--ink);
+}
+
+html[data-theme="light"] .shell-admin input,
+html[data-theme="light"] .shell-admin select,
+html[data-theme="light"] .shell-admin textarea {
+  background: #f7faff;
+}
+
+.shell-admin input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--primary);
+}
+
+.shell-admin .stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shell-admin .stat-card,
+.shell-admin .step-item,
+.shell-admin .support-list li,
+.shell-admin .upload-entry,
+.shell-admin #priorityList li,
+.shell-admin .status-panel,
+.shell-admin .deep-link {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="light"] .shell-admin .stat-card,
+html[data-theme="light"] .shell-admin .step-item,
+html[data-theme="light"] .shell-admin .support-list li,
+html[data-theme="light"] .shell-admin .upload-entry,
+html[data-theme="light"] .shell-admin #priorityList li,
+html[data-theme="light"] .shell-admin .status-panel,
+html[data-theme="light"] .shell-admin .deep-link {
+  background: #f6f9ff;
+}
+
+.shell-admin .stat-card {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.shell-admin .stat-label {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.shell-admin .stat-value {
+  margin-top: 8px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.shell-admin .step-list,
+.shell-admin .support-list,
+.shell-admin .uploads-grid,
+.shell-admin .link-grid,
+.shell-admin .status-box {
+  display: grid;
+  gap: 10px;
+}
+
+.shell-admin .step-list,
+.shell-admin .support-list,
+.shell-admin .link-grid,
+.shell-admin .status-box {
+  gap: 12px;
+}
+
+.shell-admin .step-item,
+.shell-admin .support-list li {
+  padding: 12px 14px;
+  border-radius: 14px;
+}
+
+.shell-admin .step-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 8px;
+  border-radius: 999px;
+  background: var(--card-strong);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.shell-admin .support-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shell-admin .upload-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  align-items: center;
+}
+
+.shell-admin .upload-name {
+  font-weight: 800;
+  word-break: break-word;
+}
+
+.shell-admin .upload-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.shell-admin .upload-actions,
+.shell-admin .prio-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.shell-admin .upload-actions {
+  justify-content: end;
+}
+
+.shell-admin #priorityList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.shell-admin #priorityList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  cursor: grab;
+}
+
+.shell-admin #priorityList li.dragging {
+  opacity: 0.5;
+}
+
+.shell-admin .priority-name {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.shell-admin .status-panel {
+  padding: 12px;
+  border-radius: 14px;
+}
+
+.shell-admin .mono {
+  font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+}
+
+.shell-admin .message {
+  min-height: 20px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.shell-admin .message.ok {
+  color: #7ff0a7;
+}
+
+.shell-admin .message.warn {
+  color: #ffd88a;
+}
+
+.shell-admin .message.err {
+  color: #ffb4a8;
+}
+
+html[data-theme="light"] .shell-admin .message.ok {
+  color: var(--success);
+}
+
+html[data-theme="light"] .shell-admin .message.warn {
+  color: var(--warning);
+}
+
+html[data-theme="light"] .shell-admin .message.err {
+  color: var(--danger);
+}
+
+.shell-admin .deep-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 700;
+}
+
 .shell-search .header-shell,
 .shell-compare .compare-shell,
 .shell-track .track-shell {
@@ -761,6 +1210,8 @@ html[data-theme="light"] .shell-track .tracker-guide {
 }
 
 @media (max-width: 980px) {
+  .shell-admin .hero,
+  .shell-admin .layout,
   .shell-search .hero-panel,
   .shell-search .workspace-grid,
   .shell-search .container,
@@ -792,9 +1243,31 @@ html[data-theme="light"] .shell-track .tracker-guide {
     margin-left: 0;
   }
 
+  .shell-admin header {
+    padding: 16px;
+  }
+
+  .shell-admin .layout {
+    padding: 16px 16px 32px;
+  }
+
+  .shell-admin .hero-title,
   .shell-search .hero-title,
   .shell-compare .hero-title,
   .shell-track .hero-title {
     font-size: 24px;
+  }
+
+  .shell-admin .stat-grid,
+  .shell-admin .two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-admin .upload-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .shell-admin .upload-actions {
+    justify-content: start;
   }
 }
