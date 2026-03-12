@@ -1,9 +1,15 @@
-const js = require('@eslint/js');
-const globals = require('globals');
+import js from '@eslint/js';
+import globals from 'globals';
 
-module.exports = [
+export default [
   {
-    ignores: ['interface/uploads/**', 'output/**'],
+    ignores: [
+      'interface/uploads/**',
+      'output/**',
+      'node_modules/**',
+      'bkp_limpeza/**',
+      '.venv/**',
+    ],
   },
   js.configs.recommended,
   {
