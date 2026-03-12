@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from interface.compare_dbs import compare_table_content_duckdb, compare_table_duckdb  # noqa: E402
+from interface.compare_dbs import compare_table_content_duckdb, compare_table_duckdb, compare_table_duckdb_paged  # noqa: E402
 
 
 def _make_db(path: Path, rows):
@@ -236,3 +236,67 @@ def test_compare_table_duckdb_rejects_missing_key_column(tmp_path):
         assert "key_columns ausentes" in str(exc)
     else:
         raise AssertionError("compare_table_duckdb deveria rejeitar key_columns ausentes")
+
+
+def test_compare_table_duckdb_paged_filters_and_paginates(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "x"), (2, "b"), (4, "z")])
+    _make_db(db2, [(1, "y"), (3, "c"), (4, "z")])
+
+    result = compare_table_duckdb_paged(
+        db1,
+        db2,
+        "T",
+        key_columns=["id"],
+        compare_columns=["valor"],
+        change_types=["changed", "removed", "added"],
+        page=2,
+        page_size=1,
+    )
+
+    assert result["summary"]["keys_total"] == 4
+    assert result["summary"]["changed_count"] == 1
+    assert result["summary"]["removed_count"] == 1
+    assert result["summary"]["added_count"] == 1
+    assert result["total_filtered_rows"] == 3
+    assert result["total_pages"] == 3
+    assert result["page"] == 2
+    assert result["row_count"] == 1
+    assert result["rows"][0]["key"]["id"] == 2
+    assert result["rows"][0]["type"] == "removed"
+
+
+def test_compare_table_duckdb_paged_changed_column_keeps_added_removed(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+
+    conn1 = duckdb.connect(str(db1))
+    conn2 = duckdb.connect(str(db2))
+    try:
+        conn1.execute("CREATE TABLE T(id INTEGER, v1 TEXT, v2 TEXT)")
+        conn2.execute("CREATE TABLE T(id INTEGER, v1 TEXT, v2 TEXT)")
+        conn1.execute("INSERT INTO T VALUES (1, 'a', 'x')")
+        conn2.execute("INSERT INTO T VALUES (1, 'b', 'x')")
+        conn1.execute("INSERT INTO T VALUES (2, 'c', 'y')")
+        conn2.execute("INSERT INTO T VALUES (2, 'c', 'z')")
+        conn2.execute("INSERT INTO T VALUES (3, 'n', 'm')")
+    finally:
+        conn1.close()
+        conn2.close()
+
+    result = compare_table_duckdb_paged(
+        db1,
+        db2,
+        "T",
+        key_columns=["id"],
+        compare_columns=["v1", "v2"],
+        changed_column="v1",
+        page=1,
+        page_size=10,
+    )
+
+    assert result["summary"]["changed_count"] == 2
+    assert result["summary"]["added_count"] == 1
+    assert result["total_filtered_rows"] == 2
+    assert [row["key"]["id"] for row in result["rows"]] == [1, 3]

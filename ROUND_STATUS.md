@@ -366,3 +366,47 @@ Stop `/api/compare_db_rows` from truncating the compare result before backend fi
 
 - The compare route is now correct for filtering and pagination, but it still paginates in Python after loading the full diff set returned by `compare_table_duckdb(...)`.
 - If very large compare outputs become a real performance bottleneck, the next measured optimization should move filter/pagination deeper into the SQL layer instead of reintroducing truncation before filtering.
+
+## Follow-up Slice: Dedicated SQL Compare Paging Engine
+
+### Goal
+
+Replace the route-level Python filtering and pagination path with a dedicated SQL-backed compare paging engine.
+
+### Applied
+
+1. Added `compare_table_duckdb_paged(...)` in `interface/compare_dbs.py`.
+2. Kept `compare_table_duckdb(...)` intact for existing direct callers and regression coverage.
+3. Moved into SQL for the keyed compare route:
+   - `key_filter`
+   - `change_types`
+   - `changed_column`
+   - `page`
+   - `page_size`
+4. Preserved the current API contract:
+   - global `summary` remains unfiltered
+   - `rows` are paged
+   - `total_filtered_rows` and `total_pages` reflect the filtered result set
+5. Added stable paging order by key columns plus `change_type`.
+6. Switched `/api/compare_db_rows` in `interface/app_flask_local_search.py` to the new paged engine and removed the old Python-side filtering/pagination block.
+7. Expanded regression coverage:
+   - direct unit coverage for `compare_table_duckdb_paged(...)`
+   - route coverage with the paged engine monkeypatched
+
+### What Was Proved
+
+- The compare route no longer needs to materialize the full diff set in Python just to filter and paginate.
+- SQL-backed pagination preserves the existing JSON contract expected by `static/compare_dbs.html`.
+- The old compare engine still works for existing direct tests while the route now uses the paged path.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `24 passed`
+- `./.venv/bin/ty check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- `./.venv/bin/ruff check interface/compare_dbs.py interface/app_flask_local_search.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+
+### Findings From This Slice
+
+- The route-level performance bottleneck from Python-side compare pagination is now closed.
+- The compare module now carries two keyed compare engines with overlapping setup logic, which is acceptable for the stabilization phase but is the next cleanup candidate if we keep extending this area.

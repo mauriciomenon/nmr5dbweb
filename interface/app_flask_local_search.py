@@ -30,7 +30,7 @@ from interface.find_record_across_dbs import find_record_across_dbs, SUPPORTED_E
 from interface.compare_dbs import (
     list_common_tables,
     list_table_columns,
-    compare_table_duckdb,
+    compare_table_duckdb_paged,
     compare_table_content_duckdb,
 )
 
@@ -850,71 +850,18 @@ def api_compare_db_rows():
             app.logger.warning("compare_db_rows: %s", msg)
             return jsonify({"error": msg}), 400
 
-        # Nesta rota, row_limit/page_size controla a saída paginada.
-        # Se aplicarmos LIMIT antes, filtros backend e paginação em páginas > 1
-        # passam a operar sobre um universo truncado e podem perder diferenças reais.
-        result = compare_table_duckdb(db1, db2, table, key_columns, compare_columns, limit=None)
-
-        rows = result.get("rows") or []
-        result_compare_columns = result.get("compare_columns") or []
-        if changed_column and changed_column not in result_compare_columns:
-            return jsonify({
-                "error": "changed_column precisa existir em compare_columns",
-                "changed_column": changed_column,
-            }), 400
-
-        def _row_matches_filters(row: dict) -> bool:
-            # filtro por chave
-            if key_filter:
-                key = row.get("key") or {}
-                for col, val in key_filter.items():
-                    got = key.get(col)
-                    if str(got) != str(val):
-                        return False
-
-            # filtro por tipo de mudança
-            if change_types is not None and len(change_types) > 0:
-                if row.get("type") not in change_types:
-                    return False
-
-            # filtro por coluna alterada (apenas para linhas "changed")
-            if changed_column and row.get("type") == "changed":
-                a_vals = row.get("a") or {}
-                b_vals = row.get("b") or {}
-                av = a_vals.get(changed_column)
-                bv = b_vals.get(changed_column)
-                # tratamos None/"vazio" de forma semelhante ao frontend: se ambos iguais, não conta
-                if (av is None and bv is None) or (av == bv):
-                    return False
-
-            return True
-
-        if key_filter or (change_types is not None and len(change_types) > 0) or changed_column:
-            filtered_rows = [r for r in rows if _row_matches_filters(r)]
-        else:
-            filtered_rows = rows
-
-        total_filtered = len(filtered_rows)
-
-        if page_size:
-            total_pages = max(1, (total_filtered + page_size - 1) // page_size)
-            if page > total_pages:
-                page = total_pages
-            start = (page - 1) * page_size
-            end = start + page_size
-            page_rows = filtered_rows[start:end]
-        else:
-            total_pages = 1
-            page = 1
-            page_rows = filtered_rows
-
-        result["rows"] = page_rows
-        result["row_count"] = len(page_rows)
-        result["page"] = page
-        result["page_size"] = page_size
-        result["total_filtered_rows"] = int(total_filtered)
-        result["total_pages"] = int(total_pages)
-
+        result = compare_table_duckdb_paged(
+            db1,
+            db2,
+            table,
+            key_columns,
+            compare_columns,
+            key_filter=key_filter,
+            change_types=change_types,
+            changed_column=changed_column,
+            page=page,
+            page_size=page_size,
+        )
         return jsonify(result)
     except duckdb.IOException as exc:  # erros específicos de acesso ao arquivo DuckDB
         msg = str(exc)

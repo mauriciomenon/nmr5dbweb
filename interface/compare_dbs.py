@@ -401,3 +401,255 @@ def compare_table_duckdb(
             "changed_count": int(changed_count),
         },
     }
+
+
+def compare_table_duckdb_paged(
+    db1: Path,
+    db2: Path,
+    table: str,
+    key_columns: Sequence[str],
+    compare_columns: Sequence[str] | None = None,
+    *,
+    key_filter: Dict[str, str] | None = None,
+    change_types: Sequence[str] | None = None,
+    changed_column: str | None = None,
+    page: int = 1,
+    page_size: int = 100,
+) -> Dict[str, Any]:
+    """Compara uma tabela entre dois bancos DuckDB com filtros e paginação em SQL."""
+    if not key_columns:
+        raise ValueError("key_columns vazio; e necessario informar pelo menos uma coluna-chave")
+    if int(page) < 1:
+        raise ValueError("page deve ser maior ou igual a 1")
+    if int(page_size) < 1:
+        raise ValueError("page_size deve ser maior ou igual a 1")
+
+    db1 = db1.resolve()
+    db2 = db2.resolve()
+    if not db1.exists():
+        raise FileNotFoundError(db1)
+    if not db2.exists():
+        raise FileNotFoundError(db2)
+
+    cols_a = list_table_columns(db1, table)
+    cols_b = list_table_columns(db2, table)
+    missing_tables = []
+    if not cols_a:
+        missing_tables.append("db1")
+    if not cols_b:
+        missing_tables.append("db2")
+    if missing_tables:
+        raise ValueError(f"tabela '{table}' nao encontrada em: {', '.join(missing_tables)}")
+
+    cols_b_set = set(cols_b)
+    common_columns = [c for c in cols_a if c in cols_b_set]
+    missing_keys = [c for c in key_columns if c not in common_columns]
+    if missing_keys:
+        raise ValueError(
+            "key_columns ausentes nas duas tabelas: " + ", ".join(sorted(missing_keys))
+        )
+
+    if compare_columns is None:
+        compare_columns = [c for c in common_columns if c not in key_columns]
+    else:
+        missing_compare = [c for c in compare_columns if c not in common_columns]
+        if missing_compare:
+            raise ValueError(
+                "compare_columns ausentes nas duas tabelas: " + ", ".join(sorted(missing_compare))
+            )
+
+    if changed_column and changed_column not in compare_columns:
+        raise ValueError("changed_column precisa existir em compare_columns")
+
+    valid_types = {"added", "removed", "changed"}
+    change_types_list = list(change_types or [])
+    invalid_change_types = [str(t) for t in change_types_list if str(t) not in valid_types]
+    if invalid_change_types:
+        raise ValueError("change_types contem valores invalidos: " + ", ".join(invalid_change_types))
+    change_types_list = [str(t) for t in change_types_list]
+
+    key_filter_map = dict(key_filter or {})
+    invalid_filter_keys = [c for c in key_filter_map if c not in key_columns]
+    if invalid_filter_keys:
+        raise ValueError(
+            "key_filter usa coluna fora de key_columns: " + ", ".join(sorted(invalid_filter_keys))
+        )
+
+    coalesced_keys = ", ".join([
+        f"COALESCE({_qualify_identifier('a', c)}, {_qualify_identifier('b', c)}) AS {_quote_identifier(c)}"
+        for c in key_columns
+    ])
+
+    compare_cols_sql_parts: List[str] = []
+    diff_conditions: List[str] = []
+    for c in compare_columns:
+        compare_cols_sql_parts.append(
+            f"{_qualify_identifier('a', c)} AS {_quote_identifier(f'a_{c}')}"
+        )
+        compare_cols_sql_parts.append(
+            f"{_qualify_identifier('b', c)} AS {_quote_identifier(f'b_{c}')}"
+        )
+        diff_conditions.append(
+            f"{_qualify_identifier('a', c)} IS DISTINCT FROM {_qualify_identifier('b', c)}"
+        )
+
+    compare_cols_sql = ", ".join(compare_cols_sql_parts) if compare_cols_sql_parts else ""
+    diff_condition_sql = " OR ".join(diff_conditions) if diff_conditions else "FALSE"
+    join_condition = " AND ".join([
+        f"{_qualify_identifier('a', c)} = {_qualify_identifier('b', c)}" for c in key_columns
+    ])
+    change_type_case = (
+        "CASE "
+        f"WHEN {_qualify_identifier('a', key_columns[0])} IS NULL THEN 'added' "
+        f"WHEN {_qualify_identifier('b', key_columns[0])} IS NULL THEN 'removed' "
+        f"WHEN {diff_condition_sql} THEN 'changed' "
+        "ELSE 'same' END AS change_type"
+    )
+
+    select_cols = coalesced_keys
+    if compare_cols_sql:
+        select_cols += ", " + compare_cols_sql
+    select_cols += ", " + change_type_case
+
+    table_a_sql = _qualify_identifier("db1", table)
+    table_b_sql = _qualify_identifier("db2", table)
+    order_by_parts = [f"{_quote_identifier(c)} NULLS LAST" for c in key_columns]
+    order_by_parts.append("change_type")
+    order_by_sql = ", ".join(order_by_parts)
+
+    filter_clauses: List[str] = []
+    filter_params: List[Any] = []
+    for col, val in key_filter_map.items():
+        filter_clauses.append(f"CAST({_quote_identifier(col)} AS VARCHAR) = ?")
+        filter_params.append(str(val))
+
+    if change_types_list:
+        placeholders = ", ".join(["?"] * len(change_types_list))
+        filter_clauses.append(f"change_type IN ({placeholders})")
+        filter_params.extend(change_types_list)
+
+    if changed_column:
+        filter_clauses.append(
+            f"(change_type <> 'changed' OR "
+            f"{_quote_identifier(f'a_{changed_column}')} IS DISTINCT FROM {_quote_identifier(f'b_{changed_column}')})"
+        )
+
+    filtered_where_sql = " AND ".join(filter_clauses) if filter_clauses else "TRUE"
+
+    common_cte_sql = f"""
+    WITH diff_rows AS (
+      SELECT
+        {select_cols}
+      FROM {table_a_sql} AS a
+      FULL OUTER JOIN {table_b_sql} AS b
+        ON {join_condition}
+      WHERE
+        {_qualify_identifier('a', key_columns[0])} IS NULL
+        OR {_qualify_identifier('b', key_columns[0])} IS NULL
+        OR ({diff_condition_sql})
+    ), filtered_rows AS (
+      SELECT * FROM diff_rows
+      WHERE {filtered_where_sql}
+    )
+    """
+
+    summary_sql = common_cte_sql + f"""
+    SELECT
+      (SELECT COUNT(*) FROM {table_a_sql}) AS rows_a,
+      (SELECT COUNT(*) FROM {table_b_sql}) AS rows_b,
+      (SELECT COUNT(*) FROM {table_a_sql} AS a FULL OUTER JOIN {table_b_sql} AS b ON {join_condition}) AS keys_total,
+      (SELECT COUNT(*) FROM diff_rows) AS diff_total,
+      (SELECT COUNT(*) FROM diff_rows WHERE change_type = 'added') AS added_total,
+      (SELECT COUNT(*) FROM diff_rows WHERE change_type = 'removed') AS removed_total,
+      (SELECT COUNT(*) FROM diff_rows WHERE change_type = 'changed') AS changed_total,
+      (SELECT COUNT(*) FROM filtered_rows) AS filtered_total
+    """
+
+    conn = _connect_memory()
+    try:
+        _attach_db(conn, "db1", db1, read_only=True)
+        _attach_db(conn, "db2", db2, read_only=True)
+
+        summary_row = conn.execute(summary_sql, filter_params).fetchone()
+        if summary_row is None:
+            raise RuntimeError(f"Falha ao resumir comparacao da tabela {table}")
+
+        (
+            total_a,
+            total_b,
+            total_keys,
+            diff_total,
+            added_total,
+            removed_total,
+            changed_total,
+            filtered_total,
+        ) = summary_row
+
+        filtered_total_int = int(filtered_total or 0)
+        page_int = int(page)
+        page_size_int = int(page_size)
+        total_pages = max(1, (filtered_total_int + page_size_int - 1) // page_size_int)
+        if filtered_total_int == 0:
+            page_int = 1
+        elif page_int > total_pages:
+            page_int = total_pages
+        offset = (page_int - 1) * page_size_int
+
+        rows: List[tuple[Any, ...]] = []
+        cols: List[str] = []
+        if filtered_total_int > 0:
+            page_sql = common_cte_sql + f"""
+            SELECT *
+            FROM filtered_rows
+            ORDER BY {order_by_sql}
+            LIMIT ? OFFSET ?
+            """
+            page_params = [*filter_params, page_size_int, offset]
+            rows = conn.execute(page_sql, page_params).fetchall()
+            cols = [c[0] for c in conn.description]
+    finally:
+        conn.close()
+
+    results: List[Dict[str, Any]] = []
+    for row in rows:
+        row_dict = {cols[i]: row[i] for i in range(len(cols))}
+        change_type = row_dict.pop("change_type", "changed")
+        key: Dict[str, Any] = {}
+        for k in key_columns:
+            key[k] = row_dict.pop(k, None)
+        a_vals: Dict[str, Any] = {}
+        b_vals: Dict[str, Any] = {}
+        for c in compare_columns or []:
+            a_vals[c] = row_dict.get(f"a_{c}")
+            b_vals[c] = row_dict.get(f"b_{c}")
+        results.append({
+            "type": change_type,
+            "key": key,
+            "a": a_vals,
+            "b": b_vals,
+        })
+
+    same_count = int(total_keys or 0) - int(diff_total or 0)
+
+    return {
+        "table": table,
+        "db1": str(db1),
+        "db2": str(db2),
+        "key_columns": list(key_columns),
+        "compare_columns": list(compare_columns or []),
+        "row_count": len(results),
+        "rows": results,
+        "page": int(page_int),
+        "page_size": int(page_size_int),
+        "total_filtered_rows": int(filtered_total_int),
+        "total_pages": int(total_pages),
+        "summary": {
+            "rows_a": int(total_a or 0),
+            "rows_b": int(total_b or 0),
+            "keys_total": int(total_keys or 0),
+            "same_count": max(0, same_count),
+            "added_count": int(added_total or 0),
+            "removed_count": int(removed_total or 0),
+            "changed_count": int(changed_total or 0),
+        },
+    }
