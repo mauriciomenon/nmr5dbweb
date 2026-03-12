@@ -1273,3 +1273,48 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `61 passed`
 - `pnpm exec eslint static`: passed
 - `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+
+## Current Slice
+
+### Scope Completed
+
+1. Published the user-generated ESLint config migration first, as its own slice.
+2. Fixed the concrete JS reliability findings raised on `app_search.js`, `app_results.js`, and `app.js`.
+3. Simplified one more bad coupling in the DuckDB fast search path without changing behavior.
+4. Formalized the current role of `output/` in project control docs.
+
+### What Changed
+
+- Replaced the old CommonJS ESLint config with a single flat-config file:
+  - `eslint.config.mjs`
+- Removed the duplicate config source:
+  - `eslint.config.js`
+- Kept the lint scope pragmatic for current repo needs:
+  - browser scripts under `static/`
+  - ignore local/generated paths such as `output/`, `node_modules/`, `.venv/`, and `bkp_limpeza/`
+- Fixed the JS issues reported by static analysis:
+  - null-check cleanup in `static/app_search.js`
+  - redundant `row_json` conditions in `static/app_results.js`
+  - constant-condition cleanup in `static/app.js`
+  - cleaner conversion/indexer status handling in `static/app.js`
+- Simplified the fast DuckDB search path in `interface/app_flask_local_search.py`:
+  - `api_search_duckdb(...)` now uses the `db_path` explicitly passed from the route instead of reaching back into global active-state lookup
+- Added focused regression coverage proving that the fast DuckDB search helper uses the explicit path it receives.
+
+### Decision On `output/`
+
+- `output/` is now treated as a formal local validation area:
+  - real operator sample DBs
+  - smoke fixtures
+- It is useful and currently justified.
+- It is not part of the supported product runtime contract.
+- No move/rename was executed in this slice; only the project decision was documented.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g '*.py')`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/find_record_across_dbs.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/find_record_across_dbs.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `62 passed`
+- `pnpm exec eslint static`: passed
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed

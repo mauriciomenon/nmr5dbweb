@@ -446,6 +446,31 @@ def test_api_search_busca_textual_duckdb_prioriza_tabela(tmp_path, monkeypatch):
     assert list(payload["results"].keys())[0] == "alpha"
 
 
+def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):
+    active_db = tmp_path / "active.duckdb"
+    route_db = tmp_path / "route.duckdb"
+
+    for db_path, table_name in ((active_db, "wrong_table"), (route_db, "right_table")):
+        conn = duckdb.connect(str(db_path))
+        conn.execute(
+            "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
+        )
+        conn.execute(
+            "INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)",
+            [table_name, "id", "1", 0, "alpha result", '{"id": 1, "name": "alpha row"}'],
+        )
+        conn.close()
+
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(active_db))
+    monkeypatch.setitem(local_search.cfg, "priority_tables", [])
+
+    payload = local_search.api_search_duckdb(
+        str(route_db), "alpha", 10, 1000, 500, "any", None
+    )
+
+    assert list(payload["results"].keys()) == ["right_table"]
+
+
 def test_api_find_record_across_dbs_sucesso_sqlite(tmp_path):
     client = app.test_client()
     track_dir = tmp_path / "track"

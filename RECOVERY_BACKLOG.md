@@ -40,11 +40,11 @@ Track real product debt that should not be fixed in the current slice.
    - search/table browsing
    - record tracking flow
    - startup/config persistence boundaries
-20. Decide whether real operator sample files under `output/` should remain as local validation fixtures only or move to a more explicit non-product sample-data convention.
-21. Continue reducing duplication inside the actual browse/search implementations in `interface/app_flask_local_search.py` after the current helper extraction:
+20. Continue reducing duplication inside the actual browse/search implementations in `interface/app_flask_local_search.py` after the current helper extraction:
    - keep the DuckDB fast path intact
    - avoid broad engine abstraction layers
    - keep row serialization and result ordering behavior stable
+21. If `output/` grows further, define retention rules so the local validation area does not become an unbounded dump of operator samples.
 
 ## Do Not Pull Into Slice 1
 

@@ -70,7 +70,7 @@ function renderResults(q, results, per_table) {
     const colsSet = new Set();
     const rowObjs = [];
     rows.forEach((it) => {
-      const r = it.row || (it.row_json ? JSON.parse(it.row_json || '{}') : {});
+      const r = it.row || (it.row_json ? JSON.parse(it.row_json) : {});
       rowObjs.push({ score: it.score, row: r });
       if (r && typeof r === 'object')
         Object.keys(r).forEach((c) => colsSet.add(c));
@@ -220,7 +220,7 @@ function exportResultsCsv() {
     alert('Sem resultados para exportar');
     return;
   }
-  const results = lastResults.results || {};
+  const results = lastResults.results;
   const colsSet = new Set(['table', 'score']);
   const rowsOut = [];
   Object.keys(results).forEach((tbl) => {
@@ -228,7 +228,7 @@ function exportResultsCsv() {
       let rowObj = item && item.row ? item.row : null;
       if (!rowObj && item && item.row_json) {
         try {
-          rowObj = JSON.parse(item.row_json || '{}');
+          rowObj = JSON.parse(item.row_json);
         } catch (e) {
           rowObj = {};
         }

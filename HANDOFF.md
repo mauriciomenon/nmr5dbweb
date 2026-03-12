@@ -162,6 +162,14 @@ The first stabilization slice is intentionally narrow:
   - `converters/`, `tools/`, and `artifacts/` remain justified
   - `output/` is currently serving as a local validation area for real Access samples plus smoke fixtures
   - no extra move to `bkp_limpeza/` was justified in this slice
+- ESLint config now has a single source of truth:
+  - `eslint.config.mjs`
+  - old `eslint.config.js` was retired
+- The recent JS reliability findings were fixed in:
+  - `static/app_search.js`
+  - `static/app_results.js`
+  - `static/app.js`
+- The fast DuckDB search helper no longer reaches into global active DB state internally; it now uses the explicit `db_path` passed by the route.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -187,5 +195,5 @@ The first stabilization slice is intentionally narrow:
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - continue reducing the remaining operator islands in `interface/app_flask_local_search.py` after upload, settings, browsing, and compare validation
   - continue reducing backend concentration in table/search implementation and record-tracking execution, not just request parsing
-  - decide whether `output/` should be formalized as local validation-only data or replaced by a clearer sample-data convention
+  - keep `output/` as a documented local validation area unless product requirements later demand a clearer sample-data convention
   - expand compare API payload-type validation if external callers send non-string fields today

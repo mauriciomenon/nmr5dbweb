@@ -1480,7 +1480,7 @@ def api_table():
         return jsonify({"error": str(e)}), 500
 
 
-def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=None):
+def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=None):
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
     if tokens:
@@ -1522,7 +1522,7 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
         sql_params = params
     conn = None
     try:
-        conn = duckdb_connect(get_db_path())
+        conn = duckdb_connect(db_path)
         rows = conn.execute(sql, sql_params).fetchall()
     except Exception as e:
         return {"error": f"search failed: {e}"}
@@ -1784,6 +1784,7 @@ def api_search():
     if ctx["db_engine"] == "duckdb":
         return jsonify(
             api_search_duckdb(
+                ctx["db_path"],
                 search_args["q"],
                 search_args["per_table"],
                 search_args["candidate_limit"],

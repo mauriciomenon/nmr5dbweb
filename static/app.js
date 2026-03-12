@@ -425,7 +425,7 @@ function updateFilesHelpText(status) {
       'Gerencie uploads aqui. A selecao de tabelas fica na barra lateral.';
     return;
   }
-  const dbType = getFlowFromName(status.db || '');
+  const dbType = getFlowFromName(status.db);
   if (dbType === 'access') {
     el.textContent =
       'Access: uploads (.mdb/.accdb) aparecem aqui. A conversao cria um .duckdb com o mesmo nome.';
@@ -744,7 +744,7 @@ function openModalById(modalId) {
   if (overlay) {
     overlay.onclick = () => closeModal();
   }
-  const display = modal ? getComputedStyle(modal).display : 'none';
+  const display = getComputedStyle(modal).display;
   logUi('INFO', 'modal open id=' + modalId + ' display=' + display);
   try {
     fetch('/client/log', {
@@ -1328,7 +1328,7 @@ async function refreshStatus() {
       return;
     }
 
-    const indexerAvailable = !(s.indexer_available === false);
+    const indexerAvailable = s.indexer_available !== false;
     const indexerErr = s.indexer_error || '';
     const indexerStatus = $('indexerStatus');
     if (indexerStatus) {
@@ -1362,15 +1362,15 @@ async function refreshStatus() {
       db ? (dbType === 'duckdb' ? 'DuckDB' : 'Access') : 'Selecione um arquivo'
     );
     if (conversionRunning) {
-      const pct =
-        s.conversion && s.conversion.percent
-          ? s.conversion.percent + '%'
-          : '0%';
+      const conversionStatus = s.conversion || {};
+      const pct = conversionStatus.percent
+        ? conversionStatus.percent + '%'
+        : '0%';
       setStatusTile(
         'statusConvValue',
         'statusConvMeta',
         'Convertendo',
-        pct + ' ' + (s.conversion.current_table || '')
+        pct + ' ' + (conversionStatus.current_table || '')
       );
     } else if (s.conversion && s.conversion.ok) {
       setStatusTile(

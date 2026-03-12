@@ -258,7 +258,7 @@ async function doSearch(opts) {
         'info'
       );
     }
-    if (exportBtn) exportBtn.disabled = !(data && data.returned_count);
+    if (exportBtn) exportBtn.disabled = !data.returned_count;
     renderResults(q, data.results || {}, per_table);
   } catch (e) {
     setSearchMeta('Erro na busca.', 'error');

@@ -20,6 +20,9 @@ Map the current product structure in a stable way so future rounds can update th
   - End-user setup and usage guides.
 - `artifacts/`
   - Runtime/generated artifacts guidance only. Generated content must stay out of git.
+- `output/`
+  - Local validation area with real operator samples and smoke fixtures.
+  - Useful for manual proof-of-use rounds, but not part of the product runtime contract.
 - `tests/`
   - Current focused tests for compare flows.
 - `bkp_limpeza/`
