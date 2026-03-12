@@ -360,8 +360,14 @@ async function loadPriorityTables() {
   listEl.innerHTML = '';
   setMessage('priorityMsg', 'Carregando tabelas...', '');
   try {
-    const tablesPayload = await apiJSON('/api/tables');
     const uploadsPayload = await apiJSON('/admin/list_uploads');
+    const currentDb = basename(uploadsPayload.current_db || '');
+    if (!currentDb) {
+      listEl.innerHTML = '<li class="status-panel">Selecione um DB ativo para ordenar tabelas.</li>';
+      setMessage('priorityMsg', 'Nenhum DB ativo selecionado.', 'warn');
+      return;
+    }
+    const tablesPayload = await apiJSON('/api/tables');
     const tables = tablesPayload.tables || [];
     const saved = uploadsPayload.priority_tables || [];
     if (!tables.length) {

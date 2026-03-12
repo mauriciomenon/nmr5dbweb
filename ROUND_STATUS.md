@@ -219,6 +219,59 @@ Harden the Flask backend around upload, index startup, and search parameter hand
 
 ### What Was Proved
 
+- Focused backend API validation is now green:
+  - upload edge cases
+  - index startup error paths
+  - search parameter validation
+  - compare and generic-search regressions
+
+## Follow-up Slice: Frontend Module Split And Real Browser Validation
+
+### Goal
+
+Reduce frontend maintenance risk by splitting the two largest page scripts and then validate the real rendered pages in a browser session.
+
+### Applied
+
+1. Split the main search/frontend script into:
+   - `static/app.js` as the shared core/state module
+   - `static/app_search.js` for search/result actions
+   - `static/app_bootstrap.js` for DOM startup and bindings
+2. Split the compare page script into:
+   - `static/compare_dbs.js` for flow/state/request handling
+   - `static/compare_dbs_render.js` for diff rendering and pagination UI helpers
+3. Updated page asset loading:
+   - `static/index.html` now loads the three search modules in dependency order
+   - `static/compare_dbs.html` now loads the compare flow and render modules separately
+4. During browser validation, fixed one concrete admin-page regression in `static/admin.html`:
+   - the page no longer requests `/api/tables` when no active DB exists
+   - the priority area now shows a controlled warning state instead of a `400` console error
+5. Ran real browser validation through Playwright against:
+   - `/`
+   - `/compare_dbs`
+   - `/track_record`
+   - `/admin.html`
+
+### What Was Proved
+
+- The large frontend files are now split into smaller operational modules without changing Flask routes or DOM ids.
+- The search page still exposes the expected global functions through the new module layout.
+- The compare page still exposes the expected global handlers after the split.
+- The admin page no longer emits the previous `/api/tables` error when no DB is selected.
+- Real browser navigation and rendering now complete successfully on all four main pages.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `node --check static/app.js static/app_search.js static/app_bootstrap.js static/ui_utils.js static/shell.js static/compare_dbs.js static/compare_dbs_render.js`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- Playwright browser validation:
+  - index page loaded, with only a non-blocking missing `favicon.ico`
+  - compare page loaded with zero console errors
+  - track page loaded with zero console errors
+  - admin page loaded cleanly after the no-DB guard fix
 - Focused backend API validation is now green in the project-local venv.
 - The upload and search paths now fail earlier and more explicitly on bad input.
 - Optional backend dependencies are now guarded without silent fallback.

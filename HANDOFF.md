@@ -70,12 +70,26 @@ The first stabilization slice is intentionally narrow:
 - `static/compare_dbs.html` no longer carries the large inline page script; that logic now lives in `static/compare_dbs.js`
 - Flask now serves the dedicated `/compare_dbs.js` asset successfully in local smoke validation
 - `static/app.js` now has one active bootstrap path for search/admin and no longer carries the old duplicated copies of the search and priority handlers
+- `static/app.js` is now split into:
+  - `static/app.js`
+  - `static/app_search.js`
+  - `static/app_bootstrap.js`
+- `static/compare_dbs.js` is now split into:
+  - `static/compare_dbs.js`
+  - `static/compare_dbs_render.js`
+- Real browser validation has now been executed with Playwright on:
+  - `/`
+  - `/compare_dbs`
+  - `/track_record`
+  - `/admin.html`
+- The admin page no longer requests `/api/tables` when there is no active DB selected
+- Browser validation found only one non-blocking asset issue on the main page:
+  - missing `favicon.ico`
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
   - duplicate-only differences are ignored
   - `row_count_a` and `row_count_b` still reflect raw row totals
-- Local browser validation is partially blocked on this machine because Playwright has no Chromium binary installed
 - Local smoke tests should avoid port `5000` here, because another machine service is already bound there; `5081` worked for Flask route checks
 - This machine also has no `curl` in PATH, so local HTTP smoke checks should prefer Python `urllib` or another available client
 
@@ -87,9 +101,8 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
-  - continue splitting `static/app.js` by responsibility now that the duplicate search/bootstrap path is gone
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
-  - split `static/compare_dbs.js` by responsibility once the compare operator flow stabilizes
+  - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility when there is measured gain
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today
