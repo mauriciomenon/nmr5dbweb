@@ -2,251 +2,974 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <title>Admin — DuckDB Search</title>
+  <title>Busca em bancos - Admin</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body{font-family:Arial,Helvetica,sans-serif;margin:18px;background:#f7f8fb;color:#111}
-    .box{background:#fff;border:1px solid #e4e7ee;padding:12px;border-radius:8px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.03)}
-    h2{margin:0 0 12px 0}
-    .small{font-size:13px;color:#666}
-    .muted{color:#666;font-size:13px}
-    input, button, select, textarea{font-size:14px;padding:8px;border:1px solid #d9e0ef;border-radius:6px}
-    .btn{background:#0b63d6;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
-    .btn.ghost{background:transparent;color:#0b63d6;border:1px solid #d7e3ff}
-    #priorityList{list-style:none;padding:0;margin:8px 0;max-height:320px;overflow:auto;border:1px dashed #eee;border-radius:6px;background:#fcfdff}
-    #priorityList li{display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:1px solid #f0f3f8;cursor:grab}
-    #priorityList li.dragging{opacity:0.5}
-    .priority-name{flex:1; margin-right:8px; word-break:break-all}
-    .prio-actions{display:flex;gap:6px}
-    .note{font-size:13px;color:#666;margin-top:6px}
-    .top-row{display:flex;gap:12px;align-items:center;margin-bottom:8px}
+    :root {
+      --bg: #12161c;
+      --bg-soft: #1b212b;
+      --card: #202732;
+      --card-strong: #0f1722;
+      --ink: #eef3fb;
+      --muted: #9aa7bb;
+      --primary: #0f5eff;
+      --primary-ink: #f5f8ff;
+      --accent: #38bdf8;
+      --success: #2ea66d;
+      --warning: #d2a13f;
+      --danger: #d76558;
+      --border: #313b49;
+      --shadow: 0 24px 48px rgba(8, 12, 18, 0.34);
+      --radius: 18px;
+      --radius-sm: 12px;
+    }
+    :root[data-theme="light"] {
+      --bg: #edf2fb;
+      --bg-soft: #dde6f3;
+      --card: #ffffff;
+      --card-strong: #f8fbff;
+      --ink: #142033;
+      --muted: #5d6a7e;
+      --primary: #0f5eff;
+      --primary-ink: #ffffff;
+      --accent: #0284c7;
+      --success: #1d8b57;
+      --warning: #b7791f;
+      --danger: #c24137;
+      --border: #cfd9e8;
+      --shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Aptos", "Bahnschrift", "IBM Plex Sans", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1000px 720px at 0% 0%, rgba(15, 94, 255, 0.18), transparent 55%),
+        radial-gradient(860px 600px at 100% 0%, rgba(56, 189, 248, 0.12), transparent 48%),
+        linear-gradient(180deg, #0f1318 0%, var(--bg) 48%, #11161d 100%);
+    }
+    html[data-theme="light"] body {
+      background:
+        radial-gradient(1000px 720px at 0% 0%, rgba(15, 94, 255, 0.10), transparent 55%),
+        radial-gradient(860px 600px at 100% 0%, rgba(2, 132, 199, 0.10), transparent 48%),
+        linear-gradient(180deg, #f5f8fd 0%, var(--bg) 48%, #e7eef8 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px) 0 0/28px 28px,
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px) 0 0/28px 28px;
+      opacity: 0.22;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      padding: 18px 24px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 19, 24, 0.88);
+      backdrop-filter: blur(16px);
+    }
+    html[data-theme="light"] header {
+      background: rgba(245, 248, 253, 0.9);
+    }
+    .header-row,
+    .hero-actions,
+    .hero-badges,
+    .section-actions,
+    .uploads-toolbar,
+    .index-controls,
+    .top-nav {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .header-row { justify-content: space-between; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .brand-mark {
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background: conic-gradient(from 40deg, #0f5eff, #38bdf8, #0f5eff);
+      box-shadow: 0 0 0 6px rgba(15, 94, 255, 0.18);
+      flex: 0 0 auto;
+    }
+    h1 {
+      margin: 0;
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+      font-size: 24px;
+      letter-spacing: 0.03em;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--muted);
+      max-width: 700px;
+      margin-top: 4px;
+    }
+    .tab-btn,
+    .btn,
+    .chip-btn {
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .tab-btn {
+      padding: 8px 14px;
+      background: rgba(255,255,255,0.04);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .tab-btn.active {
+      background: var(--primary);
+      color: var(--primary-ink);
+      border-color: var(--primary);
+      box-shadow: 0 12px 24px rgba(15, 94, 255, 0.28);
+    }
+    .btn,
+    .chip-btn {
+      padding: 10px 14px;
+      background: rgba(255,255,255,0.04);
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .btn:hover,
+    .chip-btn:hover,
+    .tab-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+    .btn.primary {
+      background: var(--primary);
+      color: var(--primary-ink);
+      border-color: var(--primary);
+      box-shadow: 0 12px 24px rgba(15, 94, 255, 0.28);
+    }
+    .btn.ghost,
+    .chip-btn {
+      background: transparent;
+    }
+    .hero {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+      gap: 16px;
+    }
+    .hero-panel,
+    .card {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    html[data-theme="light"] .hero-panel,
+    html[data-theme="light"] .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.95));
+    }
+    .hero-panel {
+      padding: 22px;
+      min-height: 220px;
+    }
+    .hero-panel::after,
+    .card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(15,94,255,0.10), transparent 38%, rgba(56,189,248,0.08));
+      opacity: 0.8;
+    }
+    .hero-content,
+    .card-inner {
+      position: relative;
+      z-index: 1;
+    }
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .hero-title {
+      margin: 10px 0 6px;
+      font-size: 28px;
+      line-height: 1.08;
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .hero-copy {
+      margin: 0;
+      color: var(--muted);
+      max-width: 60ch;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    .hero-badges { margin-top: 16px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(15, 94, 255, 0.10);
+      border: 1px solid rgba(15, 94, 255, 0.28);
+      color: var(--ink);
+    }
+    .hero-side {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .hero-side h2,
+    .section-title {
+      margin: 0;
+      font-size: 18px;
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .hero-side p,
+    .section-copy,
+    .muted,
+    .small,
+    .note,
+    .status-text {
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .layout {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+      gap: 16px;
+      padding: 20px 24px 40px;
+    }
+    .stack {
+      display: grid;
+      gap: 16px;
+      align-content: start;
+    }
+    .card {
+      padding: 18px;
+    }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .section-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .card-grid {
+      display: grid;
+      gap: 12px;
+    }
+    .two-col {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .inline-upload {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    input,
+    button,
+    select,
+    textarea {
+      font: inherit;
+    }
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 11px 12px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: rgba(10, 14, 20, 0.4);
+      color: var(--ink);
+    }
+    html[data-theme="light"] input,
+    html[data-theme="light"] select,
+    html[data-theme="light"] textarea {
+      background: #f7faff;
+    }
+    input[type="checkbox"] {
+      width: auto;
+      accent-color: var(--primary);
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .stat-card {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    html[data-theme="light"] .stat-card {
+      background: #f6f9ff;
+    }
+    .stat-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .stat-value {
+      margin-top: 8px;
+      font-size: 20px;
+      font-weight: 800;
+    }
+    .step-list {
+      display: grid;
+      gap: 10px;
+    }
+    .step-item {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px dashed var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    html[data-theme="light"] .step-item {
+      background: #f6f9ff;
+    }
+    .step-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      margin-right: 8px;
+      border-radius: 999px;
+      background: var(--card-strong);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--muted);
+    }
+    .support-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .support-list li {
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px dashed var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    html[data-theme="light"] .support-list li {
+      background: #f6f9ff;
+    }
+    .uploads-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .upload-entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      align-items: center;
+    }
+    html[data-theme="light"] .upload-entry {
+      background: #f6f9ff;
+    }
+    .upload-name {
+      font-weight: 800;
+      word-break: break-word;
+    }
+    .upload-meta {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+    .upload-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: end;
+    }
+    #priorityList {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      gap: 8px;
+      max-height: 420px;
+      overflow: auto;
+    }
+    #priorityList li {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      cursor: grab;
+    }
+    html[data-theme="light"] #priorityList li {
+      background: #f6f9ff;
+    }
+    #priorityList li.dragging { opacity: 0.5; }
+    .priority-name { min-width: 0; word-break: break-word; }
+    .prio-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+    .status-box {
+      display: grid;
+      gap: 12px;
+    }
+    .status-panel {
+      padding: 12px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+    }
+    html[data-theme="light"] .status-panel {
+      background: #f6f9ff;
+    }
+    .mono {
+      font-family: "Consolas", "SFMono-Regular", "Liberation Mono", monospace;
+    }
+    .message {
+      min-height: 20px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .message.ok { color: #7ff0a7; }
+    .message.warn { color: #ffd88a; }
+    .message.err { color: #ffb4a8; }
+    html[data-theme="light"] .message.ok { color: var(--success); }
+    html[data-theme="light"] .message.warn { color: var(--warning); }
+    html[data-theme="light"] .message.err { color: var(--danger); }
+    .link-grid {
+      display: grid;
+      gap: 8px;
+    }
+    .deep-link {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    html[data-theme="light"] .deep-link { background: #f6f9ff; }
+    @media (max-width: 1080px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      header { padding: 16px; }
+      .layout { padding: 16px 16px 32px; }
+      .hero-title { font-size: 24px; }
+      .stat-grid,
+      .two-col {
+        grid-template-columns: 1fr;
+      }
+      .upload-entry {
+        grid-template-columns: 1fr;
+      }
+      .upload-actions {
+        justify-content: start;
+      }
+    }
   </style>
 </head>
 <body>
-  <h2>Admin — Configuração e Upload</h2>
-
-  <div class="box">
-    <div class="small"><strong>DB atual:</strong> <span id="currentDb">carregando...</span></div>
-    <hr/>
-    <form id="uploadForm">
-      <label class="small">1) Upload (.duckdb / .mdb / .accdb)</label><br/>
-      <input type="file" id="fileInput" accept=".duckdb,.mdb,.accdb" />
-      <button class="btn" id="uploadBtn" type="submit">Enviar</button>
-    </form>
-    <div id="uploadMsg" class="muted"></div>
-  </div>
-
-  <div class="box">
-    <h3>2) DBs enviados</h3>
-    <div id="uploadsList" class="muted">Carregando...</div>
-  </div>
-
-  <div class="box">
-    <h3>3) Tabelas prioritárias (ordene arrastando)</h3>
-    <div class="note">Arraste para mudar a ordem. As tabelas no topo terão prioridade quando houver resultados.</div>
-    <ul id="priorityList" aria-label="Lista de tabelas priorizadas"></ul>
-    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-      <button class="btn" id="savePriorityBtn">Salvar ordem</button>
-      <button class="btn ghost" id="refreshTablesBtn">Atualizar lista</button>
-      <div class="muted" id="priorityMsg"></div>
+  <header>
+    <div class="header-row">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <h1>Busca em bancos - Operacao de arquivos</h1>
+          <div class="subtitle">Painel operacional para upload, selecao de base ativa, prioridade de tabelas e indexacao do _fulltext.</div>
+        </div>
+      </div>
+      <div class="top-nav">
+        <a href="/" class="tab-btn">Busca</a>
+        <a href="/track_record" class="tab-btn">Rastrear</a>
+        <a href="/compare_dbs" class="tab-btn">Comparar</a>
+        <a href="/admin.html" class="tab-btn active">Admin</a>
+        <button type="button" id="themeToggle" class="tab-btn">Tema</button>
+      </div>
     </div>
-  </div>
 
-  <div class="box">
-    <h3>4) Iniciar indexação (_fulltext)</h3>
-    <label><input type="checkbox" id="dropCheckbox" /> Recriar _fulltext?</label><br/>
-    <div class="top-row">
-      <label>Chunk: <input id="chunk" type="number" value="2000" style="width:120px" /></label>
-      <label>Batch: <input id="batch" type="number" value="1000" style="width:120px" /></label>
-      <button class="btn" id="startIndex">Iniciar Indexação</button>
-      <div id="indexMsg" class="muted"></div>
+    <div class="hero">
+      <section class="hero-panel">
+        <div class="hero-content">
+          <div class="eyebrow">Workspace</div>
+          <div class="hero-title">Controle o ciclo do banco antes da busca</div>
+          <p class="hero-copy">Use esta tela para decidir qual arquivo esta ativo, subir novas bases, organizar o ranking de tabelas e preparar o indice de busca. O objetivo aqui e deixar o resto da interface pronto para operar sem atrito.</p>
+          <div class="hero-badges">
+            <div id="currentDb" class="badge">DB atual: carregando...</div>
+            <div class="badge">Upload local + selecao</div>
+            <div class="badge">Indice _fulltext</div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="hero-panel hero-side">
+        <div class="hero-content">
+          <h2>Fluxo recomendado</h2>
+          <div class="step-list">
+            <div class="step-item"><span class="step-label">1</span>Enviar ou selecionar o arquivo que vira o DB ativo.</div>
+            <div class="step-item"><span class="step-label">2</span>Ordenar tabelas prioritarias para melhorar a leitura dos resultados.</div>
+            <div class="step-item"><span class="step-label">3</span>Rodar ou recriar o _fulltext antes de abrir a busca.</div>
+          </div>
+        </div>
+      </aside>
     </div>
-  </div>
+  </header>
 
-  <div class="box">
-    <h3>Status</h3>
-    <div id="statusBox" class="muted">Carregando status...</div>
+  <div class="layout">
+    <div class="stack">
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Etapa 1</div>
+              <h2 class="section-title">Entrada de arquivos</h2>
+              <div class="section-copy">Aceita DuckDB, SQLite e Access. O backend decide se a base entra pronta ou se precisa de conversao.</div>
+            </div>
+          </div>
+          <form id="uploadForm" class="card-grid">
+            <div class="inline-upload">
+              <input type="file" id="fileInput" accept=".duckdb,.db,.sqlite,.sqlite3,.mdb,.accdb" />
+              <button class="btn primary" id="uploadBtn" type="submit">Enviar arquivo</button>
+            </div>
+            <div id="uploadMsg" class="message"></div>
+            <div class="stat-grid">
+              <div class="stat-card">
+                <div class="stat-label">Formatos diretos</div>
+                <div class="stat-value mono">.duckdb .db .sqlite .sqlite3</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Formatos com conversao</div>
+                <div class="stat-value mono">.mdb .accdb</div>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Etapa 2</div>
+              <h2 class="section-title">Catalogo de bases disponiveis</h2>
+              <div class="section-copy">Escolha o DB ativo daqui. Esta lista precisa deixar claro qual arquivo esta em uso agora.</div>
+            </div>
+            <div class="uploads-toolbar">
+              <button class="btn ghost" id="refreshUploadsBtn" type="button">Atualizar catalogo</button>
+            </div>
+          </div>
+          <div id="uploadsList" class="uploads-grid muted">Carregando...</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Etapa 3</div>
+              <h2 class="section-title">Indexacao de busca</h2>
+              <div class="section-copy">O _fulltext prepara a busca local. Rode isso depois de trocar ou converter uma base.</div>
+            </div>
+          </div>
+          <div class="card-grid two-col">
+            <label>
+              <span class="small">Chunk</span>
+              <input id="chunk" type="number" value="2000" />
+            </label>
+            <label>
+              <span class="small">Batch</span>
+              <input id="batch" type="number" value="1000" />
+            </label>
+          </div>
+          <div class="index-controls" style="margin-top:12px;">
+            <label class="small"><input type="checkbox" id="dropCheckbox" /> Recriar indice completo</label>
+            <button class="btn primary" id="startIndex" type="button">Rodar indexacao</button>
+          </div>
+          <div id="indexMsg" class="message" style="margin-top:10px;"></div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="stack">
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Monitoramento</div>
+              <h2 class="section-title">Estado atual</h2>
+              <div class="section-copy">Painel rapido para saber se a base ativa esta pronta para busca.</div>
+            </div>
+          </div>
+          <div id="statusBox" class="status-box muted">Carregando status...</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Relevancia</div>
+              <h2 class="section-title">Ordem das tabelas</h2>
+              <div class="section-copy">As tabelas no topo recebem prioridade nos resultados e no contexto de busca.</div>
+            </div>
+            <div class="section-actions">
+              <button class="btn primary" id="savePriorityBtn" type="button">Salvar ordem</button>
+              <button class="btn ghost" id="refreshTablesBtn" type="button">Atualizar</button>
+            </div>
+          </div>
+          <ul id="priorityList" aria-label="Lista de tabelas priorizadas"></ul>
+          <div id="priorityMsg" class="message" style="margin-top:10px;"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-inner">
+          <div class="section-header">
+            <div>
+              <div class="section-kicker">Proximos passos</div>
+              <h2 class="section-title">Ir para outra tela</h2>
+              <div class="section-copy">Depois de preparar a base, siga para a operacao principal.</div>
+            </div>
+          </div>
+          <div class="link-grid">
+            <a class="deep-link" href="/">Abrir painel de busca <span>-></span></a>
+            <a class="deep-link" href="/compare_dbs">Abrir comparacao <span>-></span></a>
+            <a class="deep-link" href="/track_record">Abrir rastreio de registro <span>-></span></a>
+          </div>
+        </div>
+      </section>
+    </aside>
   </div>
 
 <script>
-/* Helper fetch JSON */
-async function apiJSON(path, opts){ const r = await fetch(path, opts); return r.json(); }
+const STORAGE_KEY = 'mdb_theme';
 
-/* Initial load */
-async function refreshAll(){
-  await refreshUploads();
-  await refreshStatus();
-  await loadPriorityTables();
-}
-
-/* Upload form */
-document.getElementById('uploadForm').addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const fi = document.getElementById('fileInput');
-  if(!fi.files.length){ alert('Selecione um arquivo'); return; }
-  const f = fi.files[0];
-  const fd = new FormData(); fd.append('file', f);
-  document.getElementById('uploadMsg').textContent = 'Enviando...';
-  const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-  const j = await res.json();
-  document.getElementById('uploadMsg').textContent = JSON.stringify(j);
-  await refreshUploads();
-});
-
-/* List uploaded DBs */
-async function refreshUploads(){
-  try{
-    const data = await apiJSON('/admin/list_uploads');
-    document.getElementById('currentDb').textContent = data.current_db || '(nenhum)';
-    const ul = document.getElementById('uploadsList');
-    if(data.uploads && data.uploads.length){
-      ul.innerHTML = data.uploads.map(f => `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0">
-        <div style="font-weight:600">${f.name}</div>
-        <div style="display:flex;gap:6px">
-          <button class="btn ghost" onclick="selectUpload('${encodeURIComponent(f.name)}')">Selecionar</button>
-          <a href="/uploads/${encodeURIComponent(f.name)}" target="_blank">Baixar</a>
-        </div></div>`).join('');
-    } else {
-      ul.innerHTML = '<div class="muted">Nenhum upload encontrado.</div>';
-    }
-  }catch(e){
-    document.getElementById('uploadsList').textContent = 'Erro ao listar uploads';
+function applyTheme(pref) {
+  const root = document.documentElement;
+  if (!pref || pref === 'system') {
+    root.removeAttribute('data-theme');
+  } else {
+    root.setAttribute('data-theme', pref === 'light' ? 'light' : 'dark');
   }
 }
 
-/* Select an existing uploaded DB */
-async function selectUpload(nameEnc){
-  const name = decodeURIComponent(nameEnc);
-  const res = await fetch('/admin/select', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({filename:name}) });
-  const j = await res.json();
-  alert(JSON.stringify(j));
-  await refreshAll();
+function initThemeToggle() {
+  const themeBtn = document.getElementById('themeToggle');
+  let saved = localStorage.getItem(STORAGE_KEY) || 'system';
+  if (!['system', 'light', 'dark'].includes(saved)) saved = 'system';
+  applyTheme(saved);
+  if (!themeBtn) return;
+  themeBtn.addEventListener('click', () => {
+    const current = localStorage.getItem(STORAGE_KEY) || saved || 'system';
+    const order = ['system', 'dark', 'light'];
+    const idx = Math.max(0, order.indexOf(current));
+    const next = order[(idx + 1) % order.length];
+    localStorage.setItem(STORAGE_KEY, next);
+    applyTheme(next);
+  });
 }
 
-/* Load priority list (tables) and render draggable list */
-async function loadPriorityTables(){
-  const listEl = document.getElementById('priorityList');
-  const msg = document.getElementById('priorityMsg');
-  listEl.innerHTML = '';
-  msg.textContent = 'Carregando...';
-  try{
-    const t = await apiJSON('/api/tables');
-    const tables = t.tables || [];
-    if(!tables.length){
-      listEl.innerHTML = '<li class="muted">Nenhuma tabela encontrada no DB atual.</li>';
-      msg.textContent = '';
+function messageText(payload) {
+  if (!payload) return '';
+  if (typeof payload === 'string') return payload;
+  return payload.msg || payload.message || payload.error || JSON.stringify(payload);
+}
+
+function setMessage(elId, payload, kind) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.textContent = messageText(payload);
+  el.className = 'message';
+  if (kind) el.classList.add(kind);
+}
+
+function basename(path) {
+  if (!path) return '';
+  return String(path).split(/[\\/]/).filter(Boolean).pop() || String(path);
+}
+
+async function apiJSON(path, opts) {
+  const res = await fetch(path, opts);
+  const data = await res.json();
+  if (!res.ok) {
+    const err = new Error(messageText(data) || res.statusText);
+    err.payload = data;
+    throw err;
+  }
+  return data;
+}
+
+async function refreshAll() {
+  await Promise.all([refreshUploads(), refreshStatus(), loadPriorityTables()]);
+}
+
+document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fi = document.getElementById('fileInput');
+  if (!fi.files.length) {
+    setMessage('uploadMsg', 'Selecione um arquivo antes de enviar.', 'warn');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', fi.files[0]);
+  setMessage('uploadMsg', 'Enviando arquivo...', '');
+  try {
+    const data = await apiJSON('/admin/upload', { method: 'POST', body: fd });
+    setMessage('uploadMsg', data, data.error ? 'err' : 'ok');
+    fi.value = '';
+    await refreshAll();
+  } catch (err) {
+    setMessage('uploadMsg', err.payload || err.message, 'err');
+  }
+});
+
+async function refreshUploads() {
+  const currentDbEl = document.getElementById('currentDb');
+  const listEl = document.getElementById('uploadsList');
+  try {
+    const data = await apiJSON('/admin/list_uploads');
+    const currentName = basename(data.current_db || '');
+    currentDbEl.textContent = currentName ? 'DB atual: ' + currentName : 'DB atual: nenhum';
+    if (!data.uploads || !data.uploads.length) {
+      listEl.innerHTML = '<div class="status-panel">Nenhum arquivo enviado ainda.</div>';
       return;
     }
-    // get saved priority from /admin/list_uploads (endpoint returns priority_tables)
-    const st = await apiJSON('/admin/list_uploads');
-    const saved = st.priority_tables || [];
-    // order: saved in front, then remaining tables
-    const remaining = tables.filter(x => !saved.includes(x));
-    const ordered = [...saved, ...remaining];
+    listEl.innerHTML = data.uploads.map((file) => {
+      const isCurrent = currentName && currentName === file.name;
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      return `
+        <div class="upload-entry">
+          <div>
+            <div class="upload-name">${file.name}</div>
+            <div class="upload-meta">Tipo: ${ext || 'arquivo'}${isCurrent ? ' · ativo agora' : ''}</div>
+          </div>
+          <div class="upload-actions">
+            <button class="btn ${isCurrent ? 'primary' : 'ghost'}" type="button" onclick="selectUpload('${encodeURIComponent(file.name)}')">${isCurrent ? 'Ativo' : 'Usar este DB'}</button>
+            <a class="chip-btn" href="/uploads/${encodeURIComponent(file.name)}" target="_blank" rel="noopener">Baixar</a>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    currentDbEl.textContent = 'DB atual: erro';
+    listEl.innerHTML = `<div class="status-panel">Erro ao listar uploads: ${messageText(err.payload || err.message)}</div>`;
+  }
+}
 
-    // build list items
-    ordered.forEach(name => {
+async function selectUpload(nameEnc) {
+  const filename = decodeURIComponent(nameEnc);
+  try {
+    const data = await apiJSON('/admin/select', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename })
+    });
+    setMessage('uploadMsg', data, 'ok');
+    await refreshAll();
+  } catch (err) {
+    setMessage('uploadMsg', err.payload || err.message, 'err');
+  }
+}
+
+async function loadPriorityTables() {
+  const listEl = document.getElementById('priorityList');
+  listEl.innerHTML = '';
+  setMessage('priorityMsg', 'Carregando tabelas...', '');
+  try {
+    const tablesPayload = await apiJSON('/api/tables');
+    const uploadsPayload = await apiJSON('/admin/list_uploads');
+    const tables = tablesPayload.tables || [];
+    const saved = uploadsPayload.priority_tables || [];
+    if (!tables.length) {
+      listEl.innerHTML = '<li class="status-panel">Nenhuma tabela encontrada no DB atual.</li>';
+      setMessage('priorityMsg', '');
+      return;
+    }
+    const ordered = [...saved, ...tables.filter((name) => !saved.includes(name))];
+    ordered.forEach((name) => {
       const li = document.createElement('li');
       li.draggable = true;
-      li.className = 'prio-item';
       li.dataset.table = name;
       li.innerHTML = `<div class="priority-name">${name}</div>
         <div class="prio-actions">
-          <button class="btn ghost" onclick="moveUp(this)" title="Mover para cima">▲</button>
-          <button class="btn ghost" onclick="moveDown(this)" title="Mover para baixo">▼</button>
-          <button class="btn ghost" onclick="removePriority(this)" title="Enviar para o fim">✕</button>
+          <button class="chip-btn" type="button" onclick="moveUp(this)">Subir</button>
+          <button class="chip-btn" type="button" onclick="moveDown(this)">Descer</button>
+          <button class="chip-btn" type="button" onclick="removePriority(this)">Mover ao fim</button>
         </div>`;
       listEl.appendChild(li);
     });
-    msg.textContent = '';
     enableDragAndDrop(listEl);
-  }catch(e){
-    listEl.innerHTML = '<li class="muted">Erro ao carregar tabelas</li>';
-    msg.textContent = '';
+    setMessage('priorityMsg', '');
+  } catch (err) {
+    listEl.innerHTML = '<li class="status-panel">Erro ao carregar tabelas.</li>';
+    setMessage('priorityMsg', err.payload || err.message, 'err');
   }
 }
 
-/* Drag and drop support */
-function enableDragAndDrop(listEl){
+function enableDragAndDrop(listEl) {
   let dragSrc = null;
-  listEl.querySelectorAll('li').forEach(li=>{
-    li.addEventListener('dragstart', (e)=>{
+  listEl.querySelectorAll('li').forEach((li) => {
+    li.addEventListener('dragstart', (e) => {
       dragSrc = li;
       li.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
-    li.addEventListener('dragend', ()=>{ li.classList.remove('dragging'); });
-    li.addEventListener('dragover', (e)=>{
+    li.addEventListener('dragend', () => {
+      li.classList.remove('dragging');
+    });
+    li.addEventListener('dragover', (e) => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
       const target = e.currentTarget;
-      if(target === dragSrc) return;
+      if (target === dragSrc) return;
       const rect = target.getBoundingClientRect();
-      const next = (e.clientY - rect.top) > (rect.height / 2);
-      if(next){
+      const after = (e.clientY - rect.top) > rect.height / 2;
+      if (after) {
         target.parentNode.insertBefore(dragSrc, target.nextSibling);
       } else {
         target.parentNode.insertBefore(dragSrc, target);
       }
     });
-    li.addEventListener('drop', (e)=>{ e.preventDefault(); });
+    li.addEventListener('drop', (e) => e.preventDefault());
   });
 }
 
-/* Up/Down/Remove buttons */
-function moveUp(btn){
-  const li = btn.closest('li'); const prev = li.previousElementSibling; if(prev) li.parentNode.insertBefore(li, prev);
-}
-function moveDown(btn){
-  const li = btn.closest('li'); const next = li.nextElementSibling; if(next) li.parentNode.insertBefore(next, next.nextElementSibling);
-}
-function removePriority(btn){
-  const li = btn.closest('li'); li.parentNode.appendChild(li);
+function moveUp(btn) {
+  const li = btn.closest('li');
+  const prev = li && li.previousElementSibling;
+  if (li && prev) li.parentNode.insertBefore(li, prev);
 }
 
-/* Save priority */
-document.getElementById('savePriorityBtn').addEventListener('click', async ()=>{
-  const listEl = document.getElementById('priorityList');
-  const tables = Array.from(listEl.querySelectorAll('li')).map(li => li.dataset.table);
-  const res = await fetch('/admin/set_priority', { method: 'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({tables: tables}) });
-  const j = await res.json();
-  document.getElementById('priorityMsg').textContent = JSON.stringify(j);
-  // update displayed priority from server to be consistent
-  await refreshAll();
+function moveDown(btn) {
+  const li = btn.closest('li');
+  const next = li && li.nextElementSibling;
+  if (li && next) li.parentNode.insertBefore(next, li);
+}
+
+function removePriority(btn) {
+  const li = btn.closest('li');
+  if (li && li.parentNode) li.parentNode.appendChild(li);
+}
+
+document.getElementById('savePriorityBtn').addEventListener('click', async () => {
+  const tables = Array.from(document.querySelectorAll('#priorityList li')).map((li) => li.dataset.table);
+  try {
+    const data = await apiJSON('/admin/set_priority', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ tables })
+    });
+    setMessage('priorityMsg', data, 'ok');
+    await refreshAll();
+  } catch (err) {
+    setMessage('priorityMsg', err.payload || err.message, 'err');
+  }
 });
 
-/* Start index button */
-document.getElementById('startIndex').addEventListener('click', async ()=>{
+document.getElementById('refreshTablesBtn').addEventListener('click', () => loadPriorityTables());
+document.getElementById('refreshUploadsBtn').addEventListener('click', () => refreshUploads());
+
+document.getElementById('startIndex').addEventListener('click', async () => {
   const drop = document.getElementById('dropCheckbox').checked;
-  const chunk = parseInt(document.getElementById('chunk').value) || 2000;
-  const batch = parseInt(document.getElementById('batch').value) || 1000;
-  const res = await fetch('/admin/start_index', { method:'POST', headers: {'content-type':'application/json'}, body: JSON.stringify({drop: drop, chunk: chunk, batch: batch}) });
-  const j = await res.json();
-  document.getElementById('indexMsg').textContent = JSON.stringify(j);
-  refreshStatus();
+  const chunk = parseInt(document.getElementById('chunk').value, 10) || 2000;
+  const batch = parseInt(document.getElementById('batch').value, 10) || 1000;
+  setMessage('indexMsg', 'Indexacao iniciada...', '');
+  try {
+    const data = await apiJSON('/admin/start_index', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ drop, chunk, batch })
+    });
+    setMessage('indexMsg', data, data.error ? 'err' : 'ok');
+    await refreshStatus();
+  } catch (err) {
+    setMessage('indexMsg', err.payload || err.message, 'err');
+  }
 });
 
-/* Status poll */
-async function refreshStatus(){
-  try{
-    const s = await apiJSON('/admin/status');
-    const el = document.getElementById('statusBox');
-    let html = `<div>DB: ${s.db || '(nenhum)'}<br/>_fulltext linhas: ${s.fulltext_count || 0}</div>`;
-    if(s.top_tables && s.top_tables.length){
-      html += '<div style="margin-top:8px"><strong>Top tabelas:</strong><ul>';
-      html += s.top_tables.map(t => `<li>${t.table} — ${t.count}</li>`).join('');
-      html += '</ul></div>';
-    }
-    if(s.conversion){
-      html += `<div style="margin-top:8px"><strong>Conversão:</strong> running=${s.conversion.running} ok=${s.conversion.ok} msg=${s.conversion.msg || ''}</div>`;
-    }
-    el.innerHTML = html;
-  }catch(e){
-    document.getElementById('statusBox').textContent = 'Erro ao obter status';
+async function refreshStatus() {
+  const el = document.getElementById('statusBox');
+  try {
+    const status = await apiJSON('/admin/status');
+    const dbName = basename(status.db || '');
+    const fulltextCount = status.fulltext_count || 0;
+    const conversion = status.conversion || null;
+    const topTables = Array.isArray(status.top_tables) ? status.top_tables : [];
+    const topHtml = topTables.length
+      ? `<div class="status-panel"><strong>Top tabelas</strong><div class="small" style="margin-top:8px;">${topTables.map((item) => `${item.table}: ${item.count}`).join('<br/>')}</div></div>`
+      : '<div class="status-panel"><strong>Top tabelas</strong><div class="small" style="margin-top:8px;">Nenhum resumo de tabelas disponivel.</div></div>';
+    const conversionHtml = conversion
+      ? `<div class="status-panel"><strong>Conversao</strong><div class="small" style="margin-top:8px;">running=${conversion.running} · ok=${conversion.ok} · ${conversion.msg || 'sem mensagem'}</div></div>`
+      : '<div class="status-panel"><strong>Conversao</strong><div class="small" style="margin-top:8px;">Nenhuma conversao em andamento.</div></div>';
+    el.innerHTML = `
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label">DB ativo</div>
+          <div class="stat-value">${dbName || 'nenhum'}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Linhas em _fulltext</div>
+          <div class="stat-value">${fulltextCount}</div>
+        </div>
+      </div>
+      ${conversionHtml}
+      ${topHtml}`;
+  } catch (err) {
+    el.innerHTML = `<div class="status-panel">Erro ao obter status: ${messageText(err.payload || err.message)}</div>`;
   }
 }
 
-/* Startup */
+initThemeToggle();
 setInterval(refreshStatus, 3000);
 refreshAll();
 </script>

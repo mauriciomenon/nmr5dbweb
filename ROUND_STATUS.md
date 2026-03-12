@@ -448,3 +448,59 @@ Remove duplicated keyed-compare setup logic in `interface/compare_dbs.py` withou
 
 - The internal duplication between the two keyed compare engines is now closed.
 - The next compare decision is semantic rather than structural: whether compare-without-key should keep its duplicate-insensitive behavior.
+
+## Follow-up Slice: Frontend Information Architecture Refresh
+
+### Goal
+
+Reorganize the Flask/static web pages to make the operational flow clearer without changing the backend contract.
+
+### Applied
+
+1. Reworked the shell, hero, and task grouping of the four web pages:
+   - `static/index.html`
+   - `static/admin.html`
+   - `static/compare_dbs.html`
+   - `static/track_record.html`
+2. Preserved the existing DOM ids used by the JavaScript and backend routes so the frontend behavior stays wired to the current Flask endpoints.
+3. Promoted task-oriented navigation across pages:
+   - search
+   - compare
+   - track record
+   - admin
+4. Reframed the search page around:
+   - workspace status
+   - next-step actions
+   - file/table explorer
+5. Rebuilt the admin page into a real operations screen for:
+   - upload
+   - DB selection
+   - priority ordering
+   - index startup
+6. Reorganized compare and track pages so the setup flow is visually separated from the result-reading area.
+7. Improved labels and action names to reduce ambiguity in the operator flow.
+
+### What Was Proved
+
+- The page reorganization did not require backend endpoint changes.
+- The existing compare/search API tests still pass after the layout rewrite.
+- The Flask app still serves the expected HTML routes for:
+  - `/`
+  - `/admin.html`
+  - `/compare_dbs`
+  - `/track_record`
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/compare_dbs.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_app_flask_local_search_api.py`: `30 passed`
+- `node --check static/app.js && node --check static/ui_utils.js`: passed
+- Flask route smoke check on alternate port `5081`: passed for `/`, `/admin.html`, `/compare_dbs`, `/track_record`
+
+### Findings From This Slice
+
+- The frontend now has better task separation, but visual shell/theme rules are still duplicated across multiple static HTML files.
+- Browser-level validation with Playwright is currently blocked on this machine because the Chromium binary is not installed.
+- Port `5000` is occupied by another local service on this machine, so local UI smoke checks should prefer an alternate port such as `5081`.

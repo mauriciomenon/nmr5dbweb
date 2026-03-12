@@ -54,11 +54,15 @@ The first stabilization slice is intentionally narrow:
 - `/api/compare_db_rows` now uses a dedicated SQL-backed paged compare engine instead of filtering and paginating in Python
 - The two keyed compare entry points in `interface/compare_dbs.py` now share the same internal validation, SQL-plan, and row-mapping helpers
 - The route still preserves the same JSON contract expected by `static/compare_dbs.html`
+- `static/index.html`, `static/admin.html`, `static/compare_dbs.html`, and `static/track_record.html` were reorganized around task-oriented navigation and clearer information hierarchy
+- The page refresh preserved the existing DOM ids expected by `static/app.js` and the inline page scripts
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
   - duplicate-only differences are ignored
   - `row_count_a` and `row_count_b` still reflect raw row totals
+- Local browser validation is partially blocked on this machine because Playwright has no Chromium binary installed
+- Local smoke tests should avoid port `5000` here, because another machine service is already bound there; `5081` worked for Flask route checks
 
 ## Operator Notes For Next Conversation
 
@@ -68,6 +72,7 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
+  - reduce the duplicated shell/theme CSS now repeated across the static HTML pages
   - review whether no-key compare should remain duplicate-insensitive or evolve to multiset semantics
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - expand compare API payload-type validation if external callers send non-string fields today

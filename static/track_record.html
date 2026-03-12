@@ -436,121 +436,319 @@
       .card { padding: 12px 12px 16px; }
     }
   </style>
+  <style>
+    body {
+      font-family: "Aptos", "Bahnschrift", "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    header.track-shell {
+      display: grid;
+      gap: 14px;
+    }
+    .header-topline {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand-copy h1 {
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .nav-strip {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    .tracker-hero {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(43, 92, 255, 0.14), rgba(13, 18, 27, 0.18) 46%, rgba(56, 189, 248, 0.08));
+      box-shadow: var(--shadow-soft);
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+      gap: 16px;
+    }
+    html[data-theme="light"] .tracker-hero {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.96) 48%, rgba(37, 99, 235, 0.05));
+    }
+    .hero-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .hero-title {
+      margin: 0 0 8px 0;
+      font-size: 30px;
+      line-height: 1.04;
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .hero-copy {
+      margin: 0;
+      color: var(--muted);
+      max-width: 62ch;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    .hero-metrics {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .metric-card,
+    .tracker-guide {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(8, 12, 18, 0.16);
+      padding: 14px;
+    }
+    html[data-theme="light"] .metric-card,
+    html[data-theme="light"] .tracker-guide {
+      background: rgba(255, 255, 255, 0.82);
+    }
+    .metric-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .metric-value {
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .tracker-main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .tracker-left,
+    .tracker-right {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .tracker-guide ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 13px;
+    }
+    .tracker-guide strong {
+      color: var(--ink);
+    }
+    .tracker-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .pill-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(8, 12, 18, 0.12);
+    }
+    html[data-theme="light"] .pill-link {
+      background: rgba(255, 255, 255, 0.78);
+    }
+    @media (max-width: 980px) {
+      .tracker-hero,
+      .tracker-main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      .header-topline {
+        flex-direction: column;
+      }
+      .nav-strip {
+        margin-left: 0;
+      }
+      .hero-title {
+        font-size: 24px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <div style="display:flex;align-items:center;gap:12px;">
-      <div class="brand-dot"></div>
-      <div>
-        <h1>Busca em bancos - Rastrear registro</h1>
-        <div class="subtitle">Encontra o mesmo registro em versões de banco .mdb, .accdb ou .duckdb.</div>
+  <header class="track-shell">
+    <div class="header-topline">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="brand-dot"></div>
+        <div class="brand-copy">
+          <h1>Busca em bancos - Rastreio de registro</h1>
+          <div class="subtitle">Siga um mesmo registro ao longo de varias versoes de banco sem perder o diretorio de origem, os filtros usados e o resultado agregado.</div>
+        </div>
       </div>
-    </div>
-    <div class="top-right tabs options-container">
-      <a href="/" class="tab-btn">Busca</a>
-      <a href="/track_record" class="tab-btn active">Rastrear registro</a>
-      <a href="/compare_dbs" class="tab-btn">Comparar bancos</a>
-      <div class="options-wrapper">
-        <button type="button" id="optionsBtn" class="tab-btn">Opções ▾</button>
-        <div id="optionsMenu" class="options-menu" hidden>
-          <button type="button" id="openHelpTrack" class="options-item">Ajuda</button>
-          <button type="button" id="themeToggle" class="options-item" title="Alternar tema (sistema, escuro, claro)">Tema</button>
+      <div class="nav-strip tabs options-container">
+        <a href="/" class="tab-btn">Busca</a>
+        <a href="/track_record" class="tab-btn active">Rastrear</a>
+        <a href="/compare_dbs" class="tab-btn">Comparar</a>
+        <a href="/admin.html" class="tab-btn">Admin</a>
+        <div class="options-wrapper">
+          <button type="button" id="optionsBtn" class="tab-btn">Opcoes ▾</button>
+          <div id="optionsMenu" class="options-menu" hidden>
+            <button type="button" id="openHelpTrack" class="options-item">Ajuda</button>
+            <button type="button" id="themeToggle" class="options-item" title="Alternar tema (sistema, escuro, claro)">Tema</button>
+          </div>
         </div>
       </div>
     </div>
+    <section class="tracker-hero">
+      <div>
+        <div class="hero-kicker">Auditoria de historico</div>
+        <h2 class="hero-title">Saiba em qual versao o registro aparece, some ou muda de contexto</h2>
+        <p class="hero-copy">Esta tela agora prioriza a sequencia de analise: diretorio base, filtros obrigatorios e leitura consolidada. O objetivo e deixar evidente se o registro existe, onde existe e qual banco precisa ser investigado primeiro.</p>
+        <div class="tracker-links">
+          <a href="/" class="pill-link">Voltar para busca</a>
+          <a href="/compare_dbs" class="pill-link">Abrir comparacao</a>
+          <a href="/admin.html" class="pill-link">Preparar arquivos</a>
+        </div>
+      </div>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Entrada minima</div>
+          <div class="metric-value">Diretorio + filtros</div>
+          <div class="card-title-sub">Sem isso o rastreio nao tem como localizar o registro com seguranca.</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Tabela</div>
+          <div class="metric-value">Opcional</div>
+          <div class="card-title-sub">Use quando voce ja souber em qual tabela o registro deve existir.</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Saida</div>
+          <div class="metric-value">Panorama por arquivo</div>
+          <div class="card-title-sub">Cada linha resume uma versao e o estado do registro nela.</div>
+        </div>
+      </div>
+    </section>
   </header>
   <div class="container">
     <main>
-      <section class="workflow">
-        <div class="workflow-step">
-          <div class="step-badge">1</div>
-          <div>
-            <div class="workflow-step-label">Escolha o diretório base</div>
-            <div style="font-size:13px;">Pasta que contém as diferentes versões de banco (.accdb/.mdb/.duckdb).</div>
-          </div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-badge">2</div>
-          <div>
-            <div class="workflow-step-label">Defina tabela e filtros</div>
-            <div style="font-size:13px;">Informe a tabela (opcional) e os filtros obrigatórios (COL=VAL,...).</div>
-          </div>
-        </div>
-        <div class="workflow-step">
-          <div class="step-badge">3</div>
-          <div>
-            <div class="workflow-step-label">Revise os resultados</div>
-            <div style="font-size:13px;">Veja em quais bancos o registro foi encontrado e um resumo do registro.</div>
-          </div>
-        </div>
-      </section>
-
-      <div id="flowHint" class="flow-hint info">
-        Preencha o diretório e os filtros obrigatórios, depois clique em "Executar análise".
-      </div>
-
-      <div id="helpTrackBox" class="card" style="display:none;margin-bottom:12px;">
-        <div class="card-header-row">
-          <div>
-            <p class="card-title-main">Como usar esta aba</p>
-            <p class="card-title-sub">Passos simples para rastrear um mesmo registro em varios bancos.</p>
-          </div>
-        </div>
-        <div class="help-text">
-          1) Em <strong>Diretorio dos bancos</strong>, informe a pasta base que contem as versoes do banco (.accdb/.mdb/.duckdb) ou use o botao <strong>Navegar</strong>.<br/>
-          2) Se quiser restringir a uma tabela, preencha o campo <strong>Tabela (opcional)</strong> (ex.: RANGER_SOSTAT).<br/>
-          3) Em <strong>Filtros</strong>, descreva o registro que procura no formato <code>COL=VAL</code> (ex.: RTUNO=1,PNTNO=2304).<br/>
-          4) Clique em <strong>Executar analise</strong> para ver em quais bancos o registro aparece.
-        </div>
-        <div class="help-text">
-          A tabela de resultado mostra, para cada arquivo, a data, o tamanho, a engine, se encontrou o registro,
-          em qual tabela foi encontrado, um resumo dos campos principais e, se algo falhar, a mensagem de erro.
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header-row">
-          <div>
-            <p class="card-title-main">1. Diretório dos bancos</p>
-            <p class="card-title-sub">Defina a pasta base onde estão as versões de banco que serão analisadas.</p>
-          </div>
-        </div>
-        <div class="row">
-          <div class="col">
-            <label for="customDirInput">Diretório dos bancos</label>
-            <div class="inline-row">
-              <input id="customDirInput" type="text" placeholder="Ex.: C:\\dados\\bancos\\versoes" />
-              <button id="browseDirBtn" type="button" class="secondary">Navegar...</button>
+      <div class="tracker-main-grid">
+        <div class="tracker-left">
+          <section class="workflow">
+            <div class="workflow-step">
+              <div class="step-badge">1</div>
+              <div>
+                <div class="workflow-step-label">Escolha o diretorio base</div>
+                <div style="font-size:13px;">A pasta precisa conter as varias versoes de banco que serao analisadas.</div>
+              </div>
             </div>
-            <div class="help-text">Escolha a pasta base onde estão os bancos (.accdb/.mdb/.duckdb). Você pode digitar o caminho ou usar o botão "Navegar".</div>
-          </div>
-        </div>
-      </div>
+            <div class="workflow-step">
+              <div class="step-badge">2</div>
+              <div>
+                <div class="workflow-step-label">Defina tabela e filtros</div>
+                <div style="font-size:13px;">Os filtros descrevem o registro; a tabela e opcional quando o backend puder varrer tudo.</div>
+              </div>
+            </div>
+            <div class="workflow-step">
+              <div class="step-badge">3</div>
+              <div>
+                <div class="workflow-step-label">Leia o panorama</div>
+                <div style="font-size:13px;">O resultado mostra onde o registro existe e onde a busca falhou.</div>
+              </div>
+            </div>
+          </section>
 
-      <div class="card">
-        <div class="card-header-row">
-          <div>
-            <p class="card-title-main">2. Escopo e filtros da busca</p>
-            <p class="card-title-sub">Especifique a tabela (opcional) e o conjunto de filtros obrigatórios.</p>
+          <div id="flowHint" class="flow-hint info">
+            Preencha o diretorio e os filtros obrigatorios, depois clique em "Rastrear registro".
+          </div>
+
+          <div id="helpTrackBox" class="card" style="display:none;margin-bottom:0;">
+            <div class="card-header-row">
+              <div>
+                <p class="card-title-main">Como operar esta tela</p>
+                <p class="card-title-sub">Passos simples para rastrear um mesmo registro em varios bancos.</p>
+              </div>
+            </div>
+            <div class="help-text">
+              1) Em <strong>Diretorio dos bancos</strong>, informe a pasta base que contem as versoes do banco (.accdb/.mdb/.duckdb) ou use o botao <strong>Navegar</strong>.<br/>
+              2) Se quiser restringir a uma tabela, preencha o campo <strong>Tabela (opcional)</strong> (ex.: RANGER_SOSTAT).<br/>
+              3) Em <strong>Filtros</strong>, descreva o registro que procura no formato <code>COL=VAL</code> (ex.: RTUNO=1,PNTNO=2304).<br/>
+              4) Clique em <strong>Rastrear registro</strong> para ver em quais bancos o registro aparece.
+            </div>
+            <div class="help-text">
+              A tabela de resultado mostra, para cada arquivo, a data, o tamanho, a engine, se encontrou o registro,
+              em qual tabela foi encontrado, um resumo dos campos principais e, se algo falhar, a mensagem de erro.
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <p class="card-title-main">1. Diretorio dos bancos</p>
+                <p class="card-title-sub">Defina a pasta base onde estao as versoes de banco que serao analisadas.</p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col">
+                <label for="customDirInput">Diretorio dos bancos</label>
+                <div class="inline-row">
+                  <input id="customDirInput" type="text" placeholder="Ex.: C:\\dados\\bancos\\versoes" />
+                  <button id="browseDirBtn" type="button" class="secondary">Navegar...</button>
+                </div>
+                <div class="help-text">Escolha a pasta base onde estao os bancos (.accdb/.mdb/.duckdb). Voce pode digitar o caminho ou usar o botao "Navegar".</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <p class="card-title-main">2. Escopo e filtros da busca</p>
+                <p class="card-title-sub">Especifique a tabela (opcional) e o conjunto de filtros obrigatorios.</p>
+              </div>
+            </div>
+            <div class="row">
+              <div class="col">
+                <label for="tableInput">Tabela (opcional)</label>
+                <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" value="RANGER_SOSTAT" />
+                <div class="help-text">Exemplo de tabela: RANGER_SOSTAT. Se vazio, o backend tenta encontrar o registro em qualquer tabela de cada banco.</div>
+              </div>
+            </div>
+            <div class="row" style="margin-top:8px;">
+              <div class="col">
+                <label for="filtersInput">Filtros (obrigatorio)</label>
+                <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304">RTUNO=1,PNTNO=2304</textarea>
+                <div class="help-text">Exemplo de filtros: RTUNO=1,PNTNO=2304. Formato: COL1=VAL1,COL2=VAL2,... Valores numericos sao detectados automaticamente; use aspas para strings com virgula.</div>
+              </div>
+            </div>
+            <div class="actions">
+              <button id="runBtn" type="button" class="primary">▶ Rastrear registro</button>
+              <span id="statusText" class="status"></span>
+            </div>
           </div>
         </div>
-        <div class="row">
-          <div class="col">
-            <label for="tableInput">Tabela (opcional)</label>
-            <input id="tableInput" type="text" placeholder="Ex.: RANGER_SOSTAT" value="RANGER_SOSTAT" />
-            <div class="help-text">Exemplo de tabela: RANGER_SOSTAT. Se vazio, o backend tenta encontrar o registro em qualquer tabela de cada banco.</div>
+
+        <div class="tracker-right">
+          <div class="tracker-guide">
+            <div class="hero-kicker">Boas praticas</div>
+            <h3 class="card-title-main" style="margin-bottom:6px;">Como reduzir ruido no rastreio</h3>
+            <ul>
+              <li><strong>Use a tabela</strong> quando o dominio ja estiver conhecido; isso acelera a leitura do resultado.</li>
+              <li><strong>Mantenha filtros pequenos e exatos</strong>; cada par <code>COL=VAL</code> ajuda o backend a evitar falsos positivos.</li>
+              <li><strong>Leia a coluna de erro</strong> antes de assumir ausencia do registro; as vezes o banco falhou, nao a busca.</li>
+              <li><strong>Combine com a comparacao</strong> quando precisar entender em qual versao a mudanca surgiu.</li>
+            </ul>
           </div>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <div class="col">
-            <label for="filtersInput">Filtros (obrigatório)</label>
-            <textarea id="filtersInput" placeholder="Ex.: RTUNO=1,PNTNO=2304">RTUNO=1,PNTNO=2304</textarea>
-            <div class="help-text">Exemplo de filtros: RTUNO=1,PNTNO=2304. Formato: COL1=VAL1,COL2=VAL2,... Valores numéricos são detectados automaticamente; use aspas para strings com vírgula.</div>
-          </div>
-        </div>
-        <div class="actions">
-          <button id="runBtn" type="button" class="primary">▶ Executar análise</button>
-          <span id="statusText" class="status"></span>
         </div>
       </div>
 

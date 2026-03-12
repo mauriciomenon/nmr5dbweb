@@ -635,81 +635,260 @@
       .container { padding: 16px 12px 28px; }
     }
   </style>
+  <style>
+    body {
+      font-family: "Aptos", "Bahnschrift", "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    header.compare-shell {
+      display: grid;
+      gap: 14px;
+    }
+    .header-topline {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .brand-copy h1 {
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .nav-strip {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+    .compare-hero {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(43, 92, 255, 0.14), rgba(13, 18, 27, 0.18) 45%, rgba(56, 189, 248, 0.08));
+      box-shadow: var(--shadow-soft);
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.9fr);
+      gap: 16px;
+    }
+    html[data-theme="light"] .compare-hero {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.96) 48%, rgba(37, 99, 235, 0.05));
+    }
+    .hero-kicker {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .hero-title {
+      margin: 0 0 8px 0;
+      font-size: 30px;
+      line-height: 1.04;
+      font-family: "Aptos Display", "Bahnschrift SemiBold", "Trebuchet MS", sans-serif;
+    }
+    .hero-copy {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.6;
+      max-width: 62ch;
+      font-size: 14px;
+    }
+    .hero-metrics {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+    .metric-card,
+    .guide-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(8, 12, 18, 0.16);
+      padding: 14px;
+    }
+    html[data-theme="light"] .metric-card,
+    html[data-theme="light"] .guide-card {
+      background: rgba(255, 255, 255, 0.82);
+    }
+    .metric-label {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .metric-value {
+      margin-top: 8px;
+      font-size: 18px;
+      font-weight: 800;
+    }
+    .compare-main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .compare-left,
+    .compare-right {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .guide-card ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 13px;
+    }
+    .guide-card strong {
+      color: var(--ink);
+    }
+    .quick-rail {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .pill-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(8, 12, 18, 0.12);
+    }
+    html[data-theme="light"] .pill-link {
+      background: rgba(255, 255, 255, 0.78);
+    }
+    @media (max-width: 980px) {
+      .compare-hero,
+      .compare-main-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 720px) {
+      .header-topline {
+        flex-direction: column;
+      }
+      .nav-strip {
+        margin-left: 0;
+      }
+      .hero-title {
+        font-size: 24px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <div style="display:flex;align-items:center;gap:12px;">
+  <header class="compare-shell">
+    <div class="header-topline">
+      <div style="display:flex;align-items:center;gap:12px;">
       <div class="brand-dot"></div>
-      <div>
-        <h1>Busca em bancos - Comparar bancos</h1>
-        <div class="subtitle">Compare duas versões de banco DuckDB (.duckdb), linha a linha (conversão necessária para outros formatos).</div>
+      <div class="brand-copy">
+        <h1>Busca em bancos - Comparador de versoes</h1>
+        <div class="subtitle">Compare duas versoes DuckDB sem perder o contexto: escolha os arquivos, defina a chave e leia o diff em ordem operacional.</div>
       </div>
     </div>
-    <div class="top-right tabs options-container">
+    <div class="nav-strip tabs options-container">
       <a href="/" class="tab-btn">Busca</a>
-      <a href="/track_record" class="tab-btn">Rastrear registro</a>
-      <a href="/compare_dbs" class="tab-btn active">Comparar bancos</a>
+      <a href="/track_record" class="tab-btn">Rastrear</a>
+      <a href="/compare_dbs" class="tab-btn active">Comparar</a>
+      <a href="/admin.html" class="tab-btn">Admin</a>
       <div class="options-wrapper">
-        <button type="button" id="optionsBtn" class="tab-btn">Opções ▾</button>
+        <button type="button" id="optionsBtn" class="tab-btn">Opcoes ▾</button>
         <div id="optionsMenu" class="options-menu" hidden>
           <button type="button" id="openHelpCompare" class="options-item">Ajuda</button>
           <button type="button" id="themeToggle" class="options-item" title="Alternar tema (sistema, escuro, claro)">Tema</button>
         </div>
       </div>
     </div>
-  </header>
-  <div class="container">
-    <main>
-    <section class="workflow">
-      <div class="workflow-step">
-        <div class="step-badge">1</div>
-        <div>
-          <div class="workflow-step-label">Escolha os arquivos</div>
-          <div style="font-size:13px;">Selecione os bancos A (origem) e B (destino) em .duckdb.</div>
+    <section class="compare-hero">
+      <div>
+        <div class="hero-kicker">Diff operacional</div>
+        <h2 class="hero-title">Banco A e Banco B, com chaves e filtros visiveis desde o inicio</h2>
+        <p class="hero-copy">Esta tela agora separa claramente configuracao de comparacao e leitura do resultado. O objetivo e responder tres perguntas rapido: o que mudou, onde mudou e qual chave precisa de atencao.</p>
+        <div class="quick-rail">
+          <a href="/" class="pill-link">Voltar para busca</a>
+          <a href="/track_record" class="pill-link">Rastrear um registro</a>
+          <a href="/admin.html" class="pill-link">Preparar arquivos</a>
         </div>
       </div>
-      <div class="workflow-step">
-        <div class="step-badge">2</div>
-        <div>
-          <div class="workflow-step-label">Defina tabela e chaves</div>
-          <div style="font-size:13px;">Escolha a tabela, a chave K (ex.: RTUNO,PNTNO) e filtros opcionais.</div>
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <div class="metric-label">Banco A</div>
+          <div class="metric-value">Versao nova</div>
+          <div class="card-title-sub">Use A para a base mais recente que servira como referencia atual.</div>
         </div>
-      </div>
-      <div class="workflow-step">
-        <div class="step-badge">3</div>
-        <div>
-          <div class="workflow-step-label">Revise as diferenças</div>
-          <div style="font-size:13px;">Veja o resumo geral e expanda os registros com diferenças.</div>
+        <div class="metric-card">
+          <div class="metric-label">Banco B</div>
+          <div class="metric-value">Versao anterior</div>
+          <div class="card-title-sub">Use B para a base antiga, para que inclusoes e remocoes fiquem coerentes.</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Leitura do diff</div>
+          <div class="metric-value">Resumo + detalhe</div>
+          <div class="card-title-sub">O resumo global fica separado dos filtros visuais para nao esconder impacto real.</div>
         </div>
       </div>
     </section>
+  </header>
+  <div class="container">
+    <main>
+    <div class="compare-main-grid">
+      <div class="compare-left">
+        <section class="workflow">
+          <div class="workflow-step">
+            <div class="step-badge">1</div>
+            <div>
+              <div class="workflow-step-label">Mapeie os arquivos</div>
+              <div style="font-size:13px;">Defina A como base nova e B como base anterior, ambas em .duckdb.</div>
+            </div>
+          </div>
+          <div class="workflow-step">
+            <div class="step-badge">2</div>
+            <div>
+              <div class="workflow-step-label">Escolha tabela e chave</div>
+              <div style="font-size:13px;">A chave K organiza o diff e os filtros opcionais refinam a leitura.</div>
+            </div>
+          </div>
+          <div class="workflow-step">
+            <div class="step-badge">3</div>
+            <div>
+              <div class="workflow-step-label">Leia o impacto</div>
+              <div style="font-size:13px;">Resumo global primeiro, linhas detalhadas depois.</div>
+            </div>
+          </div>
+        </section>
 
-    <div id="flowHint" class="flow-hint info">
-      Comece escolhendo os arquivos A e B em .duckdb.
-    </div>
-
-    <div id="helpCompareBox" class="card" style="display:none;margin-bottom:12px;">
-      <div class="card-header-row">
-        <div>
-          <p class="card-title-main">Como usar esta aba</p>
-          <p class="card-title-sub">Guia rapido para comparar dois bancos DuckDB.</p>
+        <div id="flowHint" class="flow-hint info">
+          Comece escolhendo os arquivos A e B em .duckdb.
         </div>
-      </div>
-      <div class="help-text">
-        1) Informe os caminhos dos bancos <strong>A</strong> (antigo) e <strong>B</strong> (novo) ou use os botoes de upload.<br/>
-        2) Clique em <strong>Carregar tabelas em comum</strong> para listar as tabelas presentes nos dois bancos.<br/>
-        3) Escolha a tabela, defina a <strong>chave K</strong> (colunas que identificam o registro) e ajuste filtros se quiser
-        focar apenas em alteracoes, inclusoes ou exclusoes.<br/>
-        4) Clique em <strong>Comparar tabela completa</strong> para ver as diferencas linha a linha.
-      </div>
-      <div class="help-text">
-        O resumo inicial mostra quantos registros sao iguais, adicionados, removidos ou alterados.
-        Abaixo, voce pode expandir linhas para ver os campos que mudaram e usar o botao de
-        <strong>exportacao CSV</strong> para analisar tudo em planilha.
-      </div>
-    </div>
 
-    <div class="card step-card" id="step1Card" style="--stagger:0;">
+        <div id="helpCompareBox" class="card" style="display:none;margin-bottom:0;">
+          <div class="card-header-row">
+            <div>
+              <p class="card-title-main">Como operar esta tela</p>
+              <p class="card-title-sub">Guia rapido para chegar no diff certo sem perder tempo.</p>
+            </div>
+          </div>
+          <div class="help-text">
+            1) Informe os caminhos dos bancos <strong>A</strong> (novo) e <strong>B</strong> (anterior) ou use os botoes de upload.<br/>
+            2) Clique em <strong>Mapear tabelas comuns</strong> para listar apenas o que existe nos dois bancos.<br/>
+            3) Escolha a tabela, defina a <strong>chave K</strong> e ajuste filtros quando quiser isolar alteracoes, inclusoes ou remocoes.<br/>
+            4) Clique em <strong>Rodar comparacao</strong> para ver o diff linha a linha.
+          </div>
+          <div class="help-text">
+            O resumo geral mostra o impacto total da tabela. Os filtros abaixo apenas controlam a visualizacao detalhada e a exportacao.
+          </div>
+        </div>
+
+        <div class="card step-card" id="step1Card" style="--stagger:0;">
       <div class="card-header-row step-card-header" onclick="toggleStep(1)">
         <div>
           <p class="card-title-main">1. Escolher bancos DuckDB</p>
@@ -744,13 +923,13 @@
           converta antes para DuckDB usando o fluxo normal da ferramenta.
         </div>
         <div style="margin-top:8px;">
-          <button id="btnLoadTables" class="primary" onclick="loadTables()">Carregar tabelas em comum entre os dois bancos</button>
+          <button id="btnLoadTables" class="primary" onclick="loadTables()">Mapear tabelas comuns</button>
         </div>
         <div id="statusMeta" class="status"></div>
       </div>
     </div>
 
-    <div class="card step-card" id="step2Card" style="--stagger:1;">
+        <div class="card step-card" id="step2Card" style="--stagger:1;">
       <div class="card-header-row step-card-header" onclick="toggleStep(2)">
         <div>
           <p class="card-title-main">2. Selecionar tabela, chaves e filtros</p>
@@ -803,7 +982,7 @@ Ex: COL1,COL2,COL3"></textarea>
           </div>
         </div>
         <div style="margin-top:4px; font-size:13px;">
-          <a href="#" onclick="toggleAdvancedOptions(event)" style="color:#60a5fa; text-decoration:none;">Opções avançadas de comparação</a>
+          <a href="#" onclick="toggleAdvancedOptions(event)" style="color:#60a5fa; text-decoration:none;">Opcoes avancadas de comparacao</a>
         </div>
         <div id="advancedOptions" style="margin-top:4px; display:none; font-size:13px; color:#9ca3af; border:1px dashed #1f2937; border-radius:6px; padding:8px; max-width:420px;">
           <div style="margin-bottom:4px; font-weight:500; color:#e5e7eb;">Limites e desempenho</div>
@@ -819,13 +998,26 @@ Ex: COL1,COL2,COL3"></textarea>
           </div>
         </div>
         <div style="margin-top:8px;">
-          <button class="primary" onclick="runCompare()">Comparar tabela completa</button>
+          <button class="primary" onclick="runCompare()">Rodar comparacao</button>
         </div>
         <div id="statusCompare" class="status"></div>
       </div>
     </div>
+      </div>
 
-    <div class="card step-card" id="step3Card" style="--stagger:2;">
+      <div class="compare-right">
+        <div class="guide-card">
+          <div class="hero-kicker">Leitura do resultado</div>
+          <h3 class="card-title-main" style="margin-bottom:6px;">Antes de abrir cada linha</h3>
+          <ul>
+            <li><strong>Resumo geral</strong> continua cobrindo toda a tabela, mesmo quando voce aplica filtros nos detalhes.</li>
+            <li><strong>Filtro por chave</strong> serve para inspecao cirurgica; nao use isso como substituto do panorama global.</li>
+            <li><strong>Filtro por coluna alterada</strong> ajuda a isolar ruido quando muitas colunas mudam na mesma chave.</li>
+            <li><strong>Exportar CSV</strong> e o caminho certo para auditoria longa fora da tela.</li>
+          </ul>
+        </div>
+
+        <div class="card step-card" id="step3Card" style="--stagger:2;">
       <div class="card-header-row step-card-header" onclick="toggleStep(3)">
         <div>
           <p class="card-title-main">3. Resultado da comparação</p>
@@ -837,14 +1029,16 @@ Ex: COL1,COL2,COL3"></textarea>
         <div class="export-row">
           <span>Os resultados abaixo respeitam os filtros e limites configurados.</span>
           <span style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Mapa geral das tabelas</button>
-            <button type="button" class="secondary" onclick="exportComparison()">Exportar para Excel (CSV)</button>
+            <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Panorama das tabelas</button>
+            <button type="button" class="secondary" onclick="exportComparison()">Exportar CSV</button>
           </span>
         </div>
         <div id="tablesOverview" style="display:none;"></div>
         <div id="summary"></div>
         <div id="results"></div>
         <div id="pagination" style="margin-top:8px; font-size:12px;"></div>
+      </div>
+    </div>
       </div>
     </div>
     </main>
