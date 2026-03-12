@@ -164,6 +164,22 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     assert payload["capabilities"]["access_fallback"] in {True, False}
 
 
+def test_client_log_e_admin_logs_expoem_count(monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "_CLIENT_LOGS", [])
+    monkeypatch.setattr(local_search, "_SERVER_LOGS", [])
+
+    resp = client.post("/client/log", json={"level": "warn", "msg": "algo aconteceu"})
+
+    assert resp.status_code == 200
+    logs_resp = client.get("/admin/logs")
+    assert logs_resp.status_code == 200
+    payload = logs_resp.get_json()
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["logs"][0]["message"] == "algo aconteceu"
+
+
 def test_admin_set_auto_index_persiste_valor(monkeypatch):
     client = app.test_client()
     saved = []
@@ -308,6 +324,30 @@ def test_api_tables_lista_tabelas_sqlite(tmp_path, monkeypatch):
     assert resp.get_json()["tables"] == ["alpha", "beta"]
 
 
+def test_api_table_ler_tabela_duckdb(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(db_path))
+    conn.execute('CREATE TABLE "event log" (id INTEGER, note VARCHAR)')
+    conn.executemany(
+        'INSERT INTO "event log" VALUES (?, ?)',
+        [(1, "alpha"), (2, "beta"), (3, "alphabet")],
+    )
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/table?name=event%20log&col=note&q=alp&sort=id&order=DESC&limit=2&offset=0")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["columns"] == ["id", "note"]
+    assert payload["total"] == 2
+    assert payload["rows"] == [
+        {"id": 3, "note": "alphabet"},
+        {"id": 1, "note": "alpha"},
+    ]
+
+
 def test_api_table_ler_tabela_sqlite(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.sqlite3"
@@ -379,6 +419,54 @@ def test_api_search_busca_textual_sqlite(tmp_path, monkeypatch):
     payload = resp.get_json()
     assert payload["returned_count"] == 1
     assert payload["results"]["alpha"][0]["row"]["name"] == "alpha unit"
+
+
+def test_api_search_busca_textual_duckdb_prioriza_tabela(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
+    )
+    conn.executemany(
+        "INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("zeta", "id", "1", 0, "alpha result", '{"id": 1, "name": "zeta row"}'),
+            ("alpha", "id", "2", 0, "alpha result", '{"id": 2, "name": "alpha row"}'),
+        ],
+    )
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setitem(local_search.cfg, "priority_tables", ["alpha"])
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert list(payload["results"].keys())[0] == "alpha"
+
+
+def test_api_find_record_across_dbs_sucesso_sqlite(tmp_path):
+    client = app.test_client()
+    track_dir = tmp_path / "track"
+    track_dir.mkdir()
+    db_path = track_dir / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE RANGER_SOSTAT (RTUNO INTEGER, PNTNO INTEGER, PNTNAM TEXT)")
+    conn.execute("INSERT INTO RANGER_SOSTAT VALUES (1, 2304, 'aux unidad')")
+    conn.commit()
+    conn.close()
+
+    resp = client.post(
+        "/api/find_record_across_dbs",
+        json={"custom_path": str(track_dir), "filters": "RTUNO=1,PNTNO=2304", "max_files": 10},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["total_files"] == 1
+    assert payload["results"][0]["found"] is True
+    assert payload["results"][0]["table"] == "RANGER_SOSTAT"
 
 
 def test_api_compare_db_tables_rejeita_arquivo_ausente(tmp_path):

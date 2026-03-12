@@ -1214,3 +1214,62 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `57 passed`
+
+## Current Slice
+
+### Scope Completed
+
+1. Reduced the `table/search implementation` concentration inside `interface/app_flask_local_search.py`.
+2. Reduced repeated engine-dispatch and Access connection code in `interface/find_record_across_dbs.py`.
+3. Improved operator-facing log/status consistency.
+4. Performed a conservative repo-file review using real Access samples from `output/`.
+
+### What Changed
+
+- Added shared helpers in `interface/app_flask_local_search.py` for:
+  - capped log handling
+  - server/client log entry construction
+  - result ordering by `priority_tables`
+  - search response payload construction
+  - row serialization for table browse
+  - table filter/order clause construction
+  - column discovery for DuckDB and SQLite
+- Reused those helpers in:
+  - `/client/log`
+  - `/admin/logs`
+  - `/api/table`
+  - DuckDB search path
+  - SQLite search path
+  - Access fallback search path
+- Reduced repeated code in `interface/find_record_across_dbs.py` by introducing:
+  - `connect_access(...)`
+  - `list_tables_for_engine(...)`
+  - `list_columns_for_engine(...)`
+  - `build_engine_where_parts(...)`
+- Added focused API coverage for:
+  - `client/log` plus `admin/logs`
+  - DuckDB table browsing
+  - DuckDB search ordering by priority table
+  - successful record tracking through SQLite
+
+### Real Data Proof
+
+- Reused the real Access sample [2025-11-05 DB4.accdb](/Users/menon/git/nmr5dbweb/output/2025-11-05%20DB4.accdb) during local proof.
+- Confirmed again that:
+  - the file is detected as `access`
+  - browse endpoints reject it safely instead of misrouting it as DuckDB/SQLite
+
+### File Review
+
+- `converters/`, `tools/`, and `artifacts/` still have active repo references and remain justified.
+- `output/` is now clearly acting as a local validation/smoke area with real operator samples plus generated smoke fixtures.
+- No additional move to `bkp_limpeza/` was justified in this slice.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(timeout 60s rg --files -g '*.py')`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py interface/find_record_across_dbs.py tests/test_app_flask_local_search_api.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py interface/find_record_across_dbs.py tests/test_app_flask_local_search_api.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `61 passed`
+- `pnpm exec eslint static`: passed
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed

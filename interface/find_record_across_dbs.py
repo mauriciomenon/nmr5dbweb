@@ -25,12 +25,12 @@ import re
 import sqlite3
 
 try:  # opcionais
-    import duckdb  # type: ignore
+    import duckdb
 except Exception:  # pragma: no cover
     duckdb = None  # type: ignore
 
 try:
-    import pyodbc  # type: ignore
+    import pyodbc
 except Exception:  # pragma: no cover
     pyodbc = None  # type: ignore
 
@@ -161,25 +161,7 @@ def list_columns_duckdb(path: Path, table: str) -> List[str]:
 
 
 def list_tables_access(path: Path) -> List[str]:
-    if pyodbc is None:
-        raise RuntimeError("pyodbc nao esta instalado")
-    conn = None
-    conn_strs = [
-        rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-        rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
-    ]
-    last_err: Optional[Exception] = None
-    for cs in conn_strs:
-        try:
-            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-            break
-        except Exception as exc:  # pragma: no cover
-            last_err = exc
-            conn = None
-    if conn is None:
-        if last_err is not None:
-            raise last_err
-        raise RuntimeError("Falha ao conectar via ODBC")
+    conn = connect_access(path)
     try:
         cur = conn.cursor()
         tables: List[str] = []
@@ -199,25 +181,7 @@ def list_tables_access(path: Path) -> List[str]:
 
 
 def list_columns_access(path: Path, table: str) -> List[str]:
-    if pyodbc is None:
-        raise RuntimeError("pyodbc nao esta instalado")
-    conn = None
-    conn_strs = [
-        rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-        rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
-    ]
-    last_err: Optional[Exception] = None
-    for cs in conn_strs:
-        try:
-            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-            break
-        except Exception as exc:  # pragma: no cover
-            last_err = exc
-            conn = None
-    if conn is None:
-        if last_err is not None:
-            raise last_err
-        raise RuntimeError("Falha ao conectar via ODBC")
+    conn = connect_access(path)
     try:
         cols: List[str] = []
         cur = conn.cursor()
@@ -239,6 +203,67 @@ def list_columns_access(path: Path, table: str) -> List[str]:
             pass
 
 
+def connect_access(path: Path):
+    if pyodbc is None:
+        raise RuntimeError("pyodbc nao esta instalado")
+    conn = None
+    last_err: Optional[Exception] = None
+    conn_strs = [
+        rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
+        rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
+    ]
+    for cs in conn_strs:
+        try:
+            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
+            break
+        except Exception as exc:  # pragma: no cover
+            last_err = exc
+            conn = None
+    if conn is None:
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("Falha ao conectar via ODBC")
+    return conn
+
+
+def list_tables_for_engine(engine: str, path: Path) -> List[str]:
+    if engine == "sqlite":
+        return list_tables_sqlite(path)
+    if engine == "duckdb":
+        return list_tables_duckdb(path)
+    if engine == "access":
+        return list_tables_access(path)
+    raise RuntimeError(f"engine nao suportada: {engine}")
+
+
+def list_columns_for_engine(engine: str, path: Path, table: str) -> List[str]:
+    if engine == "sqlite":
+        return list_columns_sqlite(path, table)
+    if engine == "duckdb":
+        return list_columns_duckdb(path, table)
+    if engine == "access":
+        return list_columns_access(path, table)
+    raise RuntimeError(f"engine nao suportada: {engine}")
+
+
+def build_engine_where_parts(engine: str, filters: List[Tuple[str, Any]], columns: List[str], table: str):
+    column_lookup = {column.lower(): column for column in columns}
+    where_parts: List[str] = []
+    params: List[Any] = []
+    for col, val in filters:
+        real = column_lookup.get(col.lower())
+        if not real:
+            raise ValueError(f"coluna '{col}' nao encontrada na tabela {table}")
+        if engine in ("sqlite", "duckdb"):
+            where_parts.append(f'"{real}" = ?')
+        else:
+            where_parts.append(f"[{real}] = ?")
+        params.append(val)
+    if not where_parts:
+        raise ValueError("nenhum filtro informado")
+    return where_parts, params
+
+
 def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     """Retorna (found, sample_row_dict, error).
 
@@ -247,32 +272,14 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
     - error: mensagem de erro (se algo deu errado ao acessar o arquivo/tabela)
     """
     try:
-        if engine == "sqlite":
-            cols = list_columns_sqlite(path, table)
-        elif engine == "duckdb":
-            cols = list_columns_duckdb(path, table)
-        elif engine == "access":
-            cols = list_columns_access(path, table)
-        else:
-            return False, None, f"engine nao suportada: {engine}"
+        cols = list_columns_for_engine(engine, path, table)
     except Exception as exc:
         return False, None, f"erro ao listar colunas: {exc}"
 
-    # garante que todas as colunas do filtro existem
-    col_lower = {c.lower(): c for c in cols}
-    where_parts: List[str] = []
-    params: List[Any] = []
-    for col, val in filters:
-        real = col_lower.get(col.lower())
-        if not real:
-            return False, None, f"coluna '{col}' nao encontrada na tabela {table}"
-        if engine in ("sqlite", "duckdb"):
-            where_parts.append(f'"{real}" = ?')
-        else:  # access / ODBC
-            where_parts.append(f"[{real}] = ?")
-        params.append(val)
-    if not where_parts:
-        return False, None, "nenhum filtro informado"
+    try:
+        where_parts, params = build_engine_where_parts(engine, filters, cols, table)
+    except ValueError as exc:
+        return False, None, str(exc)
 
     if engine == "sqlite":
         conn = sqlite3.connect(str(path))
@@ -303,21 +310,10 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
     else:  # access via pyodbc
         if pyodbc is None:
             return False, None, "pyodbc nao instalado"
-        conn = None
-        conn_strs = [
-            rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-            rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
-        ]
-        last_err: Optional[Exception] = None
-        for cs in conn_strs:
-            try:
-                conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-                break
-            except Exception as exc:  # pragma: no cover
-                last_err = exc
-                conn = None
-        if conn is None:
-            return False, None, f"falha ao conectar via ODBC: {last_err}"
+        try:
+            conn = connect_access(path)
+        except Exception as exc:
+            return False, None, f"falha ao conectar via ODBC: {exc}"
         try:
             cur = conn.cursor()
             sql = (
@@ -414,14 +410,7 @@ def find_record_across_dbs(
             if table:
                 tables = [table]
             else:
-                if engine == "sqlite":
-                    tables = list_tables_sqlite(f)
-                elif engine == "duckdb":
-                    tables = list_tables_duckdb(f)
-                elif engine == "access":
-                    tables = list_tables_access(f)
-                else:
-                    raise RuntimeError(f"engine nao suportada: {engine}")
+                tables = list_tables_for_engine(engine, f)
 
             for t in tables:
                 found, sample, err = search_in_table(engine, f, t, filters)

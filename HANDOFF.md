@@ -151,6 +151,17 @@ The first stabilization slice is intentionally narrow:
   - runtime active DB remains independent
   - admin status now exposes `persisted_db` separately from current runtime `db`
 - Real operator Access samples in `output/` were used to confirm safe Access detection and correct rejection of unsupported browse operations.
+- The next layer of backend reduction is now inside the implementation blocks, not only the route wrappers:
+  - DuckDB and SQLite table browse now share clause/serialization helpers
+  - DuckDB, SQLite, and Access search now share more result-ordering logic
+  - record tracking now shares Access connection and engine-dispatch helpers
+- Operator logging is slightly more coherent now:
+  - `/client/log` and `/admin/logs` use capped shared entry handling
+  - `/admin/logs` now reports `count` in addition to the log list
+- Current file-review conclusion:
+  - `converters/`, `tools/`, and `artifacts/` remain justified
+  - `output/` is currently serving as a local validation area for real Access samples plus smoke fixtures
+  - no extra move to `bkp_limpeza/` was justified in this slice
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored
@@ -176,4 +187,5 @@ The first stabilization slice is intentionally narrow:
   - deeper backend debt reduction in `interface/app_flask_local_search.py`
   - continue reducing the remaining operator islands in `interface/app_flask_local_search.py` after upload, settings, browsing, and compare validation
   - continue reducing backend concentration in table/search implementation and record-tracking execution, not just request parsing
+  - decide whether `output/` should be formalized as local validation-only data or replaced by a clearer sample-data convention
   - expand compare API payload-type validation if external callers send non-string fields today

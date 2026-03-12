@@ -585,6 +585,31 @@ app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_pat
 # Simple in-memory logs for UI status modal
 _CLIENT_LOGS = []
 _SERVER_LOGS = []
+LOG_LIMIT = 500
+
+def build_log_entry(level, message):
+    return {
+        "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "level": str(level or "info").lower(),
+        "message": str(message or "").strip(),
+    }
+
+
+def append_capped_log(logs, entry):
+    logs.append(entry)
+    if len(logs) > LOG_LIMIT:
+        del logs[: len(logs) - LOG_LIMIT]
+
+
+def record_server_log(level, message, *, mirror_client=False):
+    entry = build_log_entry(level, message)
+    if not entry["message"]:
+        return None
+    append_capped_log(_SERVER_LOGS, entry)
+    if mirror_client:
+        append_capped_log(_CLIENT_LOGS, entry)
+    return entry
+
 
 # ---------------- Static files ----------------
 @app.route("/")
@@ -623,20 +648,9 @@ def client_log():
         if not msg:
             return jsonify({"ok": False, "error": "mensagem vazia"}), 400
 
-        entry = {
-            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "level": level,
-            "message": msg,
-        }
-
-        _CLIENT_LOGS.append(entry)
-        if len(_CLIENT_LOGS) > 500:
-            del _CLIENT_LOGS[: len(_CLIENT_LOGS) - 500]
-
-        # espelha em _SERVER_LOGS para aparecer junto no modal
-        _SERVER_LOGS.append(entry)
-        if len(_SERVER_LOGS) > 500:
-            del _SERVER_LOGS[: len(_SERVER_LOGS) - 500]
+        entry = record_server_log(level, msg, mirror_client=True)
+        if entry is None:
+            return jsonify({"ok": False, "error": "mensagem vazia"}), 400
 
         # também registra no log do Flask
         if level == "error":
@@ -656,7 +670,7 @@ def client_log():
 def admin_logs():
     """Snapshot simples de logs para o modal de status."""
     try:
-        return jsonify({"ok": True, "logs": list(_SERVER_LOGS[-500:])})
+        return jsonify({"ok": True, "logs": list(_SERVER_LOGS[-LOG_LIMIT:]), "count": len(_SERVER_LOGS)})
     except Exception as exc:  # pragma: no cover
         app.logger.exception("Erro em /admin/logs: %s", exc)
         return jsonify({"ok": False, "error": "exception"}), 500
@@ -679,6 +693,34 @@ def sqlite_connect(path):
 
 def quote_identifier(identifier):
     return '"' + str(identifier).replace('"', '""') + '"'
+
+
+def get_priority_tables():
+    return cfg.get("priority_tables", []) or []
+
+
+def order_grouped_results(results, score_by_table):
+    priority_tables = get_priority_tables()
+    ordered = {}
+    for table_name in priority_tables:
+        if table_name in results:
+            ordered[table_name] = results.pop(table_name)
+    for table_name in sorted(results.keys(), key=lambda name: score_by_table.get(name, 0), reverse=True):
+        ordered[table_name] = results[table_name]
+    return ordered
+
+
+def serialize_table_rows(columns, rows):
+    data = []
+    for row in rows:
+        row_obj = {}
+        for index, column in enumerate(columns):
+            try:
+                row_obj[column] = serialize_value(row[index])
+            except Exception:
+                row_obj[column] = None
+        data.append(row_obj)
+    return data
 
 
 def looks_like_sqlite_file(path):
@@ -735,30 +777,52 @@ def list_tables_for_path(path):
     raise ValueError(f"Unsupported DB format: {path}")
 
 
+def get_table_columns_duckdb(path, table):
+    conn = duckdb_connect(path)
+    try:
+        cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+        return [column[0] for column in cur.description]
+    finally:
+        conn.close()
+
+
+def get_table_columns_sqlite(path, table):
+    conn = sqlite_connect(path)
+    try:
+        cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+        return [desc[0] for desc in cur.description or []]
+    finally:
+        conn.close()
+
+
+def build_table_filter_clause(columns, col, q, cast_type):
+    if not col or not q:
+        return "", []
+    if col not in columns:
+        raise ValueError(f"column not found: {col}")
+    if cast_type == "duckdb":
+        return f"WHERE CAST({quote_identifier(col)} AS VARCHAR) ILIKE ?", [f"%{q}%"]
+    return f"WHERE CAST({quote_identifier(col)} AS TEXT) LIKE ? COLLATE NOCASE", [f"%{q}%"]
+
+
+def build_table_order_clause(columns, sort, order):
+    if not sort:
+        return ""
+    if sort not in columns:
+        raise ValueError(f"sort column not found: {sort}")
+    return f"ORDER BY {quote_identifier(sort)} {order}"
+
+
 def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
     conn = duckdb_connect(path)
     try:
-        tables = [r[0] for r in conn.execute("SHOW TABLES").fetchall()]
+        tables = list_tables_duckdb(path)
         if table not in tables:
             raise LookupError(f"table not found: {table}")
-
         quoted_table = quote_identifier(table)
-        cur = conn.execute(f"SELECT * FROM {quoted_table} LIMIT 0")
-        cols = [c[0] for c in cur.description]
-
-        params = []
-        where_clause = ""
-        if col and q:
-            if col not in cols:
-                raise ValueError(f"column not found: {col}")
-            where_clause = f"WHERE CAST({quote_identifier(col)} AS VARCHAR) ILIKE ?"
-            params.append(f"%{q}%")
-
-        order_clause = ""
-        if sort:
-            if sort not in cols:
-                raise ValueError(f"sort column not found: {sort}")
-            order_clause = f"ORDER BY {quote_identifier(sort)} {order}"
+        cols = get_table_columns_duckdb(path, table)
+        where_clause, params = build_table_filter_clause(cols, col, q, "duckdb")
+        order_clause = build_table_order_clause(cols, sort, order)
 
         count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
         if where_clause:
@@ -785,24 +849,10 @@ def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
         tables = list_tables_sqlite(path)
         if table not in tables:
             raise LookupError(f"table not found: {table}")
-
         quoted_table = quote_identifier(table)
-        cur = conn.execute(f"SELECT * FROM {quoted_table} LIMIT 0")
-        cols = [desc[0] for desc in cur.description or []]
-
-        params = []
-        where_clause = ""
-        if col and q:
-            if col not in cols:
-                raise ValueError(f"column not found: {col}")
-            where_clause = f"WHERE CAST({quote_identifier(col)} AS TEXT) LIKE ? COLLATE NOCASE"
-            params.append(f"%{q}%")
-
-        order_clause = ""
-        if sort:
-            if sort not in cols:
-                raise ValueError(f"sort column not found: {sort}")
-            order_clause = f"ORDER BY {quote_identifier(sort)} {order}"
+        cols = get_table_columns_sqlite(path, table)
+        where_clause, params = build_table_filter_clause(cols, col, q, "sqlite")
+        order_clause = build_table_order_clause(cols, sort, order)
 
         count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
         if where_clause:
@@ -846,6 +896,16 @@ def build_sqlite_search_where(columns, tokens, token_mode):
         token_clauses.append("(" + " OR ".join(column_checks) + ")")
     joiner = " OR " if token_mode == "any" else " AND "
     return "WHERE " + joiner.join(token_clauses), params
+
+
+def build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table):
+    return {
+        "q": q,
+        "q_norm": q_norm,
+        "candidate_count": candidate_count,
+        "returned_count": returned_count,
+        "results": order_grouped_results(results, score_by_table),
+    }
 
 
 def fallback_search_sqlite(
@@ -913,24 +973,11 @@ def fallback_search_sqlite(
                 if returned_count >= total_limit or candidate_count >= candidate_limit:
                     break
 
-        priority_tables = cfg.get("priority_tables", []) or []
-        ordered = {}
-        for table_name in priority_tables:
-            if table_name in results:
-                ordered[table_name] = results.pop(table_name)
-        for table_name in sorted(
-            results.keys(),
-            key=lambda name: max([item["score"] for item in results[name]]) if results[name] else 0,
-            reverse=True,
-        ):
-            ordered[table_name] = results[table_name]
-        return {
-            "q": q,
-            "q_norm": q_norm,
-            "candidate_count": candidate_count,
-            "returned_count": returned_count,
-            "results": ordered,
+        score_by_table = {
+            table_name: max([item["score"] for item in items]) if items else 0
+            for table_name, items in results.items()
         }
+        return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
     except Exception as exc:
         return {"error": str(exc)}
     finally:
@@ -1416,23 +1463,13 @@ def api_table():
             page_args["order"],
         )
 
-        data = []
-        for r in rows:
-            row_obj = {}
-            for i, cname in enumerate(cols):
-                try:
-                    row_obj[cname] = serialize_value(r[i])
-                except Exception:
-                    row_obj[cname] = None
-            data.append(row_obj)
-
         return jsonify({
             "table": table,
             "total": int(total),
             "limit": page_args["limit"],
             "offset": page_args["offset"],
             "columns": cols,
-            "rows": data,
+            "rows": serialize_table_rows(cols, rows),
             "db_engine": ctx["db_engine"],
         })
     except LookupError as exc:
@@ -1583,15 +1620,7 @@ def api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, mi
                 table_max[p] = best["score"]
                 total_count += 1
 
-    # apply priority ordering
-    ordered = {}
-    for p in priority_tables:
-        if p in grouped:
-            ordered[p] = grouped.pop(p)
-    remaining = sorted(grouped.keys(), key=lambda x: table_max.get(x, 0), reverse=True)
-    for t in remaining:
-        ordered[t] = grouped[t]
-    return {"q": q, "q_norm": q_norm, "candidate_count": len(candidates), "returned_count": total_count, "results": ordered}
+    return build_search_response(q, q_norm, len(candidates), total_count, grouped, table_max)
 
 # Fallback search for Access DBs via ODBC (pyodbc)
 def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, total_limit=500, token_mode="any", min_score=None, max_tables=500, max_rows_per_table=2000):
@@ -1729,14 +1758,11 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                 returned_count += len(results[t])
                 if returned_count >= total_limit:
                     break
-        priority_tables = cfg.get("priority_tables", []) or []
-        ordered = {}
-        for p in priority_tables:
-            if p in results:
-                ordered[p] = results.pop(p)
-        for t in sorted(results.keys(), key=lambda x: max([it["score"] for it in results[x]]) if results[x] else 0, reverse=True):
-            ordered[t] = results[t]
-        return {"q": q, "q_norm": q_norm, "candidate_count": candidate_count, "returned_count": returned_count, "results": ordered}
+        score_by_table = {
+            table_name: max([item["score"] for item in items]) if items else 0
+            for table_name, items in results.items()
+        }
+        return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
     except Exception as e:
         return {"error": str(e)}
     finally:
