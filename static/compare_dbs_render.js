@@ -27,8 +27,39 @@ function buildCompareSummary(data, rows, changedRows) {
   };
 }
 
+function buildCompareHighlights(data, rows, changedRows) {
+  const highlights = [];
+  const keyColumns = data.key_columns || [];
+  if (rows.added.length) {
+    const first = rows.added[0];
+    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((first.key || {})[key])}`).join(', ');
+    highlights.push(`Primeiro registro removido do banco novo: ${keyText || 'sem chave visivel'}`);
+  }
+  if (rows.removed.length) {
+    const first = rows.removed[0];
+    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((first.key || {})[key])}`).join(', ');
+    highlights.push(`Primeiro registro novo no banco atual: ${keyText || 'sem chave visivel'}`);
+  }
+  if (changedRows.length) {
+    const firstChanged = changedRows[0];
+    const changedCols = (data.compare_columns || []).filter(column =>
+      valuesDifferent((firstChanged.a || {})[column], (firstChanged.b || {})[column])
+    );
+    const keyText = keyColumns.map(key => `${key}=${JSON.stringify((firstChanged.key || {})[key])}`).join(', ');
+    highlights.push(
+      `Primeira chave alterada: ${keyText || 'sem chave visivel'}${changedCols.length ? ' · colunas: ' + changedCols.join(', ') : ''}`
+    );
+  }
+  return highlights;
+}
+
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
+  const highlights = buildCompareHighlights(data, {
+    added: data.rows ? data.rows.filter(row => row.type === 'added') : [],
+    removed: data.rows ? data.rows.filter(row => row.type === 'removed') : [],
+    changed: data.rows ? data.rows.filter(row => row.type === 'changed') : [],
+  }, data.rows ? data.rows.filter(row => row.type === 'changed') : []);
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -44,6 +75,7 @@ function renderCompareSummary(data, summaryData) {
           </div>
         </div>
         ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${summaryData.colDiffList}</div>` : ''}
+        ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.join('<br>')}</div>` : ''}
       </div>
     </div>
   `;

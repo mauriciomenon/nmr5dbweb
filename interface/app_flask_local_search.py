@@ -191,6 +191,68 @@ def get_runtime_capabilities():
     }
 
 
+def get_current_db_context(*, require_selected=False, require_exists=False, allowed_engines=None):
+    db_path = get_db_path()
+    if not db_path:
+        if require_selected:
+            raise ValueError("No DB selected")
+        return {"db_path": "", "db_engine": "", "db_exists": False}
+
+    db_exists = Path(db_path).exists()
+    if require_exists and not db_exists:
+        raise FileNotFoundError(f"DB ativo nao encontrado: {db_path}")
+
+    db_engine = detect_db_engine(db_path) if db_exists else ""
+    if allowed_engines is not None and db_engine not in set(allowed_engines):
+        raise ValueError(f"Engine nao suportada para esta operacao: {db_engine or 'desconhecida'}")
+
+    return {"db_path": db_path, "db_engine": db_engine, "db_exists": db_exists}
+
+
+def build_admin_status():
+    ctx = get_current_db_context()
+    status = {
+        "indexing": False,
+        "db": ctx["db_path"],
+        "db_exists": ctx["db_exists"],
+        "db_engine": ctx["db_engine"],
+        "fulltext_count": 0,
+        "top_tables": [],
+        "startup_warnings": list(startup_warnings),
+        "capabilities": get_runtime_capabilities(),
+    }
+    with index_lock:
+        if index_thread and index_thread.is_alive():
+            status["indexing"] = True
+    with convert_lock:
+        status["conversion"] = dict(convert_status)
+    status["priority_tables"] = cfg.get("priority_tables", [])
+    status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
+
+    if not ctx["db_path"] or not ctx["db_exists"]:
+        return status
+    if ctx["db_engine"] != "duckdb":
+        return status
+
+    try:
+        conn = duckdb_connect(ctx["db_path"])
+        try:
+            total = conn.execute("SELECT COUNT(*) FROM _fulltext").fetchone()[0]
+            status["fulltext_count"] = int(total)
+            rows = conn.execute(
+                "SELECT table_name, COUNT(*) as c FROM _fulltext GROUP BY table_name ORDER BY c DESC LIMIT 50"
+            ).fetchall()
+            status["top_tables"] = [{"table": r[0], "count": int(r[1])} for r in rows]
+        except Exception:
+            status["fulltext_count"] = 0
+            status["top_tables"] = []
+        finally:
+            conn.close()
+    except Exception as exc:
+        status["error_fulltext"] = str(exc)
+    return status
+
+
 def sanitize_filename(value):
     if value is None:
         return ""
@@ -514,47 +576,7 @@ def admin_list_uploads():
 
 @app.route("/admin/status", methods=["GET"])
 def admin_status():
-    db_path = get_db_path()
-    db_engine = detect_db_engine(db_path) if db_path else ""
-    status = {
-        "indexing": False,
-        "db": db_path,
-        "db_exists": bool(db_path and Path(db_path).exists()),
-        "db_engine": db_engine,
-        "fulltext_count": 0,
-        "top_tables": [],
-        "startup_warnings": list(startup_warnings),
-        "capabilities": get_runtime_capabilities(),
-    }
-    with index_lock:
-        if index_thread and index_thread.is_alive():
-            status["indexing"] = True
-    # try _fulltext info
-    if db_engine == "sqlite":
-        with convert_lock:
-            status["conversion"] = dict(convert_status)
-        status["priority_tables"] = cfg.get("priority_tables", [])
-        status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
-        return jsonify(status)
-    try:
-        conn = duckdb_connect(get_db_path())
-        try:
-            total = conn.execute("SELECT COUNT(*) FROM _fulltext").fetchone()[0]
-            status["fulltext_count"] = int(total)
-            rows = conn.execute("SELECT table_name, COUNT(*) as c FROM _fulltext GROUP BY table_name ORDER BY c DESC LIMIT 50").fetchall()
-            status["top_tables"] = [{"table": r[0], "count": int(r[1])} for r in rows]
-        except Exception:
-            status["fulltext_count"] = 0
-            status["top_tables"] = []
-        finally:
-            conn.close()
-    except Exception as e:
-        status["error_fulltext"] = str(e)
-    with convert_lock:
-        status["conversion"] = dict(convert_status)
-    status["priority_tables"] = cfg.get("priority_tables", [])
-    status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
-    return jsonify(status)
+    return jsonify(build_admin_status())
 
 
 @app.route("/api/record_dirs", methods=["GET"])
@@ -797,15 +819,18 @@ def admin_start_index():
     with index_lock:
         if index_thread and index_thread.is_alive():
             return jsonify({"error": "indexação já em execução"}), 409
-        dbpath = get_db_path()
-        if not dbpath:
-            return jsonify({"error": "No DB selected"}), 400
-        if detect_db_engine(dbpath) != "duckdb":
+        try:
+            ctx = get_current_db_context(require_selected=True, require_exists=True)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        except FileNotFoundError as exc:
+            return jsonify({"error": str(exc)}), 400
+        if ctx["db_engine"] != "duckdb":
             return jsonify({"error": "indexacao _fulltext disponivel apenas para DuckDB"}), 400
         indexer = create_or_resume_fulltext
         def run_index():
             try:
-                indexer(dbpath, drop=drop, chunk=chunk, batch_insert=batch)
+                indexer(ctx["db_path"], drop=drop, chunk=chunk, batch_insert=batch)
             except Exception as e:
                 app.logger.exception("Indexação falhou: %s", e)
         index_thread = threading.Thread(target=run_index, daemon=True)
@@ -1083,12 +1108,12 @@ def api_compare_db_rows():
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
 def api_tables():
-    dbpath = get_db_path()
-    if not dbpath:
-        return jsonify({"error": "No DB selected"}), 400
     try:
-        tables = list_tables_for_path(dbpath)
+        ctx = get_current_db_context(require_selected=True, require_exists=True)
+        tables = list_tables_for_path(ctx["db_path"])
         return jsonify({"tables": tables})
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 400
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception as e:
@@ -1100,12 +1125,14 @@ def api_table():
     table = request.args.get("name")
     if not table:
         return jsonify({"error": "table name required (?name=TABLE_NAME)"}), 400
-    dbpath = get_db_path()
-    if not dbpath:
-        return jsonify({"error": "No DB selected"}), 400
-    engine = detect_db_engine(dbpath)
-    if engine not in {"duckdb", "sqlite"}:
-        return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {dbpath}"}), 400
+    try:
+        ctx = get_current_db_context(require_selected=True, require_exists=True)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if ctx["db_engine"] not in {"duckdb", "sqlite"}:
+        return jsonify({"error": f"Table view only supported for DuckDB/SQLite. Current DB: {ctx['db_path']}"}), 400
     try:
         limit = int(request.args.get("limit", 50))
         offset = int(request.args.get("offset", 0))
@@ -1121,7 +1148,7 @@ def api_table():
 
     try:
         cols, rows, total = read_table_page_for_path(
-            dbpath,
+            ctx["db_path"],
             table,
             limit,
             offset,
@@ -1485,20 +1512,22 @@ def api_search():
     tables = None
     if tables_param:
         tables = [t.strip() for t in tables_param.split(",") if t.strip()]
-    dbpath = get_db_path()
-    if not dbpath:
-        return jsonify({"error": "No DB selected"}), 400
-    engine = detect_db_engine(dbpath)
-    if engine == "duckdb":
+    try:
+        ctx = get_current_db_context(require_selected=True, require_exists=True)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 400
+    if ctx["db_engine"] == "duckdb":
         return jsonify(api_search_duckdb(q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=tables))
-    if engine == "sqlite":
+    if ctx["db_engine"] == "sqlite":
         return jsonify({"error": "Search on this screen is only supported for DuckDB _fulltext or Access fallback. Current DB engine: sqlite"}), 400
-    if engine == "access":
-        fb = fallback_search_access(dbpath, q, per_table=per_table, candidate_limit=candidate_limit, total_limit=total_limit, token_mode=token_mode, min_score=min_score)
+    if ctx["db_engine"] == "access":
+        fb = fallback_search_access(ctx["db_path"], q, per_table=per_table, candidate_limit=candidate_limit, total_limit=total_limit, token_mode=token_mode, min_score=min_score)
         if isinstance(fb, dict) and fb.get("error"):
             return jsonify({"error": fb.get("error")}), 500
         return jsonify(fb)
-    return jsonify({"error": f"Unsupported DB format: {dbpath}"}), 400
+    return jsonify({"error": f"Unsupported DB format: {ctx['db_path']}"}), 400
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)

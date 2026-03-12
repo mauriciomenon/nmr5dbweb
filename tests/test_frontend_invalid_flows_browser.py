@@ -1,4 +1,5 @@
 import threading
+from contextlib import contextmanager
 
 import pytest
 import duckdb
@@ -59,51 +60,8 @@ def ui_server(tmp_path, monkeypatch):
         server.stop()
 
 
-def test_invalid_frontend_flows_render_inline_feedback(ui_server):
-    with sync_playwright() as playwright:
-        try:
-            browser = playwright.chromium.launch(headless=True)
-        except PlaywrightError as exc:
-            if "Executable doesn't exist" in str(exc):
-                pytest.skip("Playwright browser not installed")
-            raise
-        page = browser.new_page()
-
-        page.goto(ui_server + "/")
-        page.wait_for_selector("#searchMeta")
-        assert "Selecione um DB para buscar." in (page.locator("#searchMeta").text_content() or "")
-        assert page.locator("#searchBtn").is_disabled()
-
-        page.goto(ui_server + "/admin.html")
-        page.wait_for_selector("#startIndex")
-        page.locator("#startIndex").click()
-        page.wait_for_function(
-            "() => document.getElementById('indexMsg').textContent.includes('Selecione um DB primeiro.')"
-        )
-        assert "Selecione um DB primeiro." in (page.locator("#indexMsg").text_content() or "")
-
-        page.goto(ui_server + "/compare_dbs")
-        page.wait_for_selector("#btnLoadTables")
-        page.locator("#btnLoadTables").click()
-        page.wait_for_function(
-            "() => document.getElementById('statusMeta').textContent.includes('Informe os caminhos de ambos os bancos')"
-        )
-        assert "Informe os caminhos de ambos os bancos" in (page.locator("#statusMeta").text_content() or "")
-
-        page.goto(ui_server + "/track_record")
-        page.wait_for_selector("#runBtn")
-        page.locator("#customDirInput").fill("")
-        page.locator("#filtersInput").fill("")
-        page.locator("#runBtn").click()
-        page.wait_for_function(
-            "() => document.getElementById('statusText').textContent.includes('Preencha os filtros antes de executar.')"
-        )
-        assert "Preencha os filtros antes de executar." in (page.locator("#statusText").text_content() or "")
-
-        browser.close()
-
-
-def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, monkeypatch):
+@pytest.fixture()
+def sample_data(tmp_path, monkeypatch):
     search_db = tmp_path / "search.duckdb"
     conn = duckdb.connect(str(search_db))
     conn.execute(
@@ -137,7 +95,16 @@ def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, mo
 
     monkeypatch.setitem(local_search.runtime_state, "db_path", str(search_db))
     monkeypatch.setitem(local_search.cfg, "db_path", str(search_db))
+    return {
+        "search_db": search_db,
+        "db_a": db_a,
+        "db_b": db_b,
+        "track_dir": track_dir,
+    }
 
+
+@contextmanager
+def with_browser():
     with sync_playwright() as playwright:
         try:
             browser = playwright.chromium.launch(headless=True)
@@ -145,10 +112,56 @@ def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, mo
             if "Executable doesn't exist" in str(exc):
                 pytest.skip("Playwright browser not installed")
             raise
-        page = browser.new_page()
+        browser_context = browser.new_context()
+        page = browser_context.new_page()
+        try:
+            yield browser, browser_context, page
+        finally:
+            browser_context.close()
+            browser.close()
 
+
+def test_invalid_frontend_flows_render_inline_feedback(ui_server):
+    with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/")
-        page.wait_for_selector("#searchBtn:not([disabled])")
+        page.wait_for_selector("#searchMeta", state="attached")
+        assert "Selecione um DB para buscar." in (page.locator("#searchMeta").text_content() or "")
+        assert page.locator("#searchBtn").is_disabled()
+
+        page.goto(ui_server + "/admin.html")
+        page.wait_for_selector("#startIndex")
+        page.locator("#startIndex").click()
+        page.wait_for_function(
+            "() => document.getElementById('indexMsg').textContent.includes('Selecione um DB ativo antes de iniciar a indexacao.')"
+        )
+        assert "Selecione um DB ativo antes de iniciar a indexacao." in (
+            page.locator("#indexMsg").text_content() or ""
+        )
+
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#btnLoadTables")
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => document.getElementById('statusMeta').textContent.includes('Informe os caminhos de ambos os bancos')"
+        )
+        assert "Informe os caminhos de ambos os bancos" in (page.locator("#statusMeta").text_content() or "")
+
+        page.goto(ui_server + "/track_record")
+        page.wait_for_selector("#runBtn")
+        page.locator("#customDirInput").fill("")
+        page.locator("#filtersInput").fill("")
+        page.locator("#runBtn").click()
+        page.wait_for_function(
+            "() => document.getElementById('statusText').textContent.includes('Preencha os filtros antes de executar.')"
+        )
+        assert "Preencha os filtros antes de executar." in (page.locator("#statusText").text_content() or "")
+
+
+def test_success_frontend_smoke_search_page(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/")
+        page.locator("#openSearchInlineMirror").click()
+        page.wait_for_selector("#searchBtn")
         page.locator("#q").fill("alpha")
         page.locator("#searchBtn").click()
         page.wait_for_function(
@@ -162,10 +175,13 @@ def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, mo
             "() => (document.getElementById('statusBox').textContent || '').includes('search.duckdb')"
         )
 
+
+def test_success_frontend_smoke_compare_page(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/compare_dbs")
         page.wait_for_selector("#db1Path")
-        page.locator("#db1Path").fill(str(db_a))
-        page.locator("#db2Path").fill(str(db_b))
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
         page.locator("#btnLoadTables").click()
         page.wait_for_function(
             "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
@@ -177,15 +193,17 @@ def test_success_frontend_smoke_search_compare_and_track(ui_server, tmp_path, mo
         )
         assert "items" in (page.locator("#summary").text_content() or "")
         assert "beta-old" in (page.locator("#results").text_content() or "")
+        assert "Pistas operacionais" in (page.locator("#summary").text_content() or "")
 
+
+def test_success_frontend_smoke_track_page(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/track_record")
         page.wait_for_selector("#runBtn")
-        page.locator("#customDirInput").fill(str(track_dir))
+        page.locator("#customDirInput").fill(str(sample_data["track_dir"]))
         page.locator("#filtersInput").fill("RTUNO=1,PNTNO=2304")
         page.locator("#runBtn").click()
         page.wait_for_function(
             "() => (document.getElementById('summary').textContent || '').includes('Encontrado em 1 arquivo')"
         )
         assert "sample.sqlite3" in (page.locator("#resultsTable").text_content() or "")
-
-        browser.close()

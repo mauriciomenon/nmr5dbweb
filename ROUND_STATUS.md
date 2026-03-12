@@ -1,5 +1,48 @@
 # Round Status
 
+## Current Slice: Immediate-Use Hardening And Stable Browser Smoke
+
+### Goal
+
+1. Remove the remaining immediate-use ambiguity around the active DB state in the Flask backend
+2. Turn the browser smoke into a broader stable suite for success and invalid flows
+3. Evolve diff reporting at the presentation layer without touching the fast compare engine
+
+### Applied
+
+1. Consolidated active-DB and engine checks in `interface/app_flask_local_search.py` with:
+   - `get_current_db_context(...)`
+   - `build_admin_status()`
+2. Reused that backend context in:
+   - `/admin/status`
+   - `/admin/start_index`
+   - `/api/tables`
+   - `/api/table`
+   - `/api/search`
+3. Added explicit missing-file behavior for the active DB path, instead of letting each route fail differently.
+4. Added a report-oriented summary block in `static/compare_dbs_render.js` based on existing compare results only.
+5. Expanded the browser regression suite to cover:
+   - invalid inline feedback on all main pages
+   - successful DuckDB search flow
+   - successful DuckDB compare flow
+   - successful SQLite tracking flow
+6. Updated the browser invalid-flow test to match the current admin message for no active DB before indexing.
+
+### What Was Proved
+
+- The backend now resolves active DB state and engine eligibility through one narrower internal path instead of repeating the same checks across routes.
+- Missing active DB files are now rejected consistently in API paths that depend on them.
+- The browser suite now covers both invalid and successful operator flows across the four main pages.
+- The compare report UI gained more useful operational hints without altering the current fast compare path.
+
+### Validation After Changes
+
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `./.venv/bin/ruff check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py tests/test_frontend_invalid_flows_browser.py`: passed
+- `timeout 60s node --check static/compare_dbs_render.js`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `43 passed`
+
 ## Round
 
 Slice 1: repo zero-state and control files

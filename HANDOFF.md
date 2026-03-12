@@ -111,11 +111,15 @@ The first stabilization slice is intentionally narrow:
   - `db_exists`
   - `startup_warnings`
   - backend capabilities for Access fallback, Access conversion, and DuckDB `_fulltext`
+- Active DB resolution and engine eligibility in the Flask backend are now funneled through shared internal helpers instead of being repeated independently by each route.
+- API paths that depend on the active DB now fail more consistently when the selected file no longer exists on disk.
 - `_fulltext` indexing is now rejected server-side for non-DuckDB engines instead of depending only on UI-side blocking.
 - Browser success smoke now also exists in repo coverage for:
   - DuckDB `_fulltext` search success
   - DuckDB compare success
   - SQLite tracking success
+- Browser regression coverage now also includes invalid inline feedback on the four main pages and the current no-active-DB admin indexing message.
+- `static/compare_dbs_render.js` now derives extra operator hints from current compare results, without changing the fast compare engine or its API contract.
 - The two touched `tools/` scripts no longer emit the old `py_compile` escape warnings in this repo
 - Current no-key compare semantics are still the old ones by design:
   - row order is ignored

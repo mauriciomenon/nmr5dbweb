@@ -125,6 +125,28 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     assert payload["capabilities"]["access_fallback"] in {True, False}
 
 
+def test_api_tables_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
+    client = app.test_client()
+    missing = tmp_path / "missing.duckdb"
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(missing))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == f"DB ativo nao encontrado: {missing}"
+
+
+def test_api_search_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
+    client = app.test_client()
+    missing = tmp_path / "missing.duckdb"
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(missing))
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == f"DB ativo nao encontrado: {missing}"
+
+
 def test_api_tables_lista_tabelas_sqlite(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.sqlite3"
