@@ -228,6 +228,14 @@ function normalizePathForCompare(pathValue) {
   return String(pathValue || '').trim().replace(/\\/g, '/').toLowerCase();
 }
 
+function hasDuplicateItems(values) {
+  if (!Array.isArray(values)) return false;
+  const normalized = values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  return new Set(normalized).size !== normalized.length;
+}
+
 function validateCompareRequest(compareRequest) {
   if (!compareRequest.db1 || !compareRequest.db2) {
     applyCompareMissingDbState();
@@ -268,6 +276,26 @@ function validateCompareRequest(compareRequest) {
       'warn'
     );
     setStepState('stepCompare', 'Chave K faltando', 'warn');
+    return false;
+  }
+  if (hasDuplicateItems(compareRequest.payload && compareRequest.payload.key_columns)) {
+    setCompareStatus('A chave K contem colunas duplicadas.', 'warn');
+    setFlowHint(
+      'Remova colunas duplicadas da chave K antes de comparar.',
+      'warn'
+    );
+    setStepState('stepCompare', 'Chave K duplicada', 'warn');
+    return false;
+  }
+  if (
+    hasDuplicateItems(compareRequest.payload && compareRequest.payload.compare_columns)
+  ) {
+    setCompareStatus('As colunas de comparacao contem duplicidade.', 'warn');
+    setFlowHint(
+      'Remova colunas repetidas no campo de comparacao.',
+      'warn'
+    );
+    setStepState('stepCompare', 'Colunas duplicadas', 'warn');
     return false;
   }
   if (

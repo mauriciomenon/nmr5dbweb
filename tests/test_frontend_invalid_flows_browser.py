@@ -232,6 +232,47 @@ def test_invalid_compare_rejects_same_db_file(ui_server, sample_data):
         )
 
 
+def test_invalid_compare_rejects_duplicate_key_columns(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id,id")
+        page.locator("#runCompareBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusCompare').textContent || '').includes('A chave K contem colunas duplicadas.')"
+        )
+        assert "A chave K contem colunas duplicadas." in (
+            page.locator("#statusCompare").text_content() or ""
+        )
+
+
+def test_invalid_compare_rejects_duplicate_compare_columns(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id")
+        page.locator("#compareColumns").fill("score,score")
+        page.locator("#runCompareBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusCompare').textContent || '').includes('As colunas de comparacao contem duplicidade.')"
+        )
+        assert "As colunas de comparacao contem duplicidade." in (
+            page.locator("#statusCompare").text_content() or ""
+        )
+
+
 def test_success_frontend_smoke_search_page(ui_server, sample_data):
     with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/")
