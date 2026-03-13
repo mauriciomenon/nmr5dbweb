@@ -2011,10 +2011,11 @@ def api_compare_db_rows():
 
     invalid_change_types = compare_request["invalid_change_types"]
     if invalid_change_types:
-        return jsonify({
-            "error": "change_types contem valores invalidos",
-            "invalid": invalid_change_types,
-        }), 400
+        return json_error(
+            "change_types contem valores invalidos",
+            400,
+            invalid=invalid_change_types,
+        )
 
     try:
         result = compare_table_duckdb_paged(
