@@ -327,6 +327,114 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
         conn2.close()
 
 
+def compare_tables_overview_duckdb(
+    db1: Path,
+    db2: Path,
+    tables: Sequence[str] | None = None,
+    *,
+    max_tables: int = 500,
+) -> list[dict]:
+    """Gera overview de diferenca por tabela usando uma unica conexao attach."""
+    db1, db2 = _resolve_duckdb_compare_paths(db1, db2)
+    conn = _connect_memory()
+    try:
+        _attach_db(conn, "db1", db1, read_only=True)
+        _attach_db(conn, "db2", db2, read_only=True)
+
+        tables_a_rows = conn.execute("SHOW TABLES FROM db1").fetchall()
+        tables_b_rows = conn.execute("SHOW TABLES FROM db2").fetchall()
+        tables_a = [row[0] for row in tables_a_rows]
+        tables_b_set = {row[0] for row in tables_b_rows}
+        common_tables = [table for table in tables_a if table in tables_b_set]
+        if tables is not None:
+            allowed = {str(table).strip() for table in tables if str(table).strip()}
+            common_tables = [table for table in common_tables if table in allowed]
+        common_tables = common_tables[:max_tables]
+
+        overview: list[dict] = []
+        for table in common_tables:
+            table_row = {"table": table}
+            try:
+                table_a_sql = _qualify_identifier("db1", table)
+                table_b_sql = _qualify_identifier("db2", table)
+                cols_a_desc = conn.execute(
+                    f"SELECT * FROM {table_a_sql} LIMIT 0"
+                ).description or []
+                cols_b_desc = conn.execute(
+                    f"SELECT * FROM {table_b_sql} LIMIT 0"
+                ).description or []
+                cols_a = [row[0] for row in cols_a_desc]
+                cols_b_set = {row[0] for row in cols_b_desc}
+                common_cols = [col for col in cols_a if col in cols_b_set]
+
+                row_count_a = conn.execute(
+                    f"SELECT COUNT(*) FROM {table_a_sql}"
+                ).fetchone()
+                row_count_b = conn.execute(
+                    f"SELECT COUNT(*) FROM {table_b_sql}"
+                ).fetchone()
+                if row_count_a is None or row_count_b is None:
+                    raise RuntimeError("falha ao obter contagem da tabela")
+                row_count_a_int = int(row_count_a[0] or 0)
+                row_count_b_int = int(row_count_b[0] or 0)
+
+                if not common_cols:
+                    table_row.update({
+                        "status": "no_key",
+                        "diff_count": -1,
+                        "row_count_a": row_count_a_int,
+                        "row_count_b": row_count_b_int,
+                        "error": "tabela sem colunas em comum",
+                    })
+                    overview.append(table_row)
+                    continue
+
+                cols_sql = ", ".join(_quote_identifier(col) for col in common_cols)
+                diff_sql = f"""
+                WITH
+                  a_distinct AS (
+                    SELECT DISTINCT {cols_sql}
+                    FROM {table_a_sql}
+                  ),
+                  b_distinct AS (
+                    SELECT DISTINCT {cols_sql}
+                    FROM {table_b_sql}
+                  ),
+                  only_a AS (
+                    SELECT * FROM a_distinct
+                    EXCEPT
+                    SELECT * FROM b_distinct
+                  ),
+                  only_b AS (
+                    SELECT * FROM b_distinct
+                    EXCEPT
+                    SELECT * FROM a_distinct
+                  )
+                SELECT
+                  ((SELECT COUNT(*) FROM only_a) + (SELECT COUNT(*) FROM only_b)) AS diff_count
+                """
+                diff_row = conn.execute(diff_sql).fetchone()
+                if diff_row is None:
+                    raise RuntimeError("falha ao calcular diff da tabela")
+                diff_count_int = int(diff_row[0] or 0)
+                table_row.update({
+                    "status": "diff" if diff_count_int > 0 else "same",
+                    "diff_count": diff_count_int,
+                    "row_count_a": row_count_a_int,
+                    "row_count_b": row_count_b_int,
+                })
+            except Exception as exc:  # noqa: BLE001
+                table_row.update({
+                    "status": "error",
+                    "diff_count": -1,
+                    "error": str(exc),
+                })
+            overview.append(table_row)
+        return overview
+    finally:
+        conn.close()
+
+
 def list_tables(db_path: Path) -> List[str]:
     """Lista tabelas de um arquivo DuckDB."""
     db_path = db_path.resolve()

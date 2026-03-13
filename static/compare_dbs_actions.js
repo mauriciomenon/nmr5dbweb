@@ -673,31 +673,35 @@ async function generateTablesOverview() {
   const overview = [];
   const db1 = db1Input.value.trim();
   const db2 = db2Input.value.trim();
-  for (const t of compareDbState.tablesMeta) {
-    const name = t.name;
-    try {
-      const data = await postJson('/api/compare_db_table_content', {
-        db1_path: db1,
-        db2_path: db2,
-        table: name,
-      });
-      const diffCount =
-        typeof data.diff_count === 'number' ? data.diff_count : -1;
+  const tableNames = compareDbState.tablesMeta
+    .map((item) => item && item.name)
+    .filter(Boolean);
+  try {
+    const payload = await postJson('/api/compare_db_overview', {
+      db1_path: db1,
+      db2_path: db2,
+      tables: tableNames,
+    });
+    (payload.overview || []).forEach((item) => {
       overview.push({
-        table: name,
-        status: diffCount > 0 ? 'diff' : 'same',
-        diffCount,
-        row_count_a: data.row_count_a,
-        row_count_b: data.row_count_b,
+        table: item.table,
+        status: item.status || 'error',
+        diffCount:
+          typeof item.diff_count === 'number' ? item.diff_count : -1,
+        row_count_a: item.row_count_a,
+        row_count_b: item.row_count_b,
+        error: item.error || '',
       });
-    } catch (err) {
-      console.error('Erro ao gerar resumo da tabela', name, err);
-      overview.push({
-        table: name,
-        status: 'error',
-        error: err && err.message ? err.message : String(err),
-      });
-    }
+    });
+  } catch (err) {
+    console.error('Erro ao gerar mapa geral via endpoint unico', err);
+    setCompareStatus(
+      'Falha ao gerar mapa geral: ' +
+        (err && err.message ? err.message : String(err)),
+      'error'
+    );
+    restoreBtn();
+    return;
   }
 
   compareDbState.tablesOverviewCache = { db1: db1, db2: db2, result: overview };

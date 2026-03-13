@@ -760,6 +760,53 @@ def test_api_compare_db_table_content_rejeita_arquivo_ausente(tmp_path):
     assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]
 
 
+def test_api_compare_db_overview_sucesso(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "a.duckdb"
+    db2 = tmp_path / "b.duckdb"
+
+    conn1 = duckdb.connect(str(db1))
+    conn1.execute("CREATE TABLE items(id INTEGER, valor TEXT)")
+    conn1.execute("INSERT INTO items VALUES (1, 'x'), (2, 'y')")
+    conn1.close()
+
+    conn2 = duckdb.connect(str(db2))
+    conn2.execute("CREATE TABLE items(id INTEGER, valor TEXT)")
+    conn2.execute("INSERT INTO items VALUES (1, 'x'), (2, 'z')")
+    conn2.close()
+
+    resp = client.post(
+        "/api/compare_db_overview",
+        json={"db1_path": str(db1), "db2_path": str(db2), "tables": ["items"]},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["overview"]
+    row = payload["overview"][0]
+    assert row["table"] == "items"
+    assert row["status"] == "diff"
+    assert row["diff_count"] >= 1
+    assert row["row_count_a"] == 2
+    assert row["row_count_b"] == 2
+
+
+def test_api_compare_db_overview_rejeita_tables_invalido(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "a.duckdb"
+    db2 = tmp_path / "b.duckdb"
+    duckdb.connect(str(db1)).close()
+    duckdb.connect(str(db2)).close()
+
+    resp = client.post(
+        "/api/compare_db_overview",
+        json={"db1_path": str(db1), "db2_path": str(db2), "tables": "items"},
+    )
+
+    assert resp.status_code == 400
+    assert "tables deve ser uma lista" in resp.get_json()["error"]
+
+
 def test_api_compare_db_rows_rejeita_engine_nao_duckdb(tmp_path):
     client = app.test_client()
     db_sqlite = tmp_path / "a.sqlite3"

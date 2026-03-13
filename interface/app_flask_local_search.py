@@ -35,6 +35,7 @@ from interface.compare_dbs import (
     list_table_columns,
     compare_table_duckdb_paged,
     compare_table_content_duckdb,
+    compare_tables_overview_duckdb,
 )
 
 # Optional modules
@@ -1731,6 +1732,30 @@ def api_compare_db_table_content():
         return jsonify({"error": str(exc)}), 400
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_table_content")
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/compare_db_overview", methods=["POST"])
+def api_compare_db_overview():
+    """Retorna overview de diferenca por tabela para dois bancos DuckDB."""
+    data = request.get_json(silent=True) or {}
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+    raw_tables = data.get("tables")
+    tables = None
+    if raw_tables is not None:
+        if not isinstance(raw_tables, list):
+            return jsonify({"error": "tables deve ser uma lista"}), 400
+        tables = [str(item).strip() for item in raw_tables if str(item).strip()]
+
+    try:
+        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_overview")
+        overview = compare_tables_overview_duckdb(db1, db2, tables=tables)
+        return jsonify({"overview": overview})
+    except (ValueError, FileNotFoundError) as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:  # noqa: BLE001
+        app.logger.exception("Erro em api_compare_db_overview")
         return jsonify({"error": str(exc)}), 500
 
 
