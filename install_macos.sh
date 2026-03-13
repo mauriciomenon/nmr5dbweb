@@ -26,4 +26,5 @@ echo "Setup complete."
 echo "Activate with: source .venv/bin/activate"
 echo "Run app with:  python main.py"
 echo
-echo "Note: ACCDB conversion on macOS usually needs external ODBC/driver setup."
+echo "Note: ACCDB/MDB conversion works without ODBC by default (access-parser path)."
+echo "Optional: install ODBC driver only if you explicitly need ODBC-based Access flows."

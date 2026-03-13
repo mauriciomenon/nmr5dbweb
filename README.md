@@ -95,6 +95,10 @@ Fonte canonica de dependencias Python:
 - `pyproject.toml` (runtime + grupo `dev`)
 - `requirements.txt` e `requirements-dev.txt` ficam como compatibilidade legada
 
+Compatibilidade de dependencias por plataforma:
+- `pyodbc` e `win_unicode_console` sao instalados apenas em Windows.
+- Em macOS/Linux, o fluxo principal usa conversao para DuckDB sem depender de ODBC.
+
 ---
 
 ## Conversores de linha de comando (`converters/`)
