@@ -463,12 +463,32 @@ def test_api_tables_rejeita_access_para_browse(tmp_path, monkeypatch):
     client = app.test_client()
     access_path = tmp_path / "sample.accdb"
     access_path.write_bytes(b"access")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
     monkeypatch.setattr(local_search, "get_db_path", lambda: str(access_path))
 
     resp = client.get("/api/tables")
 
     assert resp.status_code == 400
     assert resp.get_json()["error"] == "Engine nao suportada para esta operacao: access"
+
+
+def test_api_tables_access_resolve_para_duckdb_derivado(tmp_path, monkeypatch):
+    client = app.test_client()
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access")
+    duck_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(duck_path))
+    conn.execute("CREATE TABLE resolved_table (id INTEGER)")
+    conn.close()
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(access_path))
+
+    resp = client.get("/api/tables")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["db_engine"] == "duckdb"
+    assert payload["tables"] == ["resolved_table"]
 
 
 def test_api_search_rejeita_db_ativo_ausente(tmp_path, monkeypatch):
@@ -651,6 +671,35 @@ def test_api_search_access_driver_error_retorna_503(tmp_path, monkeypatch):
     assert "Convert to DuckDB first" in payload["hint"]
 
 
+def test_api_search_access_com_duckdb_derivado_usa_duckdb(tmp_path, monkeypatch):
+    client = app.test_client()
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access-placeholder")
+    duck_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(duck_path))
+    conn.execute(
+        "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
+    )
+    conn.execute(
+        "INSERT INTO _fulltext VALUES ('alpha', 'id', '1', 0, 'alpha result', '{\"id\": 1, \"name\": \"alpha row\"}')"
+    )
+    conn.close()
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(access_path))
+
+    def should_not_run(*_args, **_kwargs):
+        raise AssertionError("fallback_search_access nao deveria ser chamado")
+
+    monkeypatch.setattr(local_search, "fallback_search_access", should_not_run)
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["returned_count"] == 1
+    assert payload["results"]["alpha"][0]["row"]["name"] == "alpha row"
+
+
 def test_api_search_access_encaminha_filtro_tables(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.accdb"
@@ -685,6 +734,26 @@ def test_api_search_access_encaminha_filtro_tables(tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     assert captured["tables"] == ["t1", "t2"]
+
+
+def test_admin_select_access_resolve_para_duckdb_derivado(tmp_path, monkeypatch):
+    client = app.test_client()
+    selected = []
+    access_path = tmp_path / "sample.accdb"
+    duck_path = tmp_path / "sample.duckdb"
+    access_path.write_bytes(b"access-placeholder")
+    duck_path.write_bytes(b"duck-placeholder")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "set_db_path", selected.append)
+
+    resp = client.post("/admin/select", json={"filename": "sample.accdb"})
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["db_path"] == str(duck_path.resolve())
+    assert payload["selected_path"] == str(access_path)
+    assert payload["resolved_from_access"] is True
+    assert selected == [str(duck_path.resolve())]
 
 
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):

@@ -320,17 +320,37 @@ def get_current_db_context(*, require_selected=False, require_exists=False, allo
     if not db_path:
         if require_selected:
             raise ValueError("No DB selected")
-        return {"db_path": "", "db_engine": "", "db_exists": False}
+        return {
+            "db_path": "",
+            "db_engine": "",
+            "db_exists": False,
+            "requested_db_path": "",
+            "resolved_from_access": False,
+        }
 
+    requested_db_path = db_path
     db_exists = Path(db_path).exists()
     if require_exists and not db_exists:
         raise FileNotFoundError(f"DB ativo nao encontrado: {db_path}")
 
     db_engine = detect_db_engine(db_path) if db_exists else ""
+    resolved_from_access = False
+    if db_exists and db_engine == "access":
+        shadow_duckdb = find_access_shadow_duckdb(db_path)
+        if shadow_duckdb:
+            db_path = shadow_duckdb
+            db_engine = detect_db_engine(db_path)
+            resolved_from_access = True
     if allowed_engines is not None and db_engine not in set(allowed_engines):
         raise ValueError(f"Engine nao suportada para esta operacao: {db_engine or 'desconhecida'}")
 
-    return {"db_path": db_path, "db_engine": db_engine, "db_exists": db_exists}
+    return {
+        "db_path": db_path,
+        "db_engine": db_engine,
+        "db_exists": db_exists,
+        "requested_db_path": requested_db_path,
+        "resolved_from_access": resolved_from_access,
+    }
 
 
 def build_admin_status():
@@ -341,9 +361,11 @@ def build_admin_status():
     status = {
         "indexing": False,
         "db": ctx["db_path"],
+        "requested_db": ctx.get("requested_db_path", ""),
         "persisted_db": get_persisted_db_path(),
         "db_exists": ctx["db_exists"],
         "db_engine": ctx["db_engine"],
+        "db_resolved_from_access": bool(ctx.get("resolved_from_access")),
         "fulltext_count": 0,
         "top_tables": [],
         "startup_warnings": list(startup_warnings),
@@ -852,6 +874,23 @@ def should_select_uploaded_db(extension):
 
 def build_access_conversion_output(filename):
     return UPLOAD_DIR / f"{Path(filename).stem}.duckdb"
+
+
+def find_access_shadow_duckdb(db_path):
+    """Retorna o DuckDB derivado de um Access selecionado, quando existir."""
+    try:
+        source = Path(str(db_path))
+    except Exception:
+        return ""
+    if source.suffix.lower() not in ACCESS_EXTENSIONS:
+        return ""
+    candidate = build_access_conversion_output(source.name)
+    try:
+        if candidate.exists() and candidate.is_file():
+            return str(candidate.resolve())
+    except Exception:
+        return ""
+    return ""
 
 
 def maybe_start_auto_index(db_path):
@@ -1572,8 +1611,21 @@ def admin_select():
         return jsonify({"error": str(exc)}), 400
     if not fpath.exists():
         return jsonify({"error": "arquivo não encontrado"}), 404
-    set_db_path(str(fpath))
-    return jsonify({"ok": True, "db_path": str(fpath)})
+    selected_path = str(fpath)
+    resolved_path = selected_path
+    resolved_from_access = False
+    if fpath.suffix.lower() in ACCESS_EXTENSIONS:
+        shadow_duckdb = find_access_shadow_duckdb(selected_path)
+        if shadow_duckdb:
+            resolved_path = shadow_duckdb
+            resolved_from_access = True
+    set_db_path(resolved_path)
+    return jsonify({
+        "ok": True,
+        "db_path": resolved_path,
+        "selected_path": selected_path,
+        "resolved_from_access": resolved_from_access,
+    })
 
 @app.route("/admin/delete", methods=["POST"])
 def admin_delete():
