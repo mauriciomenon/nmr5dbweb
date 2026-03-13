@@ -20,7 +20,6 @@ import json
 import shutil
 import sqlite3
 import threading
-import importlib
 import importlib.util
 from pathlib import Path
 from datetime import datetime
@@ -37,6 +36,11 @@ from interface.compare_dbs import (
     compare_table_duckdb_paged,
     compare_table_content_duckdb,
     compare_tables_overview_duckdb,
+)
+from interface.access_parser_utils import (
+    load_access_parser_module,
+    list_access_tables_from_parser,
+    normalize_access_parser_rows,
 )
 
 # Optional modules
@@ -1329,6 +1333,12 @@ def build_search_response(q, q_norm, candidate_count, returned_count, results, s
     }
 
 
+def attach_search_backend(payload, backend):
+    if isinstance(payload, dict) and not payload.get("error"):
+        payload["search_backend"] = str(backend)
+    return payload
+
+
 def score_search_content(q_norm, tokens, content_norm, min_score):
     score = fuzz.token_set_ratio(q_norm, content_norm)
     if min_score is not None and score < min_score:
@@ -1384,71 +1394,6 @@ def build_access_row_text(row):
         return normalize_text(str(row))
 
 
-def load_access_parser_module():
-    try:
-        return importlib.import_module("access_parser"), None
-    except Exception as exc1:
-        try:
-            return importlib.import_module("access_parser_access"), None
-        except Exception as exc2:
-            return None, f"{exc1}; {exc2}"
-
-
-def list_access_tables_via_parser(parser):
-    tables = []
-    try:
-        catalog = getattr(parser, "catalog", None)
-        if catalog is not None and hasattr(catalog, "keys"):
-            tables = [str(name) for name in catalog.keys()]
-        elif hasattr(parser, "tables"):
-            parsed_tables = getattr(parser, "tables", {})
-            if hasattr(parsed_tables, "keys"):
-                tables = [str(name) for name in parsed_tables.keys()]
-    except Exception:
-        tables = []
-    return [name for name in tables if name and not str(name).startswith("MSys")]
-
-
-def normalize_access_parser_rows(parsed):
-    if parsed is None:
-        return []
-    if isinstance(parsed, dict):
-        normalized = {}
-        max_len = 0
-        for col_name, col_data in parsed.items():
-            if isinstance(col_data, (list, tuple)):
-                seq = list(col_data)
-            elif col_data is None:
-                seq = []
-            else:
-                seq = [col_data]
-            normalized[str(col_name)] = seq
-            if len(seq) > max_len:
-                max_len = len(seq)
-        if max_len == 0:
-            return []
-        rows = []
-        for idx in range(max_len):
-            row_obj = {}
-            for col_name, seq in normalized.items():
-                row_obj[col_name] = seq[idx] if idx < len(seq) else None
-            rows.append(row_obj)
-        return rows
-    if isinstance(parsed, list):
-        if not parsed:
-            return []
-        if isinstance(parsed[0], dict):
-            return [dict(row) for row in parsed]
-    if hasattr(parsed, "to_dict"):
-        try:
-            data = parsed.to_dict(orient="records")
-            if isinstance(data, list):
-                return [dict(row) for row in data if isinstance(row, dict)]
-        except Exception:
-            return []
-    return []
-
-
 def row_matches_access_tokens(row_obj, search_cols, tokens, token_mode):
     if not tokens:
         return True
@@ -1486,7 +1431,7 @@ def fallback_search_access_parser(
     except Exception as exc:
         return {"error": f"access-parser open failed: {exc}"}
 
-    table_names = list_access_tables_via_parser(parser)
+    table_names = list_access_tables_from_parser(parser)
     if requested_tables is not None:
         table_names = [name for name in table_names if name in requested_tables]
     table_names = table_names[:max_tables]
@@ -1542,7 +1487,15 @@ def fallback_search_access_parser(
                 break
 
     score_by_table = build_score_by_table(results)
-    return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
+    payload = build_search_response(
+        q,
+        q_norm,
+        candidate_count,
+        returned_count,
+        results,
+        score_by_table,
+    )
+    return attach_search_backend(payload, "access_parser")
 
 
 def fallback_search_sqlite(
@@ -1611,7 +1564,15 @@ def fallback_search_sqlite(
                     break
 
         score_by_table = build_score_by_table(results)
-        return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
+        payload = build_search_response(
+            q,
+            q_norm,
+            candidate_count,
+            returned_count,
+            results,
+            score_by_table,
+        )
+        return attach_search_backend(payload, "access_odbc")
     except Exception as exc:
         return {"error": str(exc)}
     finally:
@@ -2455,7 +2416,7 @@ def run_search_for_context(ctx, search_args):
             search_args["min_score"],
             tables=search_args["tables"],
         )
-        return payload, None
+        return attach_search_backend(payload, "duckdb_fulltext"), None
     if ctx["db_engine"] == "sqlite":
         payload = fallback_search_sqlite(
             ctx["db_path"],
@@ -2467,7 +2428,7 @@ def run_search_for_context(ctx, search_args):
             min_score=search_args["min_score"],
             tables=search_args["tables"],
         )
-        return payload, None
+        return attach_search_backend(payload, "sqlite_scan"), None
     if ctx["db_engine"] == "access":
         payload = fallback_search_access(
             ctx["db_path"],

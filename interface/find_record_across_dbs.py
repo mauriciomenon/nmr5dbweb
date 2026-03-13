@@ -23,7 +23,11 @@ import csv
 import datetime
 import re
 import sqlite3
-import importlib
+from interface.access_parser_utils import (
+    load_access_parser_module,
+    list_access_tables_from_parser,
+    normalize_access_parser_rows,
+)
 
 try:  # opcionais
     import duckdb
@@ -38,55 +42,6 @@ except Exception:  # pragma: no cover
 
 SUPPORTED_EXTS = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
 DATE_RE = re.compile(r"(?P<y>\d{4})[-_]? ?(?P<m>\d{2})[-_]? ?(?P<d>\d{2})")
-
-
-def load_access_parser_module():
-    try:
-        return importlib.import_module("access_parser"), None
-    except Exception as exc1:
-        try:
-            return importlib.import_module("access_parser_access"), None
-        except Exception as exc2:
-            return None, f"{exc1}; {exc2}"
-
-
-def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
-    if parsed is None:
-        return []
-    if isinstance(parsed, dict):
-        normalized: Dict[str, List[Any]] = {}
-        max_len = 0
-        for col_name, col_data in parsed.items():
-            if isinstance(col_data, (list, tuple)):
-                seq = list(col_data)
-            elif col_data is None:
-                seq = []
-            else:
-                seq = [col_data]
-            normalized[str(col_name)] = seq
-            max_len = max(max_len, len(seq))
-        if max_len == 0:
-            return []
-        rows: List[Dict[str, Any]] = []
-        for idx in range(max_len):
-            row_obj: Dict[str, Any] = {}
-            for col_name, seq in normalized.items():
-                row_obj[col_name] = seq[idx] if idx < len(seq) else None
-            rows.append(row_obj)
-        return rows
-    if isinstance(parsed, list):
-        if not parsed:
-            return []
-        if isinstance(parsed[0], dict):
-            return [dict(row) for row in parsed]
-    if hasattr(parsed, "to_dict"):
-        try:
-            data = parsed.to_dict(orient="records")
-            if isinstance(data, list):
-                return [dict(row) for row in data if isinstance(row, dict)]
-        except Exception:
-            return []
-    return []
 
 
 def values_equal(left: Any, right: Any) -> bool:
@@ -346,16 +301,7 @@ def list_tables_access_parser(path: Path) -> Tuple[List[str], Optional[str]]:
     except Exception as exc:
         return [], str(exc)
     try:
-        catalog = getattr(parser, "catalog", None)
-        tables: List[str] = []
-        if catalog is not None and hasattr(catalog, "keys"):
-            tables = [str(name) for name in catalog.keys()]
-        elif hasattr(parser, "tables"):
-            parsed_tables = getattr(parser, "tables", {})
-            if hasattr(parsed_tables, "keys"):
-                tables = [str(name) for name in parsed_tables.keys()]
-        tables = [name for name in tables if name and not str(name).startswith("MSys")]
-        return tables, None
+        return list_access_tables_from_parser(parser), None
     except Exception as exc:
         return [], str(exc)
 

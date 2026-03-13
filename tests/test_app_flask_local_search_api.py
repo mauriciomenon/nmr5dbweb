@@ -624,6 +624,7 @@ def test_api_search_busca_textual_sqlite(tmp_path, monkeypatch):
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload["returned_count"] == 1
+    assert payload["search_backend"] == "sqlite_scan"
     assert payload["results"]["alpha"][0]["row"]["name"] == "alpha unit"
 
 
@@ -649,6 +650,7 @@ def test_api_search_busca_textual_duckdb_prioriza_tabela(tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     payload = resp.get_json()
+    assert payload["search_backend"] == "duckdb_fulltext"
     assert list(payload["results"].keys())[0] == "alpha"
 
 
@@ -763,6 +765,7 @@ def test_api_search_access_sem_odbc_usa_parser(tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     payload = resp.get_json()
+    assert payload["search_backend"] == "access_parser"
     assert payload["returned_count"] == 1
     assert list(payload["results"].keys()) == ["t2"]
     assert payload["results"]["t2"][0]["row"]["id"] == 2
@@ -798,6 +801,7 @@ def test_api_search_access_odbc_falha_usa_parser(tmp_path, monkeypatch):
 
     assert resp.status_code == 200
     payload = resp.get_json()
+    assert payload["search_backend"] == "access_parser"
     assert payload["returned_count"] == 1
     assert list(payload["results"].keys()) == ["t1"]
     assert payload["results"]["t1"][0]["row"]["id"] == 1
