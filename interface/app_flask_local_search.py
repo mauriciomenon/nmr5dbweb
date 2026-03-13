@@ -20,6 +20,7 @@ import json
 import shutil
 import sqlite3
 import threading
+import importlib
 import importlib.util
 from pathlib import Path
 from datetime import datetime
@@ -1377,10 +1378,171 @@ def build_access_row_payload(row, columns):
 
 def build_access_row_text(row):
     try:
-        row_values = [serialize_value(value) for value in row]
+        row_values = [str(serialize_value(value)) for value in row]
         return normalize_text(" ".join(row_values))
     except Exception:
         return normalize_text(str(row))
+
+
+def load_access_parser_module():
+    try:
+        return importlib.import_module("access_parser"), None
+    except Exception as exc1:
+        try:
+            return importlib.import_module("access_parser_access"), None
+        except Exception as exc2:
+            return None, f"{exc1}; {exc2}"
+
+
+def list_access_tables_via_parser(parser):
+    tables = []
+    try:
+        catalog = getattr(parser, "catalog", None)
+        if catalog is not None and hasattr(catalog, "keys"):
+            tables = [str(name) for name in catalog.keys()]
+        elif hasattr(parser, "tables"):
+            parsed_tables = getattr(parser, "tables", {})
+            if hasattr(parsed_tables, "keys"):
+                tables = [str(name) for name in parsed_tables.keys()]
+    except Exception:
+        tables = []
+    return [name for name in tables if name and not str(name).startswith("MSys")]
+
+
+def normalize_access_parser_rows(parsed):
+    if parsed is None:
+        return []
+    if isinstance(parsed, dict):
+        normalized = {}
+        max_len = 0
+        for col_name, col_data in parsed.items():
+            if isinstance(col_data, (list, tuple)):
+                seq = list(col_data)
+            elif col_data is None:
+                seq = []
+            else:
+                seq = [col_data]
+            normalized[str(col_name)] = seq
+            if len(seq) > max_len:
+                max_len = len(seq)
+        if max_len == 0:
+            return []
+        rows = []
+        for idx in range(max_len):
+            row_obj = {}
+            for col_name, seq in normalized.items():
+                row_obj[col_name] = seq[idx] if idx < len(seq) else None
+            rows.append(row_obj)
+        return rows
+    if isinstance(parsed, list):
+        if not parsed:
+            return []
+        if isinstance(parsed[0], dict):
+            return [dict(row) for row in parsed]
+    if hasattr(parsed, "to_dict"):
+        try:
+            data = parsed.to_dict(orient="records")
+            if isinstance(data, list):
+                return [dict(row) for row in data if isinstance(row, dict)]
+        except Exception:
+            return []
+    return []
+
+
+def row_matches_access_tokens(row_obj, search_cols, tokens, token_mode):
+    if not tokens:
+        return True
+    text_values = [str(serialize_value(row_obj.get(col))) for col in search_cols]
+    search_text = normalize_text(" ".join(text_values))
+    if token_mode == "all":
+        return all(tok in search_text for tok in tokens)
+    return any(tok in search_text for tok in tokens)
+
+
+def fallback_search_access_parser(
+    access_path,
+    q,
+    per_table=10,
+    candidate_limit=1000,
+    total_limit=500,
+    token_mode="any",
+    min_score=None,
+    tables=None,
+    max_tables=500,
+    max_rows_per_table=2000,
+):
+    q_norm = normalize_text(q)
+    tokens = [t for t in q_norm.split() if t]
+    requested_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+    results = {}
+    candidate_count = 0
+    returned_count = 0
+
+    module, module_err = load_access_parser_module()
+    if module is None:
+        return {"error": f"access-parser unavailable: {module_err}"}
+    try:
+        parser = module.AccessParser(str(access_path))
+    except Exception as exc:
+        return {"error": f"access-parser open failed: {exc}"}
+
+    table_names = list_access_tables_via_parser(parser)
+    if requested_tables is not None:
+        table_names = [name for name in table_names if name in requested_tables]
+    table_names = table_names[:max_tables]
+    if not table_names:
+        return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+
+    for table_name in table_names:
+        if candidate_count >= candidate_limit or returned_count >= total_limit:
+            break
+        try:
+            parsed = parser.parse_table(table_name)
+        except Exception:
+            continue
+        rows = normalize_access_parser_rows(parsed)
+        if not rows:
+            continue
+        cols = [(str(col_name), "") for col_name in rows[0].keys()]
+        search_cols = select_access_search_columns(cols) if cols else []
+        if not search_cols:
+            continue
+        table_results = []
+        for row_obj in rows[:max_rows_per_table]:
+            if not row_matches_access_tokens(row_obj, search_cols, tokens, token_mode):
+                continue
+            row_order = [row_obj.get(col_name) for col_name, _data_type in cols]
+            row_text = build_access_row_text(row_order)
+            scored = score_search_content(q_norm, tokens, row_text, min_score)
+            if scored is None:
+                continue
+            columns = [col_name for col_name, _ in cols]
+            lower_columns = [col.lower() for col in columns]
+            if "id" in lower_columns:
+                idx = lower_columns.index("id")
+                pk_col = columns[idx]
+                pk_val = row_order[idx] if idx < len(row_order) else None
+            else:
+                pk_col = columns[0] if columns else None
+                pk_val = row_order[0] if row_order else None
+            table_results.append({
+                "score": scored["score"],
+                "pk_col": pk_col,
+                "pk_value": pk_val,
+                "row": row_obj,
+            })
+            candidate_count += 1
+            if candidate_count >= candidate_limit:
+                break
+        if table_results:
+            table_results.sort(key=lambda item: item["score"], reverse=True)
+            results[table_name] = table_results[:per_table]
+            returned_count += len(results[table_name])
+            if returned_count >= total_limit:
+                break
+
+    score_by_table = build_score_by_table(results)
+    return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
 
 
 def fallback_search_sqlite(
@@ -2108,8 +2270,20 @@ def fallback_search_access(
     max_tables=500,
     max_rows_per_table=2000,
 ):
+    requested_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
     if pyodbc is None:
-        return {"error": "pyodbc not installed; fallback unavailable"}
+        return fallback_search_access_parser(
+            access_path,
+            q,
+            per_table=per_table,
+            candidate_limit=candidate_limit,
+            total_limit=total_limit,
+            token_mode=token_mode,
+            min_score=min_score,
+            tables=list(requested_tables) if requested_tables is not None else None,
+            max_tables=max_tables,
+            max_rows_per_table=max_rows_per_table,
+        )
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
     results = {}
@@ -2130,9 +2304,28 @@ def fallback_search_access(
                 last_err = e
                 conn = None
         if conn is None:
+            parser_payload = fallback_search_access_parser(
+                access_path,
+                q,
+                per_table=per_table,
+                candidate_limit=candidate_limit,
+                total_limit=total_limit,
+                token_mode=token_mode,
+                min_score=min_score,
+                tables=list(requested_tables) if requested_tables is not None else None,
+                max_tables=max_tables,
+                max_rows_per_table=max_rows_per_table,
+            )
+            if isinstance(parser_payload, dict) and not parser_payload.get("error"):
+                return parser_payload
+            parser_err = ""
+            if isinstance(parser_payload, dict):
+                parser_err = str(parser_payload.get("error") or "")
+            if parser_err:
+                return {"error": f"ODBC connect failed: {last_err}; parser fallback failed: {parser_err}"}
             return {"error": f"ODBC connect failed: {last_err}"}
         cur = conn.cursor()
-        tables = []
+        table_names = []
         try:
             for row in cur.tables():
                 try:
@@ -2140,21 +2333,20 @@ def fallback_search_access(
                 except Exception:
                     tname = None
                 if tname and not str(tname).startswith("MSys"):
-                    tables.append(tname)
+                    table_names.append(tname)
         except Exception:
             try:
                 rows = cur.execute("SELECT Name FROM MSysObjects WHERE Type In (1,4) AND Flags = 0").fetchall()
-                tables = [r[0] for r in rows]
+                table_names = [r[0] for r in rows]
             except Exception:
-                tables = []
-        if not tables:
+                table_names = []
+        if not table_names:
             return {"error": "No user tables found in Access DB."}
-        allowed_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
-        if allowed_tables is not None:
-            tables = [name for name in tables if name in allowed_tables]
-        if not tables:
+        if requested_tables is not None:
+            table_names = [name for name in table_names if name in requested_tables]
+        if not table_names:
             return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
-        tables = tables[:max_tables]
+        table_names = table_names[:max_tables]
         def build_where_for_columns(cols):
             if not tokens:
                 return None
@@ -2165,7 +2357,7 @@ def fallback_search_access(
                 else:
                     parts.append(" AND ".join([f"{col} LIKE ?" for _ in tokens]))
             return "(" + " OR ".join(parts) + ")" if parts else None
-        for t in tables:
+        for t in table_names:
             if candidate_count >= candidate_limit or returned_count >= total_limit:
                 break
             cols = []

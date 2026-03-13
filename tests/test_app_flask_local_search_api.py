@@ -736,6 +736,73 @@ def test_api_search_access_encaminha_filtro_tables(tmp_path, monkeypatch):
     assert captured["tables"] == ["t1", "t2"]
 
 
+def test_api_search_access_sem_odbc_usa_parser(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(local_search, "pyodbc", None)
+
+    class FakeParser:
+        def __init__(self, _path):
+            self.catalog = {"t1": {}, "t2": {}}
+
+        def parse_table(self, table):
+            if table == "t1":
+                return {"id": [1], "text": ["foo needle"]}
+            if table == "t2":
+                return {"id": [2], "text": ["needle bar"]}
+            return {}
+
+    class FakeModule:
+        AccessParser = FakeParser
+
+    monkeypatch.setattr(local_search, "load_access_parser_module", lambda: (FakeModule, None))
+
+    resp = client.get("/api/search?q=needle&tables=t2")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["returned_count"] == 1
+    assert list(payload["results"].keys()) == ["t2"]
+    assert payload["results"]["t2"][0]["row"]["id"] == 2
+
+
+def test_api_search_access_odbc_falha_usa_parser(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    class FakePyodbc:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            raise RuntimeError("odbc connect failed")
+
+    class FakeParser:
+        def __init__(self, _path):
+            self.catalog = {"t1": {}}
+
+        def parse_table(self, table):
+            if table == "t1":
+                return {"id": [1], "text": ["needle data"]}
+            return {}
+
+    class FakeModule:
+        AccessParser = FakeParser
+
+    monkeypatch.setattr(local_search, "pyodbc", FakePyodbc)
+    monkeypatch.setattr(local_search, "load_access_parser_module", lambda: (FakeModule, None))
+
+    resp = client.get("/api/search?q=needle")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["returned_count"] == 1
+    assert list(payload["results"].keys()) == ["t1"]
+    assert payload["results"]["t1"][0]["row"]["id"] == 1
+
+
 def test_admin_select_access_resolve_para_duckdb_derivado(tmp_path, monkeypatch):
     client = app.test_client()
     selected = []
