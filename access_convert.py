@@ -9,55 +9,16 @@ import shutil
 import duckdb
 import pandas as pd
 import logging
+from interface.access_parser_utils import (
+    ensure_access_parser_logging,
+    list_access_tables_from_parser,
+    load_access_parser_module,
+    normalize_access_parser_rows,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("access_convert")
-
-
-def _access_parser_verbose_enabled() -> bool:
-    return str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_VERBOSE", "")).strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
-
-
-class _AccessParserNoiseFilter(logging.Filter):
-    """Suppresses noisy info lines from access_parser about empty tables."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if _access_parser_verbose_enabled():
-            return True
-        name = str(getattr(record, "name", "") or "")
-        if not name.startswith("access_parser"):
-            return True
-        try:
-            message = record.getMessage()
-        except Exception:
-            return True
-        if "has no data" in str(message):
-            return False
-        return True
-
-
-def _configure_access_parser_logging() -> None:
-    if _access_parser_verbose_enabled():
-        return
-    # Reduce generic parser noise by level.
-    logging.getLogger("access_parser").setLevel(logging.WARNING)
-    # Enforce suppression even if parser sets INFO internally.
-    root = logging.getLogger()
-    for handler in root.handlers:
-        has_filter = any(
-            isinstance(existing, _AccessParserNoiseFilter)
-            for existing in getattr(handler, "filters", [])
-        )
-        if not has_filter:
-            handler.addFilter(_AccessParserNoiseFilter())
-
-
-_configure_access_parser_logging()
+ensure_access_parser_logging()
 
 def _ensure_clean_duckdb(path):
     try:
@@ -274,13 +235,9 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 pass
 
     def try_access_parser():
-        try:
-            import access_parser as ap
-        except Exception as e1:
-            try:
-                import access_parser_access as ap
-            except Exception as e2:
-                return False, f"access-parser not installed: {e1}; {e2}"
+        ap, mod_err = load_access_parser_module()
+        if ap is None:
+            return False, f"access-parser not installed: {mod_err}"
 
         try:
             db = ap.AccessParser(access_path)
@@ -289,17 +246,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
 
         dconn = None
         try:
-            tables = []
-            try:
-                catalog = getattr(db, "catalog", None)
-                if catalog is not None:
-                    tables = [str(name) for name in catalog.keys()]
-                elif hasattr(db, "tables"):
-                    tables = [str(name) for name in db.tables.keys()]
-            except Exception:
-                tables = []
-
-            tables = [name for name in tables if name and not str(name).startswith("MSys")]
+            tables = list_access_tables_from_parser(db)
             if not tables:
                 return False, "No user tables found via access-parser."
 
@@ -318,7 +265,12 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 )
                 try:
                     parsed = db.parse_table(table_name)
-                    if not parsed:
+                    rows = normalize_access_parser_rows(parsed)
+                    if rows:
+                        frame = pd.DataFrame(rows)
+                    elif isinstance(parsed, dict) and parsed:
+                        frame = pd.DataFrame(columns=[str(col) for col in parsed.keys()])
+                    else:
                         _report(
                             total_tables=total,
                             processed_tables=i + 1,
@@ -327,30 +279,6 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                             msg="table_empty",
                         )
                         continue
-
-                    if isinstance(parsed, dict):
-                        normalized = {}
-                        max_len = 0
-                        for col_name, col_data in parsed.items():
-                            if isinstance(col_data, (list, tuple, pd.Series)):
-                                seq = list(col_data)
-                            elif col_data is None:
-                                seq = []
-                            else:
-                                seq = [col_data]
-                            normalized[col_name] = seq
-                            if len(seq) > max_len:
-                                max_len = len(seq)
-
-                        if max_len > 0:
-                            for col_name, seq in normalized.items():
-                                if len(seq) < max_len:
-                                    seq.extend([None] * (max_len - len(seq)))
-                            frame = pd.DataFrame(normalized)
-                        else:
-                            frame = pd.DataFrame(columns=list(normalized.keys()))
-                    else:
-                        frame = pd.DataFrame(parsed)
 
                     dconn.execute(f'DROP TABLE IF EXISTS "{safe_table}"')
 

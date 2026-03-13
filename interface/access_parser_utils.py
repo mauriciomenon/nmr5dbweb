@@ -31,7 +31,7 @@ class _AccessParserNoiseFilter(logging.Filter):
         return True
 
 
-def _configure_access_parser_logging() -> None:
+def ensure_access_parser_logging() -> None:
     if _access_parser_verbose_enabled():
         return
     logging.getLogger("access_parser").setLevel(logging.WARNING)
@@ -46,7 +46,7 @@ def _configure_access_parser_logging() -> None:
 
 
 def load_access_parser_module():
-    _configure_access_parser_logging()
+    ensure_access_parser_logging()
     try:
         return importlib.import_module("access_parser"), None
     except Exception as exc1:
