@@ -177,10 +177,20 @@ async function handleFileUpload(side) {
       compareDbState.lastCompareMeta = null;
       compareDbState.tablesMeta = [];
       compareDbState.tablesLoadedOnce = false;
+      compareDbState.tablesOverviewCache = null;
+      compareDbState.tablesOverviewVisible = false;
       const localTableSelect = document.getElementById('tableSelect');
       if (localTableSelect) {
         localTableSelect.innerHTML =
           '<option value="">carregue os arquivos A e B e clique em "1) Carregar tabelas em comum"</option>';
+      }
+      const overviewContainer = document.getElementById('tablesOverviewContainer');
+      if (overviewContainer) {
+        overviewContainer.style.display = 'none';
+      }
+      const overviewBtn = document.getElementById('btnTablesOverview');
+      if (overviewBtn) {
+        overviewBtn.textContent = 'Mapa geral das tabelas';
       }
     }
 

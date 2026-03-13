@@ -381,33 +381,33 @@ def convert_duckdb_to_sqlite(duck_path: Path, sqlite_path: Path) -> tuple[bool, 
             tables = _list_duck_tables(src)
             if not tables:
                 return False, "duckdb sem tabelas de usuario"
-        if sqlite_path.exists():
-            sqlite_path.unlink()
-        with duckdb.connect(str(duck_path), read_only=True) as src, closing(sqlite3.connect(str(sqlite_path))) as dst:
-            for table in tables:
-                info_rows = src.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
-                columns = [str(row[1]) for row in info_rows]
-                types = [_map_duck_to_sqlite_type(str(row[2] or "")) for row in info_rows]
-                if not columns:
-                    continue
-                col_defs = ", ".join(
-                    f"{_quote_identifier(col)} {dtype}" for col, dtype in zip(columns, types)
-                )
-                dst.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table)}")
-                dst.execute(f"CREATE TABLE {_quote_identifier(table)} ({col_defs})")
-                col_list = ", ".join(_quote_identifier(col) for col in columns)
-                select_q = src.execute(f"SELECT {col_list} FROM {_quote_identifier(table)}")
-                insert_sql = (
-                    f"INSERT INTO {_quote_identifier(table)} ({col_list}) VALUES ("
-                    + ", ".join(["?"] * len(columns))
-                    + ")"
-                )
-                while True:
-                    chunk = select_q.fetchmany(2000)
-                    if not chunk:
-                        break
-                    dst.executemany(insert_sql, chunk)
-            dst.commit()
+            if sqlite_path.exists():
+                sqlite_path.unlink()
+            with closing(sqlite3.connect(str(sqlite_path))) as dst:
+                for table in tables:
+                    info_rows = src.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
+                    columns = [str(row[1]) for row in info_rows]
+                    types = [_map_duck_to_sqlite_type(str(row[2] or "")) for row in info_rows]
+                    if not columns:
+                        continue
+                    col_defs = ", ".join(
+                        f"{_quote_identifier(col)} {dtype}" for col, dtype in zip(columns, types)
+                    )
+                    dst.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table)}")
+                    dst.execute(f"CREATE TABLE {_quote_identifier(table)} ({col_defs})")
+                    col_list = ", ".join(_quote_identifier(col) for col in columns)
+                    select_q = src.execute(f"SELECT {col_list} FROM {_quote_identifier(table)}")
+                    insert_sql = (
+                        f"INSERT INTO {_quote_identifier(table)} ({col_list}) VALUES ("
+                        + ", ".join(["?"] * len(columns))
+                        + ")"
+                    )
+                    while True:
+                        chunk = select_q.fetchmany(2000)
+                        if not chunk:
+                            break
+                        dst.executemany(insert_sql, chunk)
+                dst.commit()
         return True, "duckdb_to_sqlite_ok"
     except Exception as exc:
         return False, f"duckdb_to_sqlite_failed: {exc}"
@@ -419,32 +419,32 @@ def convert_sqlite_to_duckdb(sqlite_path: Path, duckdb_path: Path) -> tuple[bool
             tables = _list_sqlite_tables(scon)
             if not tables:
                 return False, "sqlite sem tabelas de usuario"
-        if duckdb_path.exists():
-            duckdb_path.unlink()
-        with closing(sqlite3.connect(str(sqlite_path))) as scon, duckdb.connect(str(duckdb_path)) as dcon:
-            for table in tables:
-                info_rows = scon.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
-                columns = [str(row[1]) for row in info_rows]
-                types = [_map_sqlite_to_duck_type(str(row[2] or "")) for row in info_rows]
-                if not columns:
-                    continue
-                col_defs = ", ".join(
-                    f"{_quote_identifier(col)} {dtype}" for col, dtype in zip(columns, types)
-                )
-                dcon.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table)}")
-                dcon.execute(f"CREATE TABLE {_quote_identifier(table)} ({col_defs})")
-                col_list = ", ".join(_quote_identifier(col) for col in columns)
-                rows = scon.execute(f"SELECT {col_list} FROM {_quote_identifier(table)}")
-                insert_sql = (
-                    f"INSERT INTO {_quote_identifier(table)} ({col_list}) VALUES ("
-                    + ", ".join(["?"] * len(columns))
-                    + ")"
-                )
-                while True:
-                    chunk = rows.fetchmany(2000)
-                    if not chunk:
-                        break
-                    dcon.executemany(insert_sql, chunk)
+            if duckdb_path.exists():
+                duckdb_path.unlink()
+            with duckdb.connect(str(duckdb_path)) as dcon:
+                for table in tables:
+                    info_rows = scon.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
+                    columns = [str(row[1]) for row in info_rows]
+                    types = [_map_sqlite_to_duck_type(str(row[2] or "")) for row in info_rows]
+                    if not columns:
+                        continue
+                    col_defs = ", ".join(
+                        f"{_quote_identifier(col)} {dtype}" for col, dtype in zip(columns, types)
+                    )
+                    dcon.execute(f"DROP TABLE IF EXISTS {_quote_identifier(table)}")
+                    dcon.execute(f"CREATE TABLE {_quote_identifier(table)} ({col_defs})")
+                    col_list = ", ".join(_quote_identifier(col) for col in columns)
+                    rows = scon.execute(f"SELECT {col_list} FROM {_quote_identifier(table)}")
+                    insert_sql = (
+                        f"INSERT INTO {_quote_identifier(table)} ({col_list}) VALUES ("
+                        + ", ".join(["?"] * len(columns))
+                        + ")"
+                    )
+                    while True:
+                        chunk = rows.fetchmany(2000)
+                        if not chunk:
+                            break
+                        dcon.executemany(insert_sql, chunk)
         return True, "sqlite_to_duckdb_ok"
     except Exception as exc:
         return False, f"sqlite_to_duckdb_failed: {exc}"

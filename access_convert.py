@@ -188,11 +188,13 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
                     f"samples: {sample}",
                 )
-            if materialized_tables == 0:
+            if materialized_tables == 0 and skipped_tables:
                 return False, "strict mode: no tables materialized via pyodbc"
             _report(total_tables=total, processed_tables=total, current_table="", percent=100, msg="converted")
             if skipped_tables:
                 return True, f"converted via pyodbc (skipped={len(skipped_tables)})"
+            if materialized_tables == 0:
+                return True, "converted via pyodbc (all tables empty)"
             return True, "converted via pyodbc"
         except Exception as e:
             try:
@@ -257,11 +259,13 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
                     f"samples: {sample}",
                 )
-            if materialized_tables == 0:
+            if materialized_tables == 0 and skipped_tables:
                 return False, "strict mode: no tables materialized via pypyodbc"
             _report(total_tables=total, processed_tables=total, current_table="", percent=100, msg="converted")
             if skipped_tables:
                 return True, f"converted via pypyodbc (skipped={len(skipped_tables)})"
+            if materialized_tables == 0:
+                return True, "converted via pypyodbc (all tables empty)"
             return True, "converted via pypyodbc"
         except Exception as e:
             return False, f"pypyodbc error: {e}"

@@ -264,7 +264,7 @@ Exemplos de uso:
         if is_bind_address_in_use_error(e):
             print("A porta ja esta em uso por outro processo")
         else:
-            print("Falha de bind nao relacionada a porta ocupada")
+            print("Falha de sistema operacional durante inicializacao")
         sys.exit(1)
     except Exception as e:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")

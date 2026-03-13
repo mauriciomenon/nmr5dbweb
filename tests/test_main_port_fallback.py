@@ -127,4 +127,4 @@ def test_main_bind_error_generico(monkeypatch, capsys):
 
     assert exc.value.code == 1
     captured = capsys.readouterr().out
-    assert "nao relacionada a porta ocupada" in captured
+    assert "Falha de sistema operacional durante inicializacao" in captured
