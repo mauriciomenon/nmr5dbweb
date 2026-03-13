@@ -69,3 +69,27 @@ def test_search_in_table_access_fallback_quando_odbc_falha(tmp_path, monkeypatch
     assert found is True
     assert sample is not None
     assert sample["RTUNO"] == 1
+
+
+def test_search_in_table_access_sem_odbc_nao_lista_colunas(tmp_path, monkeypatch):
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access")
+    monkeypatch.setattr(track, "pyodbc", None)
+    monkeypatch.setattr(track, "load_access_parser_module", lambda: (FakeAccessModule, None))
+    monkeypatch.setattr(
+        track,
+        "list_columns_for_engine",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("nao deveria listar colunas")),
+    )
+
+    found, sample, err = track.search_in_table(
+        "access",
+        db_path,
+        "RANGER_SOSTAT",
+        [("RTUNO", 1), ("PNTNO", 2304)],
+    )
+
+    assert err is None
+    assert found is True
+    assert sample is not None
+    assert sample["RTUNO"] == 1

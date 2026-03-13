@@ -447,6 +447,10 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
     - sample_row_dict: dicionário simples com alguns campos da linha encontrada
     - error: mensagem de erro (se algo deu errado ao acessar o arquivo/tabela)
     """
+    if engine == "access" and pyodbc is None:
+        # Fast path on non-Windows without ODBC: parse table once.
+        return search_in_table_access_parser(path, table, filters)
+
     try:
         cols = list_columns_for_engine(engine, path, table)
     except Exception as exc:
