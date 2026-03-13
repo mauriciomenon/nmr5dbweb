@@ -243,8 +243,7 @@ function setFlowHint(text, show) {
   el.style.display = show ? 'block' : 'none';
 }
 
-function setFlowBanner(text, level) {
-  const el = $('flowBanner');
+function setBannerElement(el, text, level) {
   if (!el) return;
   if (!text) {
     el.textContent = '';
@@ -258,19 +257,23 @@ function setFlowBanner(text, level) {
   if (level) el.classList.add(level);
 }
 
+function setFlowBanner(text, level) {
+  setBannerElement($('flowBanner'), text, level);
+}
+
 function setModalBanner(elId, text, level) {
-  const el = $(elId);
-  if (!el) return;
-  if (!text) {
-    el.textContent = '';
-    el.style.display = 'none';
-    el.classList.remove('info', 'warn', 'error');
-    return;
+  setBannerElement($(elId), text, level);
+}
+
+function openNextModalAndFocus(nextModalId) {
+  if (!nextModalId) return;
+  openModalById(nextModalId);
+  if (nextModalId !== 'searchModal') return;
+  const q = $('q');
+  if (q && !q.disabled) {
+    q.focus();
+    q.select();
   }
-  el.textContent = text;
-  el.style.display = 'block';
-  el.classList.remove('info', 'warn', 'error');
-  if (level) el.classList.add(level);
 }
 
 function scheduleModalClose(nextModalId) {
@@ -280,16 +283,7 @@ function scheduleModalClose(nextModalId) {
   }
   conversionCompletionTimer = setTimeout(() => {
     closeModal();
-    if (nextModalId) {
-      openModalById(nextModalId);
-      if (nextModalId === 'searchModal') {
-        const q = $('q');
-        if (q && !q.disabled) {
-          q.focus();
-          q.select();
-        }
-      }
-    }
+    openNextModalAndFocus(nextModalId);
   }, 1600);
 }
 
@@ -300,16 +294,7 @@ function scheduleIndexModalClose(nextModalId) {
   }
   indexCompletionTimer = setTimeout(() => {
     closeModal();
-    if (nextModalId) {
-      openModalById(nextModalId);
-      if (nextModalId === 'searchModal') {
-        const q = $('q');
-        if (q && !q.disabled) {
-          q.focus();
-          q.select();
-        }
-      }
-    }
+    openNextModalAndFocus(nextModalId);
   }, 1600);
 }
 
@@ -867,20 +852,23 @@ function resetModalStyles(modal) {
   modal.style.boxShadow = '';
 }
 
+function resetOverlayStyles(overlay) {
+  if (!overlay) return;
+  overlay.style.display = 'none';
+  overlay.style.zIndex = '';
+  overlay.style.position = '';
+  overlay.style.inset = '';
+  overlay.style.background = '';
+  overlay.style.pointerEvents = '';
+  overlay.style.visibility = '';
+}
+
 function closeModal() {
   const modalId = activeModalId;
   const overlay = $('overlay');
   document.body.classList.remove('modal-open');
   closeAllModals();
-  if (overlay) {
-    overlay.style.display = 'none';
-    overlay.style.zIndex = '';
-    overlay.style.position = '';
-    overlay.style.inset = '';
-    overlay.style.background = '';
-    overlay.style.pointerEvents = '';
-    overlay.style.visibility = '';
-  }
+  resetOverlayStyles(overlay);
   if (modalId === 'configModal') {
     manualFlowOverride = '';
   }
@@ -901,15 +889,7 @@ function forceCloseModals() {
   const overlay = $('overlay');
   document.body.classList.remove('modal-open');
   closeAllModals();
-  if (overlay) {
-    overlay.style.display = 'none';
-    overlay.style.zIndex = '';
-    overlay.style.position = '';
-    overlay.style.inset = '';
-    overlay.style.background = '';
-    overlay.style.pointerEvents = '';
-    overlay.style.visibility = '';
-  }
+  resetOverlayStyles(overlay);
   manualFlowOverride = '';
   activeModalId = null;
 }

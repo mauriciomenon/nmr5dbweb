@@ -1763,6 +1763,53 @@ def build_score_by_table(results):
     }
 
 
+def normalize_requested_tables(tables):
+    return {str(table).strip() for table in tables or [] if str(table).strip()} or None
+
+
+def build_search_payload_with_backend(q, q_norm, candidate_count, returned_count, results, backend):
+    score_by_table = build_score_by_table(results)
+    payload = build_search_response(
+        q,
+        q_norm,
+        candidate_count,
+        returned_count,
+        results,
+        score_by_table,
+    )
+    return attach_search_backend(payload, backend)
+
+
+def build_empty_search_response(q, q_norm):
+    return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+
+
+def run_access_parser_fallback(
+    access_path,
+    q,
+    per_table,
+    candidate_limit,
+    total_limit,
+    token_mode,
+    min_score,
+    requested_tables,
+    max_tables,
+    max_rows_per_table,
+):
+    return fallback_search_access_parser(
+        access_path,
+        q,
+        per_table=per_table,
+        candidate_limit=candidate_limit,
+        total_limit=total_limit,
+        token_mode=token_mode,
+        min_score=min_score,
+        tables=list(requested_tables) if requested_tables is not None else None,
+        max_tables=max_tables,
+        max_rows_per_table=max_rows_per_table,
+    )
+
+
 def select_access_search_columns(columns):
     text_columns = [
         column_name
@@ -1816,7 +1863,7 @@ def fallback_search_access_parser(
 ):
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
-    requested_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+    requested_tables = normalize_requested_tables(tables)
     results = {}
     candidate_count = 0
     returned_count = 0
@@ -1834,7 +1881,7 @@ def fallback_search_access_parser(
         table_names = [name for name in table_names if name in requested_tables]
     table_names = table_names[:max_tables]
     if not table_names:
-        return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+        return build_empty_search_response(q, q_norm)
 
     for table_name in table_names:
         if candidate_count >= candidate_limit or returned_count >= total_limit:
@@ -1884,16 +1931,14 @@ def fallback_search_access_parser(
             if returned_count >= total_limit:
                 break
 
-    score_by_table = build_score_by_table(results)
-    payload = build_search_response(
+    return build_search_payload_with_backend(
         q,
         q_norm,
         candidate_count,
         returned_count,
         results,
-        score_by_table,
+        "access_parser",
     )
-    return attach_search_backend(payload, "access_parser")
 
 
 def fallback_search_sqlite(
@@ -1910,7 +1955,7 @@ def fallback_search_sqlite(
 ):
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
-    allowed_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+    allowed_tables = normalize_requested_tables(tables)
     results = {}
     candidate_count = 0
     returned_count = 0
@@ -1922,7 +1967,7 @@ def fallback_search_sqlite(
             table_names = [name for name in table_names if name in allowed_tables]
         table_names = table_names[:max_tables]
         if not table_names:
-            return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+            return build_empty_search_response(q, q_norm)
 
         for table_name in table_names:
             pragma_rows = conn.execute(f"PRAGMA table_info({quote_identifier(table_name)})").fetchall()
@@ -1961,60 +2006,62 @@ def fallback_search_sqlite(
                 if returned_count >= total_limit or candidate_count >= candidate_limit:
                     break
 
-        score_by_table = build_score_by_table(results)
-        payload = build_search_response(
+        return build_search_payload_with_backend(
             q,
             q_norm,
             candidate_count,
             returned_count,
             results,
-            score_by_table,
+            "sqlite_scan",
         )
-        return attach_search_backend(payload, "sqlite_scan")
     except Exception as exc:
         return {"error": str(exc)}
     finally:
         if conn is not None:
             conn.close()
 
-def list_tables_access(path):
-    """Lista tabelas de um banco Access via ODBC (pyodbc)."""
+
+def connect_access_odbc(path, timeout=30):
     if pyodbc is None:
         raise RuntimeError("pyodbc not installed")
-    conn = None
     conn_strs = [
         fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
         fr"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
     ]
     last_err = None
-    for cs in conn_strs:
+    for conn_str in conn_strs:
         try:
-            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-            break
-        except Exception as e:
-            last_err = e
-            conn = None
-    if conn is None:
-        raise RuntimeError(f"ODBC connect failed: {last_err}")
+            return pyodbc.connect(conn_str, autocommit=True, timeout=timeout)
+        except Exception as exc:
+            last_err = exc
+    raise RuntimeError(f"ODBC connect failed: {last_err}")
+
+
+def list_access_user_tables_cursor(cur):
+    tables = []
+    try:
+        for row in cur.tables():
+            try:
+                table_name = getattr(row, "table_name", None) or (row[2] if len(row) > 2 else None)
+            except Exception:
+                table_name = None
+            if table_name and not str(table_name).startswith("MSys"):
+                tables.append(table_name)
+    except Exception:
+        try:
+            rows = cur.execute("SELECT Name FROM MSysObjects WHERE Type In (1,4) AND Flags = 0").fetchall()
+            tables = [row[0] for row in rows]
+        except Exception:
+            tables = []
+    return tables
+
+
+def list_tables_access(path):
+    """Lista tabelas de um banco Access via ODBC (pyodbc)."""
+    conn = connect_access_odbc(path, timeout=30)
     try:
         cur = conn.cursor()
-        tables = []
-        try:
-            for row in cur.tables():
-                try:
-                    tname = getattr(row, "table_name", None) or (row[2] if len(row) > 2 else None)
-                except Exception:
-                    tname = None
-                if tname and not str(tname).startswith("MSys"):
-                    tables.append(tname)
-        except Exception:
-            # fallback via MSysObjects
-            try:
-                rows = cur.execute("SELECT Name FROM MSysObjects WHERE Type In (1,4) AND Flags = 0").fetchall()
-                tables = [r[0] for r in rows]
-            except Exception:
-                tables = []
-        return tables
+        return list_access_user_tables_cursor(cur)
     finally:
         try:
             conn.close()
@@ -2616,9 +2663,9 @@ def fallback_search_access(
     max_tables=500,
     max_rows_per_table=2000,
 ):
-    requested_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+    requested_tables = normalize_requested_tables(tables)
     if pyodbc is None:
-        return fallback_search_access_parser(
+        return run_access_parser_fallback(
             access_path,
             q,
             per_table=per_table,
@@ -2626,7 +2673,7 @@ def fallback_search_access(
             total_limit=total_limit,
             token_mode=token_mode,
             min_score=min_score,
-            tables=list(requested_tables) if requested_tables is not None else None,
+            requested_tables=requested_tables,
             max_tables=max_tables,
             max_rows_per_table=max_rows_per_table,
         )
@@ -2637,20 +2684,11 @@ def fallback_search_access(
     returned_count = 0
     conn = None
     try:
-        conn_strs = [
-            fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={access_path};",
-            fr"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={access_path};",
-        ]
-        last_err = None
-        for cs in conn_strs:
-            try:
-                conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-                break
-            except Exception as e:
-                last_err = e
-                conn = None
-        if conn is None:
-            parser_payload = fallback_search_access_parser(
+        try:
+            conn = connect_access_odbc(access_path, timeout=30)
+        except RuntimeError as exc:
+            last_err = str(exc).replace("ODBC connect failed: ", "", 1)
+            parser_payload = run_access_parser_fallback(
                 access_path,
                 q,
                 per_table=per_table,
@@ -2658,7 +2696,7 @@ def fallback_search_access(
                 total_limit=total_limit,
                 token_mode=token_mode,
                 min_score=min_score,
-                tables=list(requested_tables) if requested_tables is not None else None,
+                requested_tables=requested_tables,
                 max_tables=max_tables,
                 max_rows_per_table=max_rows_per_table,
             )
@@ -2671,27 +2709,13 @@ def fallback_search_access(
                 return {"error": f"ODBC connect failed: {last_err}; parser fallback failed: {parser_err}"}
             return {"error": f"ODBC connect failed: {last_err}"}
         cur = conn.cursor()
-        table_names = []
-        try:
-            for row in cur.tables():
-                try:
-                    tname = getattr(row, "table_name", None) or (row[2] if len(row) > 2 else None)
-                except Exception:
-                    tname = None
-                if tname and not str(tname).startswith("MSys"):
-                    table_names.append(tname)
-        except Exception:
-            try:
-                rows = cur.execute("SELECT Name FROM MSysObjects WHERE Type In (1,4) AND Flags = 0").fetchall()
-                table_names = [r[0] for r in rows]
-            except Exception:
-                table_names = []
+        table_names = list_access_user_tables_cursor(cur)
         if not table_names:
             return {"error": "No user tables found in Access DB."}
         if requested_tables is not None:
             table_names = [name for name in table_names if name in requested_tables]
         if not table_names:
-            return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
+            return build_empty_search_response(q, q_norm)
         table_names = table_names[:max_tables]
         def build_where_for_columns(cols):
             if not tokens:
@@ -2777,16 +2801,14 @@ def fallback_search_access(
                 returned_count += len(results[t])
                 if returned_count >= total_limit:
                     break
-        score_by_table = build_score_by_table(results)
-        payload = build_search_response(
+        return build_search_payload_with_backend(
             q,
             q_norm,
             candidate_count,
             returned_count,
             results,
-            score_by_table,
+            "access_odbc",
         )
-        return attach_search_backend(payload, "access_odbc")
     except Exception as e:
         return {"error": str(e)}
     finally:
