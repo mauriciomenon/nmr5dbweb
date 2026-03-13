@@ -251,6 +251,43 @@ def test_api_search_rejeita_parametros_invalidos():
     assert resp.get_json()["error"] == "per_table must be an integer"
 
 
+def test_api_search_rejeita_per_table_acima_do_maximo():
+    client = app.test_client()
+
+    resp = client.get("/api/search?q=test&per_table=201")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "per_table must be <= 200"
+
+
+def test_api_search_rejeita_candidate_limit_acima_do_maximo():
+    client = app.test_client()
+
+    resp = client.get("/api/search?q=test&candidate_limit=20001")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "candidate_limit must be <= 20000"
+
+
+def test_api_search_rejeita_total_limit_acima_do_maximo():
+    client = app.test_client()
+
+    resp = client.get("/api/search?q=test&total_limit=5001")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "total_limit must be <= 5000"
+
+
+def test_api_search_rejeita_filtro_tables_maior_que_limite():
+    client = app.test_client()
+    tables = ",".join(f"t{i}" for i in range(1, 202))
+
+    resp = client.get(f"/api/search?q=test&tables={tables}")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "tables must contain at most 200 items"
+
+
 def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     client = app.test_client()
     monkeypatch.setattr(local_search, "startup_warnings", ["db_path configurado nao existe mais: /tmp/lost.duckdb"])
@@ -577,6 +614,21 @@ def test_api_table_ler_tabela_sqlite(tmp_path, monkeypatch):
         {"id": 3, "note": "alphabet"},
         {"id": 1, "note": "alpha"},
     ]
+
+
+def test_api_table_rejeita_limit_acima_do_maximo(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(db_path))
+    conn.execute("CREATE TABLE alpha (id INTEGER)")
+    conn.execute("INSERT INTO alpha VALUES (1)")
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/table?name=alpha&limit=1001")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "limit must be <= 1000"
 
 
 def test_api_tables_detecta_sqlite_em_extensao_db(tmp_path, monkeypatch):

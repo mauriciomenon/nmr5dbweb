@@ -95,6 +95,11 @@ SQLITE_EXTENSIONS = {".sqlite", ".sqlite3"}
 DUCKDB_EXTENSIONS = {".duckdb"}
 COMPARE_PAGE_SIZE_DEFAULT = 100
 COMPARE_PAGE_SIZE_MAX = 1000
+TABLE_PAGE_LIMIT_MAX = 1000
+SEARCH_PER_TABLE_MAX = 200
+SEARCH_CANDIDATE_LIMIT_MAX = 20000
+SEARCH_TOTAL_LIMIT_MAX = 5000
+SEARCH_TABLES_FILTER_MAX = 200
 
 # Conversion & index state
 convert_lock = threading.Lock()
@@ -596,7 +601,7 @@ def get_search_db_context_response():
     )
 
 
-def parse_int_query_arg(raw_value, field_name, *, default=None, minimum=None):
+def parse_int_query_arg(raw_value, field_name, *, default=None, minimum=None, maximum=None):
     if raw_value is None or raw_value == "":
         return default
     try:
@@ -605,6 +610,8 @@ def parse_int_query_arg(raw_value, field_name, *, default=None, minimum=None):
         raise ValueError(f"{field_name} must be an integer") from exc
     if minimum is not None and value < minimum:
         raise ValueError(f"{field_name} must be >= {minimum}")
+    if maximum is not None and value > maximum:
+        raise ValueError(f"{field_name} must be <= {maximum}")
     return value
 
 
@@ -612,14 +619,27 @@ def parse_search_request_args(args):
     q = (args.get("q") or "").strip()
     if not q:
         raise ValueError("query param q required")
-    per_table = parse_int_query_arg(args.get("per_table", 10), "per_table", default=10, minimum=1)
+    per_table = parse_int_query_arg(
+        args.get("per_table", 10),
+        "per_table",
+        default=10,
+        minimum=1,
+        maximum=SEARCH_PER_TABLE_MAX,
+    )
     candidate_limit = parse_int_query_arg(
         args.get("candidate_limit", 1000),
         "candidate_limit",
         default=1000,
         minimum=1,
+        maximum=SEARCH_CANDIDATE_LIMIT_MAX,
     )
-    total_limit = parse_int_query_arg(args.get("total_limit", 500), "total_limit", default=500, minimum=1)
+    total_limit = parse_int_query_arg(
+        args.get("total_limit", 500),
+        "total_limit",
+        default=500,
+        minimum=1,
+        maximum=SEARCH_TOTAL_LIMIT_MAX,
+    )
     token_mode = (args.get("token_mode", "any") or "any").lower()
     if token_mode not in ("any", "all"):
         token_mode = "any"
@@ -630,7 +650,16 @@ def parse_search_request_args(args):
     tables_param = args.get("tables")
     tables = None
     if tables_param:
-        tables = [t.strip() for t in tables_param.split(",") if t.strip()]
+        tables = []
+        seen_tables = set()
+        for raw_table in tables_param.split(","):
+            table = raw_table.strip()
+            if not table or table in seen_tables:
+                continue
+            seen_tables.add(table)
+            tables.append(table)
+        if len(tables) > SEARCH_TABLES_FILTER_MAX:
+            raise ValueError(f"tables must contain at most {SEARCH_TABLES_FILTER_MAX} items")
     return {
         "q": q,
         "per_table": per_table,
@@ -644,7 +673,13 @@ def parse_search_request_args(args):
 
 def parse_table_request_args(args):
     try:
-        limit = parse_int_query_arg(args.get("limit", 50), "limit", default=50, minimum=0)
+        limit = parse_int_query_arg(
+            args.get("limit", 50),
+            "limit",
+            default=50,
+            minimum=0,
+            maximum=TABLE_PAGE_LIMIT_MAX,
+        )
         offset = parse_int_query_arg(args.get("offset", 0), "offset", default=0, minimum=0)
     except ValueError as exc:
         raise ValueError(str(exc)) from exc
