@@ -806,6 +806,13 @@ def compare_internal_error(route_name, exc):
     return jsonify({"error": str(exc)}), 500
 
 
+def json_error(message, status_code=400, **extra):
+    payload = {"error": str(message)}
+    if extra:
+        payload.update(extra)
+    return jsonify(payload), status_code
+
+
 def sanitize_filename(value):
     if value is None:
         return ""
@@ -2053,21 +2060,21 @@ def api_tables():
         tables = list_tables_for_path(ctx["db_path"])
         return jsonify({"tables": tables, "db_engine": ctx["db_engine"]})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return json_error(e, 500)
 
 
 @app.route("/api/table", methods=["GET"])
 def api_table():
     table = request.args.get("name")
     if not table:
-        return jsonify({"error": "table name required (?name=TABLE_NAME)"}), 400
+        return json_error("table name required (?name=TABLE_NAME)", 400)
     ctx, error_response = get_browse_db_context_response()
     if error_response is not None:
         return error_response
     try:
         page_args = parse_table_request_args(request.args)
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        return json_error(exc, 400)
 
     try:
         cols, rows, total = read_table_page_for_path(
@@ -2091,11 +2098,11 @@ def api_table():
             "db_engine": ctx["db_engine"],
         })
     except LookupError as exc:
-        return jsonify({"error": str(exc)}), 404
+        return json_error(exc, 404)
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        return json_error(exc, 400)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return json_error(e, 500)
 
 
 def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token_mode, min_score, tables=None):
@@ -2472,14 +2479,16 @@ def api_search():
     try:
         search_args = parse_search_request_args(request.args)
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        return json_error(exc, 400)
     ctx, error_response = get_search_db_context_response()
     if error_response is not None:
         return error_response
     payload, status_code = run_search_for_context(ctx, search_args)
     if status_code is None:
         return jsonify(payload)
-    return jsonify(payload), status_code
+    return json_error(payload.get("error", "search failed"), status_code, **{
+        k: v for k, v in payload.items() if k != "error"
+    })
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
