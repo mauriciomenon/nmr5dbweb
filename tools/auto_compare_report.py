@@ -377,12 +377,13 @@ def _list_sqlite_tables(conn: sqlite3.Connection) -> list[str]:
 
 def convert_duckdb_to_sqlite(duck_path: Path, sqlite_path: Path) -> tuple[bool, str]:
     try:
-        if sqlite_path.exists():
-            sqlite_path.unlink()
-        with duckdb.connect(str(duck_path), read_only=True) as src, closing(sqlite3.connect(str(sqlite_path))) as dst:
+        with duckdb.connect(str(duck_path), read_only=True) as src:
             tables = _list_duck_tables(src)
             if not tables:
                 return False, "duckdb sem tabelas de usuario"
+        if sqlite_path.exists():
+            sqlite_path.unlink()
+        with duckdb.connect(str(duck_path), read_only=True) as src, closing(sqlite3.connect(str(sqlite_path))) as dst:
             for table in tables:
                 info_rows = src.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
                 columns = [str(row[1]) for row in info_rows]
@@ -414,12 +415,13 @@ def convert_duckdb_to_sqlite(duck_path: Path, sqlite_path: Path) -> tuple[bool, 
 
 def convert_sqlite_to_duckdb(sqlite_path: Path, duckdb_path: Path) -> tuple[bool, str]:
     try:
-        if duckdb_path.exists():
-            duckdb_path.unlink()
-        with closing(sqlite3.connect(str(sqlite_path))) as scon, duckdb.connect(str(duckdb_path)) as dcon:
+        with closing(sqlite3.connect(str(sqlite_path))) as scon:
             tables = _list_sqlite_tables(scon)
             if not tables:
                 return False, "sqlite sem tabelas de usuario"
+        if duckdb_path.exists():
+            duckdb_path.unlink()
+        with closing(sqlite3.connect(str(sqlite_path))) as scon, duckdb.connect(str(duckdb_path)) as dcon:
             for table in tables:
                 info_rows = scon.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
                 columns = [str(row[1]) for row in info_rows]

@@ -1010,7 +1010,12 @@ function appendSectionFields(
       continue;
     }
 
-    const sideValue = sectionType === 'added' ? row.b[column] : row.a[column];
+    let sideValue;
+    if (sectionType === 'added') {
+      sideValue = row.a[column];
+    } else {
+      sideValue = row.b[column];
+    }
     const line = document.createElement('div');
     line.className = 'diff-field-line';
     line.innerHTML = `<strong>${escapeHtmlText(column)}:</strong> ${escapeHtmlText(shortValue(sideValue))}`;

@@ -37,7 +37,7 @@ async function restoreFromSavedState() {
     db2Input.value
   ) {
     try {
-      const selectedBefore = (saved && saved.tableSelect) || (tableSelect ? tableSelect.value : '');
+      const selectedBefore = (saved && saved.table) || (tableSelect ? tableSelect.value : '');
       const headData = await postJson('/api/compare_db_tables', {
         db1_path: db1Input.value,
         db2_path: db2Input.value,
@@ -175,6 +175,13 @@ async function handleFileUpload(side) {
     if (nextPath !== previousPath) {
       compareDbState.lastComparePayload = null;
       compareDbState.lastCompareMeta = null;
+      compareDbState.tablesMeta = [];
+      compareDbState.tablesLoadedOnce = false;
+      const localTableSelect = document.getElementById('tableSelect');
+      if (localTableSelect) {
+        localTableSelect.innerHTML =
+          '<option value="">carregue os arquivos A e B e clique em "1) Carregar tabelas em comum"</option>';
+      }
     }
 
     const otherPathInput = document.getElementById(
