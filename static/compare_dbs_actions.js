@@ -120,6 +120,15 @@ async function loadTables() {
   }
 }
 
+function escapeCompareText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function onTableChange() {
   const table = document.getElementById('tableSelect').value;
   const keyInput = document.getElementById('keyColumns');
@@ -899,12 +908,16 @@ async function generateTablesOverview() {
     compareDbState.tablesOverviewCache.db1 === db1Input.value &&
     compareDbState.tablesOverviewCache.db2 === db2Input.value
   ) {
-    renderTablesOverview(compareDbState.tablesOverviewCache.result);
+    renderTablesOverview(
+      compareDbState.tablesOverviewCache.result,
+      compareDbState.tablesOverviewCache.summary
+    );
     restoreBtn();
     return;
   }
 
   const overview = [];
+  let overviewSummary = null;
   const db1 = db1Input.value.trim();
   const db2 = db2Input.value.trim();
   const tableNames = compareDbState.tablesMeta
@@ -916,6 +929,7 @@ async function generateTablesOverview() {
       db2_path: db2,
       tables: tableNames,
     });
+    overviewSummary = payload.summary || null;
     (payload.overview || []).forEach((item) => {
       overview.push({
         table: item.table,
@@ -938,8 +952,13 @@ async function generateTablesOverview() {
     return;
   }
 
-  compareDbState.tablesOverviewCache = { db1: db1, db2: db2, result: overview };
-  renderTablesOverview(overview);
+  compareDbState.tablesOverviewCache = {
+    db1: db1,
+    db2: db2,
+    result: overview,
+    summary: overviewSummary,
+  };
+  renderTablesOverview(overview, overviewSummary);
   restoreBtn();
 }
 
@@ -957,7 +976,7 @@ async function toggleTablesOverview() {
   updateTablesOverviewVisibility();
 }
 
-function renderTablesOverview(overview) {
+function renderTablesOverview(overview, overviewSummary) {
   const container = document.getElementById('tablesOverview');
   if (!container) return;
   if (!overview || !overview.length) {
@@ -972,33 +991,36 @@ function renderTablesOverview(overview) {
 
   let html = '<div class="tables-overview-card">';
   html += '<div><strong>Mapa geral das tabelas em comum</strong></div>';
+  if (overviewSummary) {
+    html += `<div class="tables-overview-meta">Total: ${Number(overviewSummary.total_tables || 0)} · Diferentes: ${Number(overviewSummary.diff_tables || 0)} · Iguais: ${Number(overviewSummary.same_tables || 0)} · Sem chave: ${Number(overviewSummary.no_key_tables || 0)} · Erro: ${Number(overviewSummary.error_tables || 0)}</div>`;
+  }
   html += '<div class="tables-overview-grid">';
 
   if (withDiff.length) {
     html += '<div><strong>Tabelas com diferencas de conteudo:</strong></div>';
     for (const o of withDiff) {
-      html += `<div class="tables-overview-row"><span class="tables-overview-name">${o.table}</span><span class="tables-overview-meta">${o.diffCount} linhas diferentes · A: ${o.row_count_a} · B: ${o.row_count_b}</span></div>`;
+      html += `<div class="tables-overview-row"><span class="tables-overview-name">${escapeCompareText(o.table)}</span><span class="tables-overview-meta">${o.diffCount} linhas diferentes · A: ${o.row_count_a} · B: ${o.row_count_b}</span></div>`;
     }
   }
   if (withoutDiff.length) {
     html +=
       '<div style="margin-top:4px;"><strong>Tabelas sem diferencas relevantes:</strong></div>';
     for (const o of withoutDiff) {
-      html += `<div class="tables-overview-row"><span class="tables-overview-name">${o.table}</span><span class="tables-overview-meta">conteudo identico · A: ${o.row_count_a} · B: ${o.row_count_b}</span></div>`;
+      html += `<div class="tables-overview-row"><span class="tables-overview-name">${escapeCompareText(o.table)}</span><span class="tables-overview-meta">conteudo identico · A: ${o.row_count_a} · B: ${o.row_count_b}</span></div>`;
     }
   }
   if (noKey.length) {
     html +=
       '<div style="margin-top:4px;"><strong>Tabelas nao avaliadas (chave nao identificada automaticamente):</strong></div>';
     for (const o of noKey) {
-      html += `<div class="tables-overview-row"><span class="tables-overview-name">${o.table}</span><span class="tables-overview-meta">defina uma chave manualmente no passo 2 para comparar esta tabela.</span></div>`;
+      html += `<div class="tables-overview-row"><span class="tables-overview-name">${escapeCompareText(o.table)}</span><span class="tables-overview-meta">defina uma chave manualmente no passo 2 para comparar esta tabela.</span></div>`;
     }
   }
   if (errors.length) {
     html +=
       '<div style="margin-top:4px;"><strong>Tabelas com erro ao comparar:</strong></div>';
     for (const o of errors) {
-      html += `<div class="tables-overview-row"><span class="tables-overview-name">${o.table}</span><span class="tables-overview-meta">${o.error || 'Erro ao comparar.'}</span></div>`;
+      html += `<div class="tables-overview-row"><span class="tables-overview-name">${escapeCompareText(o.table)}</span><span class="tables-overview-meta">${escapeCompareText(o.error || 'Erro ao comparar.')}</span></div>`;
     }
   }
 
