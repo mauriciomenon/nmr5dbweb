@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from tools.auto_compare_report import (
+    build_table_detail_compact,
     list_candidate_files,
     run_compare_pipeline,
     suggest_two_sources,
@@ -61,3 +62,65 @@ def test_run_compare_pipeline_sqlite_inputs(tmp_path: Path) -> None:
     assert "diff_tables" in md_text
     assert "T1" in md_text
     assert "fonte_a_steps" in md_text
+
+
+def test_build_table_detail_compact_usa_uniao_de_colunas_alteradas() -> None:
+    payload = {
+        "table": "SOSTAT",
+        "key_columns": ["ID"],
+        "compare_columns": ["C1", "C2", "C3", "C4"],
+        "rows": [
+            {
+                "type": "changed",
+                "key": {"ID": 1},
+                "a": {"C1": "a", "C2": "b", "C3": "x", "C4": "m"},
+                "b": {"C1": "a", "C2": "b", "C3": "y", "C4": "m"},
+            },
+            {
+                "type": "changed",
+                "key": {"ID": 2},
+                "a": {"C1": "d", "C2": "e", "C3": "f", "C4": "g"},
+                "b": {"C1": "d", "C2": "e", "C3": "f", "C4": "z"},
+            },
+            {
+                "type": "added",
+                "key": {"ID": 3},
+                "a": {"C1": "", "C2": "", "C3": "", "C4": ""},
+                "b": {"C1": "n1", "C2": "n2", "C3": "n3", "C4": "n4"},
+            },
+        ],
+    }
+    detail = build_table_detail_compact(payload, ["ID", "C1", "C2", "C3", "C4"])
+    assert detail["visible_columns"] == ["C3", "C4"]
+    assert len(detail["records"]) == 3
+    added = detail["records"][2]
+    assert set(added["new"].keys()) == {"C3", "C4"}
+
+
+def test_report_nao_exibe_tabela_same_no_bloco_de_alteracoes(tmp_path: Path) -> None:
+    docs = tmp_path / "documentos"
+    reports = docs / "reports"
+    docs.mkdir()
+    db1 = docs / "2026-01-29 DB2.sqlite"
+    db2 = docs / "2026-02-27 DB4.sqlite"
+    conn1 = sqlite3.connect(str(db1))
+    conn2 = sqlite3.connect(str(db2))
+    try:
+        conn1.execute("CREATE TABLE T1 (id INTEGER, value TEXT)")
+        conn1.execute("CREATE TABLE T2 (id INTEGER, value TEXT)")
+        conn2.execute("CREATE TABLE T1 (id INTEGER, value TEXT)")
+        conn2.execute("CREATE TABLE T2 (id INTEGER, value TEXT)")
+        conn1.executemany("INSERT INTO T1 VALUES (?, ?)", [(1, "A"), (2, "B")])
+        conn2.executemany("INSERT INTO T1 VALUES (?, ?)", [(1, "A"), (2, "C")])
+        conn1.executemany("INSERT INTO T2 VALUES (?, ?)", [(1, "X"), (2, "Y")])
+        conn2.executemany("INSERT INTO T2 VALUES (?, ?)", [(1, "X"), (2, "Y")])
+        conn1.commit()
+        conn2.commit()
+    finally:
+        conn1.close()
+        conn2.close()
+
+    outputs = run_compare_pipeline(db1, db2, docs, reports)
+    md_text = outputs["md"].read_text(encoding="utf-8")
+    assert "| T1 | diff |" in md_text
+    assert "| T2 | same |" not in md_text

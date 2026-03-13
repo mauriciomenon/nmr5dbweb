@@ -29,14 +29,33 @@ from typing import Sequence
 import duckdb
 
 from access_convert import convert_access_to_duckdb
-from interface.compare_dbs import compare_tables_overview_duckdb, list_common_tables
+from interface.compare_dbs import (
+    compare_table_duckdb_paged,
+    compare_tables_overview_duckdb,
+    list_common_tables,
+    list_table_columns,
+)
 
 SUPPORTED_INPUT_EXTS = {".accdb", ".mdb", ".duckdb", ".sqlite", ".sqlite3", ".db"}
 ACCESS_EXTS = {".accdb", ".mdb"}
 SQLITE_EXTS = {".sqlite", ".sqlite3"}
 DUCKDB_EXTS = {".duckdb"}
 DEFAULT_PAGE_SIZE = 10
+DEFAULT_DETAIL_ROW_LIMIT = 200
 ISO_PREFIX_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+KEY_NAME_HINTS = [
+    "INHPRO",
+    "ITEMNB",
+    "RTUNO",
+    "PNTNO",
+    "UNIQID",
+    "OID",
+    "ID",
+    "KEY",
+    "COD",
+    "NO",
+    "NB",
+]
 
 
 @dataclass(frozen=True)
@@ -488,6 +507,194 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
     raise RuntimeError(f"engine nao suportada para {source.name}")
 
 
+def _score_key_name(column: str) -> int:
+    key = str(column or "").upper()
+    score = 0
+    for idx, hint in enumerate(KEY_NAME_HINTS):
+        if hint in key:
+            score += 1000 - idx * 10
+    if key.endswith("ID") or key.endswith("NO") or key.endswith("NB"):
+        score += 200
+    return score
+
+
+def _count_rows(conn: duckdb.DuckDBPyConnection, table: str) -> int:
+    row = conn.execute(f"SELECT COUNT(*) FROM {_quote_identifier(table)}").fetchone()
+    return int(row[0] or 0) if row else 0
+
+
+def _count_distinct_tuple(
+    conn: duckdb.DuckDBPyConnection, table: str, columns: Sequence[str]
+) -> int:
+    if not columns:
+        return 0
+    cols_sql = ", ".join(_quote_identifier(c) for c in columns)
+    row = conn.execute(
+        f"SELECT COUNT(*) FROM (SELECT {cols_sql} FROM {_quote_identifier(table)} GROUP BY {cols_sql}) t"
+    ).fetchone()
+    return int(row[0] or 0) if row else 0
+
+
+def _is_unique_key(
+    conn: duckdb.DuckDBPyConnection, table: str, key_columns: Sequence[str]
+) -> bool:
+    total = _count_rows(conn, table)
+    if total == 0:
+        return False
+    distinct = _count_distinct_tuple(conn, table, key_columns)
+    return distinct == total
+
+
+def infer_key_columns(db1_path: Path, db2_path: Path, table: str, common_columns: Sequence[str]) -> list[str]:
+    ordered = sorted(
+        [str(col) for col in common_columns],
+        key=lambda col: (-_score_key_name(col), str(col)),
+    )
+    if not ordered:
+        raise RuntimeError(f"tabela sem colunas comuns: {table}")
+    top = ordered[:10]
+
+    c1 = duckdb.connect(str(db1_path), read_only=True)
+    c2 = duckdb.connect(str(db2_path), read_only=True)
+    try:
+        for col in top:
+            key = [col]
+            if _is_unique_key(c1, table, key) and _is_unique_key(c2, table, key):
+                return key
+        for i in range(len(top)):
+            for j in range(i + 1, len(top)):
+                key = [top[i], top[j]]
+                if _is_unique_key(c1, table, key) and _is_unique_key(c2, table, key):
+                    return key
+    finally:
+        c1.close()
+        c2.close()
+
+    return [ordered[0]]
+
+
+def _key_to_text(key_map: dict) -> str:
+    if not isinstance(key_map, dict) or not key_map:
+        return "-"
+    parts = []
+    for key in sorted(key_map.keys()):
+        parts.append(f"{key}={key_map.get(key)}")
+    return " | ".join(parts)
+
+
+def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[str]) -> dict:
+    table = str(compare_payload.get("table") or "")
+    rows = list(compare_payload.get("rows") or [])
+    compare_columns = list(compare_payload.get("compare_columns") or [])
+    changed_cols: list[str] = []
+    changed_set = set()
+
+    for item in rows:
+        if str(item.get("type") or "") != "changed":
+            continue
+        a_vals = item.get("a") or {}
+        b_vals = item.get("b") or {}
+        for col in compare_columns:
+            if a_vals.get(col) != b_vals.get(col) and col not in changed_set:
+                changed_set.add(col)
+                changed_cols.append(col)
+
+    if not changed_cols:
+        fallback = [c for c in table_columns if c not in (compare_payload.get("key_columns") or [])]
+        changed_cols = fallback[: min(4, len(fallback))]
+
+    records = []
+    for item in rows:
+        row_type = str(item.get("type") or "")
+        key_text = _key_to_text(item.get("key") or {})
+        a_vals = item.get("a") or {}
+        b_vals = item.get("b") or {}
+        old_row = {}
+        new_row = {}
+        changed_map = {}
+        for col in changed_cols:
+            old_v = a_vals.get(col, "")
+            new_v = b_vals.get(col, "")
+            old_row[col] = old_v
+            new_row[col] = new_v
+            if row_type == "changed":
+                changed_map[col] = old_v != new_v
+            elif row_type == "added":
+                changed_map[col] = bool(str(new_v))
+            elif row_type == "removed":
+                changed_map[col] = bool(str(old_v))
+            else:
+                changed_map[col] = old_v != new_v
+        records.append(
+            {
+                "type": row_type,
+                "key_text": key_text,
+                "old": old_row,
+                "new": new_row,
+                "changed": changed_map,
+            }
+        )
+
+    return {
+        "table": table,
+        "key_columns": list(compare_payload.get("key_columns") or []),
+        "visible_columns": changed_cols,
+        "rows_total": int(compare_payload.get("total_filtered_rows") or len(rows)),
+        "rows_returned": len(records),
+        "summary": compare_payload.get("summary") or {},
+        "records": records,
+    }
+
+
+def collect_table_details(
+    db1_path: Path,
+    db2_path: Path,
+    overview_rows: Sequence[dict],
+    *,
+    detail_row_limit: int = DEFAULT_DETAIL_ROW_LIMIT,
+) -> list[dict]:
+    details = []
+    for row in overview_rows:
+        if str(row.get("status") or "") != "diff":
+            continue
+        table = str(row.get("table") or "")
+        if not table:
+            continue
+        cols1 = list_table_columns(db1_path, table)
+        cols2 = set(list_table_columns(db2_path, table))
+        common_columns = [c for c in cols1 if c in cols2]
+        if not common_columns:
+            continue
+        key_columns = infer_key_columns(db1_path, db2_path, table, common_columns)
+        page_size = min(100, max(1, detail_row_limit))
+        page = 1
+        collected_rows = []
+        compare_payload = None
+        while len(collected_rows) < detail_row_limit:
+            payload = compare_table_duckdb_paged(
+                db1_path,
+                db2_path,
+                table,
+                key_columns=key_columns,
+                compare_columns=[c for c in common_columns if c not in key_columns],
+                page=page,
+                page_size=page_size,
+            )
+            compare_payload = payload
+            collected_rows.extend(payload.get("rows") or [])
+            if page >= int(payload.get("total_pages") or 1):
+                break
+            page += 1
+
+        if compare_payload is None:
+            continue
+        compare_payload = dict(compare_payload)
+        compare_payload["rows"] = collected_rows[:detail_row_limit]
+        detail = build_table_detail_compact(compare_payload, common_columns)
+        details.append(detail)
+    return details
+
+
 def summarize_overview(rows: Sequence[dict]) -> dict:
     summary = {
         "total_tables": len(rows),
@@ -509,11 +716,17 @@ def summarize_overview(rows: Sequence[dict]) -> dict:
     return summary
 
 
-def build_report_payload(a: PreparedSource, b: PreparedSource, overview_rows: Sequence[dict]) -> dict:
+def build_report_payload(
+    a: PreparedSource,
+    b: PreparedSource,
+    overview_rows: Sequence[dict],
+    table_details: Sequence[dict],
+) -> dict:
     now = dt.datetime.now()
     summary = summarize_overview(overview_rows)
+    changed_rows = [row for row in overview_rows if str(row.get("status") or "") != "same"]
     sorted_rows = sorted(
-        overview_rows,
+        changed_rows,
         key=lambda row: (
             str(row.get("status") or "") != "diff",
             -(int(row.get("diff_count") or 0) if str(row.get("status") or "") == "diff" else -1),
@@ -547,7 +760,9 @@ def build_report_payload(a: PreparedSource, b: PreparedSource, overview_rows: Se
         },
         "summary": summary,
         "common_tables": [str(row.get("table") or "") for row in overview_rows],
+        "changed_tables": [str(row.get("table") or "") for row in sorted_rows],
         "rows": list(sorted_rows),
+        "table_details": list(table_details),
     }
 
 
@@ -577,11 +792,71 @@ def _html_rows(rows: Sequence[dict]) -> str:
     return "\n".join(cells)
 
 
+def _html_cell(value) -> str:
+    if value is None:
+        return ""
+    return html.escape(str(value))
+
+
+def _html_table_detail(detail: dict) -> str:
+    cols = detail.get("visible_columns") or []
+    if not cols:
+        return "<div class='meta'>Sem colunas para exibir no modo compacto.</div>"
+    header_cells = "".join([f"<th>{html.escape(str(col))}</th>" for col in cols])
+    body_rows = []
+    for item in detail.get("records") or []:
+        row_type = str(item.get("type") or "")
+        key_text = html.escape(str(item.get("key_text") or "-"))
+        old_vals = item.get("old") or {}
+        new_vals = item.get("new") or {}
+        changed_map = item.get("changed") or {}
+        old_cells = []
+        new_cells = []
+        for col in cols:
+            css = "changed-cell" if changed_map.get(col) else ""
+            old_cells.append(f"<td class='{css}'>{_html_cell(old_vals.get(col, ''))}</td>")
+            new_cells.append(f"<td class='{css}'>{_html_cell(new_vals.get(col, ''))}</td>")
+        body_rows.append(
+            "<tr class='old-row'>"
+            f"<td rowspan='2'>{key_text}</td>"
+            f"<td rowspan='2'>{html.escape(row_type)}</td>"
+            "<td>anterior</td>"
+            + "".join(old_cells)
+            + "</tr>"
+        )
+        body_rows.append(
+            "<tr class='new-row'>"
+            "<td>novo</td>"
+            + "".join(new_cells)
+            + "</tr>"
+        )
+    return (
+        "<table class='detail'>"
+        "<thead><tr><th>key</th><th>tipo</th><th>linha</th>"
+        + header_cells
+        + "</tr></thead><tbody>"
+        + "\n".join(body_rows)
+        + "</tbody></table>"
+    )
+
+
 def render_report_html(payload: dict) -> str:
     s = payload["summary"]
     a = payload["source_a"]
     b = payload["source_b"]
     rows = payload["rows"]
+    details = payload.get("table_details") or []
+    details_blocks = []
+    for detail in details:
+        details_blocks.append(
+            "<div class='card'>"
+            f"<h2>Tabela: {html.escape(str(detail.get('table') or ''))}</h2>"
+            f"<div class='meta'>colunas compactas: {html.escape(', '.join(detail.get('visible_columns') or []))}</div>"
+            f"<div class='meta'>linhas diff retornadas: {detail.get('rows_returned', 0)} "
+            f"(total detectado: {detail.get('rows_total', 0)})</div>"
+            + _html_table_detail(detail)
+            + "</div>"
+        )
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -597,13 +872,17 @@ def render_report_html(payload: dict) -> str:
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 12px; }}
     .kpi {{ display: flex; gap: 12px; flex-wrap: wrap; }}
     .pill {{ background: #eef2ff; border: 1px solid #c7d2fe; color: #1e3a8a; border-radius: 999px; padding: 6px 10px; font-size: 13px; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }}
     th, td {{ border: 1px solid #dbe3ef; padding: 8px; text-align: left; vertical-align: top; }}
     th {{ background: #eff6ff; position: sticky; top: 0; }}
+    table.detail th {{ position: static; }}
     tr.diff td {{ background: #fff7ed; }}
     tr.same td {{ background: #f0fdf4; }}
     tr.warn td {{ background: #fffbeb; }}
     tr.error td {{ background: #fef2f2; }}
+    tr.old-row td {{ background: #f8fafc; }}
+    tr.new-row td {{ background: #eef6ff; }}
+    td.changed-cell {{ background: #fee2e2 !important; color: #7f1d1d; font-weight: 600; }}
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
   </style>
 </head>
@@ -645,7 +924,7 @@ def render_report_html(payload: dict) -> str:
       </div>
     </div>
     <div class="card">
-      <h2>Detalhe por tabela</h2>
+      <h2>Tabelas com alteracao (sem tabelas iguais)</h2>
       <table>
         <thead>
           <tr>
@@ -662,6 +941,7 @@ def render_report_html(payload: dict) -> str:
         </tbody>
       </table>
     </div>
+    {"".join(details_blocks)}
   </div>
 </body>
 </html>
@@ -670,6 +950,7 @@ def render_report_html(payload: dict) -> str:
 
 def render_report_md(payload: dict) -> str:
     s = payload["summary"]
+    details = payload.get("table_details") or []
     lines = [
         "# Comparacao automatizada de bancos",
         "",
@@ -695,7 +976,7 @@ def render_report_md(payload: dict) -> str:
         f"- no_key_tables: {s['no_key_tables']}",
         f"- error_tables: {s['error_tables']}",
         "",
-        "## Tabelas",
+        "## Tabelas com alteracao (sem tabelas iguais)",
         "",
         "| tabela | status | rows_a | rows_b | diff_count | error |",
         "|---|---:|---:|---:|---:|---|",
@@ -705,11 +986,38 @@ def render_report_md(payload: dict) -> str:
             f"| {row.get('table','')} | {row.get('status','')} | {row.get('row_count_a','')} | "
             f"{row.get('row_count_b','')} | {row.get('diff_count','')} | {row.get('error','')} |"
         )
+    lines.append("")
+    lines.append("## Detalhe compacto por tabela")
+    for detail in details:
+        lines.append("")
+        lines.append(f"### {detail.get('table', '')}")
+        lines.append(f"- colunas_visiveis: {', '.join(detail.get('visible_columns') or [])}")
+        lines.append(
+            f"- linhas_diff: {detail.get('rows_returned', 0)} de {detail.get('rows_total', 0)}"
+        )
+        lines.append("")
+        lines.append("| key | tipo | linha | " + " | ".join(detail.get("visible_columns") or []) + " |")
+        lines.append("|---|---|---|" + "|".join(["---"] * len(detail.get("visible_columns") or [])) + "|")
+        for item in detail.get("records") or []:
+            cols = detail.get("visible_columns") or []
+            old_vals = [str((item.get("old") or {}).get(c, "")) for c in cols]
+            new_vals = [str((item.get("new") or {}).get(c, "")) for c in cols]
+            lines.append(
+                f"| {item.get('key_text','-')} | {item.get('type','')} | anterior | "
+                + " | ".join(old_vals)
+                + " |"
+            )
+            lines.append(
+                f"| {item.get('key_text','-')} | {item.get('type','')} | novo | "
+                + " | ".join(new_vals)
+                + " |"
+            )
     return "\n".join(lines) + "\n"
 
 
 def render_report_txt(payload: dict) -> str:
     s = payload["summary"]
+    details = payload.get("table_details") or []
     out = [
         "COMPARACAO AUTOMATIZADA DE BANCOS",
         f"Gerado em: {payload['generated_at']}",
@@ -732,7 +1040,7 @@ def render_report_txt(payload: dict) -> str:
         f"  no_key_tables: {s['no_key_tables']}",
         f"  error_tables: {s['error_tables']}",
         "",
-        "DETALHE POR TABELA",
+        "TABELAS COM ALTERACAO",
     ]
     for row in payload["rows"]:
         out.append(
@@ -742,6 +1050,24 @@ def render_report_txt(payload: dict) -> str:
             + f"| diff={row.get('diff_count','')} "
             + (f"| error={row.get('error','')}" if row.get("error") else "")
         )
+    out.append("")
+    out.append("DETALHE COMPACTO POR TABELA")
+    for detail in details:
+        out.append("")
+        out.append(f"TABELA {detail.get('table','')}")
+        out.append(
+            "  colunas_visiveis: " + ", ".join(detail.get("visible_columns") or [])
+        )
+        out.append(
+            f"  linhas_diff: {detail.get('rows_returned', 0)} de {detail.get('rows_total', 0)}"
+        )
+        for item in detail.get("records") or []:
+            out.append(f"  key={item.get('key_text','-')} tipo={item.get('type','')}")
+            cols = detail.get("visible_columns") or []
+            old_pairs = [f"{c}={str((item.get('old') or {}).get(c, ''))}" for c in cols]
+            new_pairs = [f"{c}={str((item.get('new') or {}).get(c, ''))}" for c in cols]
+            out.append("    anterior: " + " | ".join(old_pairs))
+            out.append("    novo    : " + " | ".join(new_pairs))
     return "\n".join(out) + "\n"
 
 
@@ -819,7 +1145,8 @@ def run_compare_pipeline(source_a: Path, source_b: Path, docs_dir: Path, reports
         prepared_b.duckdb_path,
         tables=common_tables,
     )
-    payload = build_report_payload(prepared_a, prepared_b, overview)
+    details = collect_table_details(prepared_a.duckdb_path, prepared_b.duckdb_path, overview)
+    payload = build_report_payload(prepared_a, prepared_b, overview, details)
     return write_report_files(payload, reports_dir)
 
 
