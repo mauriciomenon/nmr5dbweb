@@ -17,6 +17,7 @@
 # - utils.py with normalize_text(value) and serialize_value(value) if you want custom behavior (fallbacks included)
 import os
 import json
+import shutil
 import sqlite3
 import threading
 from pathlib import Path
@@ -191,10 +192,77 @@ def clear_db_path():
 
 
 def get_runtime_capabilities():
+    access_odbc = get_access_odbc_status()
     return {
         "access_fallback": pyodbc is not None,
         "access_conversion": convert_access_to_duckdb is not None,
         "duckdb_fulltext": create_or_resume_fulltext is not None,
+        "access_odbc_ready": bool(access_odbc.get("pyodbc_available") and access_odbc.get("access_driver_available")),
+        "access_mdbtools_available": bool(has_mdbtools_binaries()),
+    }
+
+
+def has_mdbtools_binaries():
+    return bool(shutil.which("mdb-tables") and shutil.which("mdb-export"))
+
+
+def get_access_odbc_status():
+    status = {
+        "platform": os.name,
+        "pyodbc_available": pyodbc is not None,
+        "access_driver_available": False,
+        "drivers": [],
+        "error": "",
+    }
+    if pyodbc is None:
+        status["error"] = OPTIONAL_IMPORT_ERRORS.get("pyodbc", "pyodbc not installed")
+        return status
+    try:
+        drivers = [str(d) for d in pyodbc.drivers()]
+    except Exception as exc:
+        status["error"] = f"cannot list ODBC drivers: {exc}"
+        return status
+    status["drivers"] = drivers
+    status["access_driver_available"] = any(
+        ("Access Driver" in d) or ("ACEODBC" in d.upper())
+        for d in drivers
+    )
+    if not status["access_driver_available"]:
+        status["error"] = "Access ODBC driver not found"
+    return status
+
+
+def evaluate_access_conversion_support(ext):
+    ext_l = str(ext or "").lower().strip()
+    if ext_l not in ACCESS_EXTENSIONS:
+        return {"ready": False, "reason": f"unsupported access extension: {ext_l}"}
+
+    odbc = get_access_odbc_status()
+    mdbtools_ok = has_mdbtools_binaries()
+    converter_ok = convert_access_to_duckdb is not None
+    if not converter_ok:
+        reason = "access_convert module not available"
+    elif ext_l == ".accdb":
+        if not odbc["pyodbc_available"]:
+            reason = "pyodbc missing"
+        elif not odbc["access_driver_available"]:
+            reason = "Access ODBC driver missing"
+        else:
+            reason = ""
+    else:
+        if odbc["pyodbc_available"] and odbc["access_driver_available"]:
+            reason = ""
+        elif mdbtools_ok:
+            reason = ""
+        else:
+            reason = "need pyodbc+Access ODBC or mdbtools for .mdb"
+
+    return {
+        "ready": reason == "",
+        "reason": reason,
+        "converter_available": converter_ok,
+        "odbc": odbc,
+        "mdbtools_available": mdbtools_ok,
     }
 
 
@@ -222,6 +290,8 @@ def get_current_db_context(*, require_selected=False, require_exists=False, allo
 
 def build_admin_status():
     capabilities = get_runtime_capabilities()
+    access_precheck = evaluate_access_conversion_support(".accdb")
+    mdb_precheck = evaluate_access_conversion_support(".mdb")
     ctx = get_current_db_context()
     status = {
         "indexing": False,
@@ -235,6 +305,10 @@ def build_admin_status():
         "capabilities": capabilities,
         "indexer_available": capabilities.get("duckdb_fulltext", False),
         "indexer_error": "",
+        "access_precheck": access_precheck,
+        "mdb_precheck": mdb_precheck,
+        "odbc_enabled": bool(access_precheck.get("odbc", {}).get("pyodbc_available")),
+        "conversion_mode": "odbc_preferred" if access_precheck.get("ready") else "pure_only",
     }
     if not capabilities.get("duckdb_fulltext", False):
         status["indexer_error"] = OPTIONAL_IMPORT_ERRORS.get(
@@ -1237,6 +1311,14 @@ def admin_upload():
     converter = convert_access_to_duckdb
     if ext in (".mdb", ".accdb") and converter is None:
         return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
+    if ext in (".mdb", ".accdb"):
+        precheck = evaluate_access_conversion_support(ext)
+        if not precheck.get("ready"):
+            return jsonify({
+                "error": "Conversao Access indisponivel neste ambiente",
+                "reason": precheck.get("reason", "precheck_failed"),
+                "precheck": precheck,
+            }), 503
     try:
         dest = next_upload_dest(filename)
     except ValueError as exc:
@@ -1261,6 +1343,15 @@ def admin_upload():
             start_access_conversion(dest, out_duckdb, active_converter)
         return jsonify({"ok": True, "status": "converting", "input": str(dest), "output": str(out_duckdb)})
     return jsonify({"error": f"extensão não permitida: {ext}"}), 400
+
+
+@app.route("/admin/access_precheck", methods=["GET"])
+def admin_access_precheck():
+    ext = (request.args.get("ext") or ".accdb").strip().lower()
+    if ext not in ACCESS_EXTENSIONS:
+        return jsonify({"error": f"extensao access invalida: {ext}"}), 400
+    report = evaluate_access_conversion_support(ext)
+    return jsonify({"ok": True, "ext": ext, "precheck": report})
 
 @app.route("/admin/select", methods=["POST"])
 def admin_select():

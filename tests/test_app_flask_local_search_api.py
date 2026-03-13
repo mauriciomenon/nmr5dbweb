@@ -62,6 +62,43 @@ def test_admin_upload_db_seleciona_imediatamente(tmp_path, monkeypatch):
     assert saved_path.read_bytes() == b"duck"
 
 
+def test_admin_upload_accdb_rejeita_quando_precheck_falha(tmp_path, monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "set_db_path", lambda _path: None)
+    monkeypatch.setattr(local_search, "convert_access_to_duckdb", lambda *_args, **_kwargs: (True, "ok"))
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda _ext: {
+            "ready": False,
+            "reason": "pyodbc missing",
+            "converter_available": True,
+            "odbc": {
+                "pyodbc_available": False,
+                "access_driver_available": False,
+                "drivers": [],
+                "error": "pyodbc not installed",
+                "platform": "nt",
+            },
+            "mdbtools_available": False,
+        },
+    )
+
+    resp = client.post(
+        "/admin/upload",
+        data={"file": (BytesIO(b"accdb"), "sample.accdb")},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 503
+    payload = resp.get_json()
+    assert payload["error"] == "Conversao Access indisponivel neste ambiente"
+    assert payload["reason"] == "pyodbc missing"
+    assert payload["precheck"]["ready"] is False
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_admin_list_uploads_retorna_metadados_basicos(tmp_path, monkeypatch):
     client = app.test_client()
     sample = tmp_path / "sample.sqlite3"
@@ -81,6 +118,36 @@ def test_admin_list_uploads_retorna_metadados_basicos(tmp_path, monkeypatch):
     assert payload["uploads"][0]["name"] == "sample.sqlite3"
     assert payload["uploads"][0]["size"] == 4
     assert payload["current_db_exists"] is True
+
+
+def test_admin_access_precheck_retorna_relatorio(monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda ext: {
+            "ready": ext == ".mdb",
+            "reason": "" if ext == ".mdb" else "Access ODBC driver missing",
+            "converter_available": True,
+            "odbc": {
+                "pyodbc_available": True,
+                "access_driver_available": ext == ".mdb",
+                "drivers": ["Microsoft Access Driver (*.mdb, *.accdb)"],
+                "error": "",
+                "platform": "nt",
+            },
+            "mdbtools_available": False,
+        },
+    )
+
+    resp = client.get("/admin/access_precheck?ext=.accdb")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["ext"] == ".accdb"
+    assert payload["precheck"]["ready"] is False
+    assert payload["precheck"]["reason"] == "Access ODBC driver missing"
 
 
 def test_admin_list_uploads_indica_db_inexistente(tmp_path, monkeypatch):

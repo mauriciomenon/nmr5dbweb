@@ -346,14 +346,21 @@ function updateConversionModeText(status) {
     el.textContent = '';
     return;
   }
+  const precheck = status.access_precheck || null;
+  if (precheck && precheck.ready === false) {
+    const reason = precheck.reason || 'ambiente incompleto';
+    el.textContent =
+      'Conversao Access indisponivel neste ambiente: ' + reason + '.';
+    return;
+  }
   const mode = status.conversion_mode || 'odbc_preferred';
   const odbcEnabled = status.odbc_enabled !== false;
   if (!odbcEnabled) {
-    el.textContent = 'Modo atual: ODBC desativado (usando pyaccess_parser).';
+    el.textContent = 'Modo atual: ODBC indisponivel.';
     return;
   }
   if (mode === 'pure_only') {
-    el.textContent = 'Modo atual: conversao pura (sem ODBC).';
+    el.textContent = 'Modo atual: conversao sem ODBC.';
     return;
   }
   el.textContent = 'Modo atual: ODBC preferencial com fallback.';
