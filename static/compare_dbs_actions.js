@@ -445,6 +445,10 @@ function triggerBlobDownload(content, mimeType, filename) {
 function escapeCsvCell(val) {
   if (val === null || typeof val === 'undefined') return '';
   let s = String(val);
+  const trimmed = s.trimStart();
+  if (trimmed && /^[=+\-@]/.test(trimmed)) {
+    s = "'" + s;
+  }
   if (s.includes('"')) s = s.replace(/"/g, '""');
   if (s.includes('"') || s.includes(';') || s.includes('\n') || s.includes('\r')) {
     s = '"' + s + '"';
