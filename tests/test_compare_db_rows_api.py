@@ -256,6 +256,27 @@ def test_api_compare_change_types_empty_returns_400(tmp_path):
     assert resp.get_json()["error"] == "change_types deve conter ao menos um tipo"
 
 
+def test_api_compare_same_db_paths_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    _make_db(db1, [(1, "a")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db1),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "db1_path e db2_path nao podem ser o mesmo arquivo"
+
+
 def test_api_compare_changed_column_outside_compare_columns_returns_400(tmp_path):
     client = app.test_client()
 

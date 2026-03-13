@@ -530,6 +530,10 @@ def validate_compare_db_inputs(db1_path, db2_path, route_name, *, allowed_engine
         "db1_path": Path(db1_path).expanduser().resolve(strict=False),
         "db2_path": Path(db2_path).expanduser().resolve(strict=False),
     }
+    if raw_paths["db1_path"] == raw_paths["db2_path"]:
+        message = "db1_path e db2_path nao podem ser o mesmo arquivo"
+        app.logger.warning("%s: %s", route_name, message)
+        raise ValueError(message)
     missing = []
     not_files = []
     unsupported = []
