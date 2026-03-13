@@ -972,6 +972,12 @@ def _html_cell(value) -> str:
     return html.escape(str(value))
 
 
+def _html_attr(value) -> str:
+    if value is None:
+        return ""
+    return html.escape(str(value), quote=True)
+
+
 def _value_css(row_type: str, line_kind: str, changed: bool) -> str:
     if not changed:
         return ""
@@ -1105,7 +1111,7 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
         key_values = item.get("key_values") or {}
         key_cells = "".join(
             [
-                f"<td data-col='{html.escape(str(col))}' rowspan='2'>{_html_cell(key_values.get(col, ''))}</td>"
+                f"<td data-col='{html.escape(str(col))}' rowspan='2' class='cell-clip' title='{_html_attr(key_values.get(col, ''))}'>{_html_cell(key_values.get(col, ''))}</td>"
                 for col in key_cols
             ]
         )
@@ -1117,13 +1123,11 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
         for col in cols:
             old_css = _value_css(row_type, "old", bool(changed_map.get(col)))
             new_css = _value_css(row_type, "new", bool(changed_map.get(col)))
-            old_class = f" class='{old_css}'" if old_css else ""
-            new_class = f" class='{new_css}'" if new_css else ""
             old_cells.append(
-                f"<td data-col='{html.escape(str(col))}'{old_class}>{_html_cell(old_vals.get(col, ''))}</td>"
+                f"<td data-col='{html.escape(str(col))}' class='cell-clip {old_css}' title='{_html_attr(old_vals.get(col, ''))}'>{_html_cell(old_vals.get(col, ''))}</td>"
             )
             new_cells.append(
-                f"<td data-col='{html.escape(str(col))}'{new_class}>{_html_cell(new_vals.get(col, ''))}</td>"
+                f"<td data-col='{html.escape(str(col))}' class='cell-clip {new_css}' title='{_html_attr(new_vals.get(col, ''))}'>{_html_cell(new_vals.get(col, ''))}</td>"
             )
         status_class = ""
         if row_type == "added":
@@ -1214,16 +1218,18 @@ def render_report_html(payload: dict) -> str:
     .card {{ background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; padding: 16px; margin-bottom: 16px; }}
     h1 {{ margin: 0 0 10px; font-size: 24px; font-weight: 500; }}
     h2 {{ margin: 0 0 8px; font-size: 18px; font-weight: 500; }}
-    .meta {{ color: #4b5563; font-size: 13px; }}
+    .meta {{ color: #4b5563; font-size: 12px; }}
     .meta a {{ color: #1d4ed8; text-decoration: none; }}
     .meta a:hover {{ text-decoration: underline; }}
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 12px; }}
     .kpi {{ display: flex; gap: 12px; flex-wrap: wrap; }}
-    .pill {{ background: #eef2ff; border: 1px solid #c7d2fe; color: #1e3a8a; border-radius: 999px; padding: 6px 10px; font-size: 13px; }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }}
+    .pill {{ background: #eef2ff; border: 1px solid #c7d2fe; color: #1e3a8a; border-radius: 999px; padding: 6px 10px; font-size: 12px; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }}
     th, td {{ border: 1px solid #dbe3ef; padding: 8px; text-align: left; vertical-align: top; }}
     th {{ background: #eff6ff; position: sticky; top: 0; }}
     table.detail th {{ position: static; }}
+    table.detail {{ table-layout: fixed; }}
+    table.detail td.cell-clip {{ max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .value-added {{ color: #0b7a0b; font-weight: 400; }}
     .value-removed {{ color: #c00000; font-weight: 400; }}
     .value-changed {{ color: #7a1f1f; font-weight: 400; }}
