@@ -71,3 +71,21 @@ def test_access_parser_strict_fails_when_no_table_has_rows(tmp_path, monkeypatch
 
     assert ok is False
     assert "no tables converted" in msg
+
+
+def test_access_parser_no_data_errors_are_not_counted_as_skips(tmp_path, monkeypatch):
+    monkeypatch.delenv("NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS", raising=False)
+
+    def parse_impl(table_name):
+        if table_name == "t_bad":
+            raise RuntimeError("table t_bad has no data")
+        return {"id": [1], "name": ["ok"]}
+
+    monkeypatch.setattr(conv, "load_access_parser_module", lambda: (_build_fake_module(parse_impl), None))
+
+    out = tmp_path / "no_data_ok.duckdb"
+    ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=False)
+
+    assert ok is True
+    assert "converted via access-parser" in msg
+    assert "skipped" not in msg

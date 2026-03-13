@@ -26,6 +26,18 @@ def _access_parser_allow_skips() -> bool:
     return raw in ("1", "true", "yes", "on")
 
 
+def _is_access_parser_no_data_error(message: str) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    return (
+        "has no data" in text
+        or "no data" in text
+        or "tabela vazia" in text
+        or "table empty" in text
+    )
+
+
 def _ensure_clean_duckdb(path):
     try:
         if os.path.exists(path):
@@ -261,6 +273,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             dconn = duckdb.connect(duckdb_path)
             converted_tables = 0
             skipped_tables = []
+            no_data_tables = 0
 
             for i, table_name in enumerate(tables):
                 safe_table = str(table_name).replace('"', '""')
@@ -315,6 +328,17 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     )
                 except Exception as e:
                     err_msg = str(e)
+                    if _is_access_parser_no_data_error(err_msg):
+                        no_data_tables += 1
+                        logger.info("Tabela sem dados via access-parser: %s", table_name)
+                        _report(
+                            total_tables=total,
+                            processed_tables=i + 1,
+                            current_table=str(table_name),
+                            percent=int(((i + 1) / total) * 100),
+                            msg="table_no_data",
+                        )
+                        continue
                     logger.warning("Skipping table %s after access-parser error: %s", table_name, err_msg)
                     skipped_tables.append((str(table_name), err_msg))
                     _report(
@@ -337,6 +361,15 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     f"samples: {sample}",
                 )
             if converted_tables == 0 and total > 0:
+                if no_data_tables == total:
+                    _report(
+                        total_tables=total,
+                        processed_tables=total,
+                        current_table="",
+                        percent=100,
+                        msg="converted_no_data",
+                    )
+                    return True, "converted via access-parser (all tables without data)"
                 return False, "access-parser strict mode: no tables converted"
             _report(
                 total_tables=total,
