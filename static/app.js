@@ -2000,9 +2000,8 @@ if (!window.__appSearchFlowBound) {
     const min_score = parseInt($('min_score').value, 10) || null;
     const tablesSel = $('tablesFilter');
     let tablesParam = '';
-    let selectedTables = [];
     if (tablesSel) {
-      selectedTables = Array.from(tablesSel.selectedOptions)
+      const selectedTables = Array.from(tablesSel.selectedOptions)
         .map((o) => o.value)
         .filter(Boolean);
       if (selectedTables.length) {
@@ -2037,7 +2036,6 @@ if (!window.__appSearchFlowBound) {
     if (exportBtn) exportBtn.disabled = true;
     if (!canRunSearchNow()) return;
     const request = buildSearchRequest(q);
-    const per_table = request.per_table;
     lastQuery = q;
     setSearchMeta(`Buscando: "${q}" ...`, '');
     setFlowBanner('Busca em andamento. Aguarde os resultados.', 'info');
@@ -2086,7 +2084,7 @@ if (!window.__appSearchFlowBound) {
         );
       }
       if (exportBtn) exportBtn.disabled = !data.returned_count;
-      renderResults(q, data.results || {}, per_table);
+      renderResults(q, data.results || {}, request.per_table);
     } catch (e) {
       setSearchMeta('Erro na busca.', 'error');
       $('resultsArea').innerHTML =
