@@ -445,6 +445,7 @@ function buildCompareDomainSignals(changedRows) {
 
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
+  if (!summaryEl) return;
   const changedRows = data.rows
     ? data.rows.filter((row) => row.type === 'changed')
     : [];
