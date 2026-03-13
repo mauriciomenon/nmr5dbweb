@@ -148,26 +148,13 @@ const COMPARE_UI_TO_BACKEND_TYPES = {
 };
 
 function collectCompareRequest(page = 1) {
-  const {
-    db1Input,
-    db2Input,
-    tableSelect,
-    keyCols,
-    cmpCols,
-    keyFilterEl,
-    cbChanged,
-    cbAdded,
-    cbRemoved,
-    colSelect,
-    rowLimitEl,
-    rowLimitEnabledEl,
-  } = getCompareFormRefs();
-  const db1 = db1Input ? db1Input.value.trim() : '';
-  const db2 = db2Input ? db2Input.value.trim() : '';
-  const table = tableSelect ? tableSelect.value : '';
-  const keyColsStr = keyCols ? keyCols.value.trim() : '';
-  const cmpColsStr = cmpCols ? cmpCols.value.trim() : '';
-  const keyFilterStr = keyFilterEl ? keyFilterEl.value.trim() : '';
+  const formState = buildCompareFormState();
+  const db1 = String(formState.db1Path || '').trim();
+  const db2 = String(formState.db2Path || '').trim();
+  const table = String(formState.table || '');
+  const keyColsStr = String(formState.keyColumns || '').trim();
+  const cmpColsStr = String(formState.compareColumns || '').trim();
+  const keyFilterStr = String(formState.keyFilter || '').trim();
 
   const key_columns = keyColsStr
     .split(',')
@@ -180,9 +167,9 @@ function collectCompareRequest(page = 1) {
         .filter(Boolean)
     : null;
   let row_limit = null;
-  const limitEnabled = !rowLimitEnabledEl || rowLimitEnabledEl.checked;
-  if (limitEnabled && rowLimitEl) {
-    const raw = String(rowLimitEl.value || '').trim();
+  const limitEnabled = !!formState.rowLimitEnabled;
+  if (limitEnabled) {
+    const raw = String(formState.rowLimit || '').trim();
     if (raw) {
       const parsed = parseInt(raw, 10);
       if (!Number.isNaN(parsed) && parsed >= 1) {
@@ -192,13 +179,13 @@ function collectCompareRequest(page = 1) {
   }
 
   const change_types = [];
-  if (!cbChanged || cbChanged.checked) change_types.push(COMPARE_UI_TO_BACKEND_TYPES.changed);
-  if (!cbAdded || cbAdded.checked)
+  if (formState.filterChanged) change_types.push(COMPARE_UI_TO_BACKEND_TYPES.changed);
+  if (formState.filterAdded)
     change_types.push(COMPARE_UI_TO_BACKEND_TYPES.added);
-  if (!cbRemoved || cbRemoved.checked)
+  if (formState.filterRemoved)
     change_types.push(COMPARE_UI_TO_BACKEND_TYPES.removed);
 
-  const changed_column = colSelect && colSelect.value ? colSelect.value : null;
+  const changed_column = formState.filterColumn ? formState.filterColumn : null;
   const page_size = row_limit || null;
 
   return {
@@ -568,34 +555,13 @@ function buildCompareReportSummary(meta, allRows) {
       if (!valuesDifferent(valueA, valueB)) return;
 
       changedColumnsCount[column] = (changedColumnsCount[column] || 0) + 1;
-
-      const oldBlank = isBlankCompareValue(valueB);
-      const newBlank = isBlankCompareValue(valueA);
-      if (oldBlank !== newBlank) {
-        const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
-        const key = `${column} | ${direction}`;
-        nullTransitions[key] = (nullTransitions[key] || 0) + 1;
-      }
-
-      const numA = toFiniteCompareNumber(valueA);
-      const numB = toFiniteCompareNumber(valueB);
-      if (numA === null || numB === null) return;
-      const delta = numA - numB;
-      const absDelta = Math.abs(delta);
-      if (!absDelta) return;
-      const stat = numericDrift[column] || {
-        count: 0,
-        sumAbsDelta: 0,
-        maxAbsDelta: 0,
-        maxSignedDelta: 0,
-      };
-      stat.count += 1;
-      stat.sumAbsDelta += absDelta;
-      if (absDelta > stat.maxAbsDelta) {
-        stat.maxAbsDelta = absDelta;
-        stat.maxSignedDelta = delta;
-      }
-      numericDrift[column] = stat;
+      updateCompareValueSignals(
+        column,
+        valueA,
+        valueB,
+        nullTransitions,
+        numericDrift
+      );
     });
   });
 

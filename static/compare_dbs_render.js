@@ -283,36 +283,13 @@ function buildCompareValueSignals(data, changedRows) {
       const valueA = (row.a || {})[column];
       const valueB = (row.b || {})[column];
       if (!valuesDifferent(valueA, valueB)) return;
-
-      const oldBlank = isBlankCompareValue(valueB);
-      const newBlank = isBlankCompareValue(valueA);
-      if (oldBlank !== newBlank) {
-        const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
-        const key = `${column} | ${direction}`;
-        nullTransitions[key] = (nullTransitions[key] || 0) + 1;
-      }
-
-      const numA = toFiniteCompareNumber(valueA);
-      const numB = toFiniteCompareNumber(valueB);
-      if (numA === null || numB === null) return;
-
-      const delta = numA - numB;
-      const absDelta = Math.abs(delta);
-      if (!absDelta) return;
-
-      const stat = numericDrift[column] || {
-        count: 0,
-        sumAbsDelta: 0,
-        maxAbsDelta: 0,
-        maxSignedDelta: 0,
-      };
-      stat.count += 1;
-      stat.sumAbsDelta += absDelta;
-      if (absDelta > stat.maxAbsDelta) {
-        stat.maxAbsDelta = absDelta;
-        stat.maxSignedDelta = delta;
-      }
-      numericDrift[column] = stat;
+      updateCompareValueSignals(
+        column,
+        valueA,
+        valueB,
+        nullTransitions,
+        numericDrift
+      );
     });
   });
 

@@ -14,39 +14,8 @@ async function restoreFromSavedState() {
     db1Input,
     db2Input,
     tableSelect,
-    keyCols,
-    cmpCols,
-    keyFilterEl,
-    cbChanged,
-    cbAdded,
-    cbRemoved,
-    colSelect,
-    rowLimitEl,
-    rowLimitEnabledEl,
   } = getCompareFormRefs();
-
-  if (db1Input && typeof saved.db1Path === 'string')
-    db1Input.value = saved.db1Path;
-  if (db2Input && typeof saved.db2Path === 'string')
-    db2Input.value = saved.db2Path;
-  if (keyCols && typeof saved.keyColumns === 'string')
-    keyCols.value = saved.keyColumns;
-  if (cmpCols && typeof saved.compareColumns === 'string')
-    cmpCols.value = saved.compareColumns;
-  if (keyFilterEl && typeof saved.keyFilter === 'string')
-    keyFilterEl.value = saved.keyFilter;
-  if (cbChanged && typeof saved.filterChanged === 'boolean')
-    cbChanged.checked = saved.filterChanged;
-  if (cbAdded && typeof saved.filterAdded === 'boolean')
-    cbAdded.checked = saved.filterAdded;
-  if (cbRemoved && typeof saved.filterRemoved === 'boolean')
-    cbRemoved.checked = saved.filterRemoved;
-  if (colSelect && typeof saved.filterColumn === 'string')
-    colSelect.value = saved.filterColumn;
-  if (rowLimitEl && typeof saved.rowLimit === 'string')
-    rowLimitEl.value = saved.rowLimit;
-  if (rowLimitEnabledEl && typeof saved.rowLimitEnabled === 'boolean')
-    rowLimitEnabledEl.checked = saved.rowLimitEnabled;
+  applyCompareFormState(saved);
 
   compareDbState.tablesLoadedOnce = !!saved.tablesLoadedOnce;
   compareDbState.currentOpenStep = saved.currentOpenStep || 1;

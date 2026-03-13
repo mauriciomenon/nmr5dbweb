@@ -23,6 +23,44 @@ function toFiniteCompareNumber(value) {
   return null;
 }
 
+function updateCompareValueSignals(
+  column,
+  valueA,
+  valueB,
+  nullTransitions,
+  numericDrift
+) {
+  const oldBlank = isBlankCompareValue(valueB);
+  const newBlank = isBlankCompareValue(valueA);
+  if (oldBlank !== newBlank) {
+    const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
+    const key = `${column} | ${direction}`;
+    nullTransitions[key] = (nullTransitions[key] || 0) + 1;
+  }
+
+  const numA = toFiniteCompareNumber(valueA);
+  const numB = toFiniteCompareNumber(valueB);
+  if (numA === null || numB === null) return;
+
+  const delta = numA - numB;
+  const absDelta = Math.abs(delta);
+  if (!absDelta) return;
+
+  const stat = numericDrift[column] || {
+    count: 0,
+    sumAbsDelta: 0,
+    maxAbsDelta: 0,
+    maxSignedDelta: 0,
+  };
+  stat.count += 1;
+  stat.sumAbsDelta += absDelta;
+  if (absDelta > stat.maxAbsDelta) {
+    stat.maxAbsDelta = absDelta;
+    stat.maxSignedDelta = delta;
+  }
+  numericDrift[column] = stat;
+}
+
 function shortValue(v, maxLen = 80) {
   let s;
   try {
@@ -78,6 +116,7 @@ function guessKeyColumnsForTable(tableName, columns) {
 window.valuesDifferent = valuesDifferent;
 window.isBlankCompareValue = isBlankCompareValue;
 window.toFiniteCompareNumber = toFiniteCompareNumber;
+window.updateCompareValueSignals = updateCompareValueSignals;
 window.shortValue = shortValue;
 window.showRowSegment = showRowSegment;
 window.guessKeyColumnsForTable = guessKeyColumnsForTable;
