@@ -149,15 +149,19 @@ async function handleFileUpload(side) {
         data = JSON.parse(rawBody);
       } catch (parseErr) {
         const statusLabel = `${res.status} ${res.statusText}`.trim();
-        throw new Error(
-          `Resposta invalida do servidor no upload (${statusLabel || 'sem status'}).`,
-          { cause: parseErr }
+        const parseError = new Error(
+          `Resposta invalida do servidor no upload (${statusLabel || 'sem status'}).`
         );
+        parseError.parseCause = parseErr;
+        throw parseError;
       }
     }
     if (!res.ok || data.error) {
       const fallbackMsg = res.statusText || `HTTP ${res.status}`;
       throw new Error(data.error || fallbackMsg);
+    }
+    if (!data.db_path && !data.output) {
+      throw new Error('Upload sem caminho de banco retornado pelo servidor.');
     }
     if (data.db_path) {
       pathInput.value = data.db_path;
@@ -167,9 +171,6 @@ async function handleFileUpload(side) {
       pathInput.value = data.output;
       nameSpan.textContent = file.name + ' (carregado)';
       setUploadStatus(`Upload do Banco ${side} concluido com sucesso.`);
-    } else {
-      nameSpan.textContent = file.name + ' (enviado)';
-      setUploadStatus(`Upload do Banco ${side} concluido.`);
     }
     const nextPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
     if (nextPath !== previousPath) {
@@ -184,7 +185,7 @@ async function handleFileUpload(side) {
         localTableSelect.innerHTML =
           '<option value="">carregue os arquivos A e B e clique em "1) Carregar tabelas em comum"</option>';
       }
-      const overviewContainer = document.getElementById('tablesOverviewContainer');
+      const overviewContainer = document.getElementById('tablesOverview');
       if (overviewContainer) {
         overviewContainer.style.display = 'none';
       }
