@@ -227,6 +227,23 @@ function validateCompareRequest(compareRequest) {
     setStepState('stepCompare', 'Chave K faltando', 'warn');
     return false;
   }
+  if (
+    compareRequest &&
+    compareRequest.payload &&
+    Array.isArray(compareRequest.payload.change_types) &&
+    compareRequest.payload.change_types.length === 0
+  ) {
+    setCompareStatus(
+      'Selecione ao menos um tipo de diferenca (alterada, nova ou removida).',
+      'warn'
+    );
+    setFlowHint(
+      'Marque pelo menos um filtro de tipo de diferenca antes de comparar.',
+      'warn'
+    );
+    setStepState('stepCompare', 'Tipo de diferenca nao selecionado', 'warn');
+    return false;
+  }
   return true;
 }
 

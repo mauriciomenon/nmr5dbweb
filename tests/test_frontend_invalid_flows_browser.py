@@ -321,6 +321,29 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert page.locator("#compareViewModeAnchor .pill-btn").count() >= 2
 
 
+def test_invalid_compare_requires_change_type(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id")
+        page.locator("#filterChanged").set_checked(False)
+        page.locator("#filterAdded").set_checked(False)
+        page.locator("#filterRemoved").set_checked(False)
+        page.locator("#runCompareBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusCompare').textContent || '').includes('Selecione ao menos um tipo de diferenca')"
+        )
+        assert "Selecione ao menos um tipo de diferenca" in (
+            page.locator("#statusCompare").text_content() or ""
+        )
+
+
 def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_data, tmp_path):
     with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/compare_dbs")
