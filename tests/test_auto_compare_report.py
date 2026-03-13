@@ -5,6 +5,7 @@ from pathlib import Path
 
 from tools.auto_compare_report import (
     build_table_detail_compact,
+    render_report_html,
     list_candidate_files,
     run_compare_pipeline,
     suggest_two_sources,
@@ -186,3 +187,60 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
         "LLIM6",
         "ITEMNB",
     ]
+
+
+def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> None:
+    payload = {
+        "generated_at": "2026-03-13T15:00:00",
+        "source_a": {
+            "file": "A.accdb",
+            "path": "/tmp/A.accdb",
+            "engine": "access",
+            "size_bytes": 1,
+            "mtime": "2026-03-13T10:00:00",
+            "iso_date": "2026-03-13",
+            "duckdb": "/tmp/A.duckdb",
+            "sqlite": "/tmp/A.sqlite",
+            "steps": ["x"],
+        },
+        "source_b": {
+            "file": "B.accdb",
+            "path": "/tmp/B.accdb",
+            "engine": "access",
+            "size_bytes": 1,
+            "mtime": "2026-03-13T10:00:00",
+            "iso_date": "2026-03-13",
+            "duckdb": "/tmp/B.duckdb",
+            "sqlite": "/tmp/B.sqlite",
+            "steps": ["x"],
+        },
+        "summary": {
+            "total_tables": 1,
+            "same_tables": 0,
+            "diff_tables": 1,
+            "no_key_tables": 0,
+            "error_tables": 0,
+        },
+        "rows": [{"table": "T1", "status": "diff", "row_count_a": 1, "row_count_b": 1, "diff_count": 1}],
+        "table_details": [
+            {
+                "table": "T1",
+                "visible_columns": ["C1"],
+                "rows_total": 1,
+                "rows_returned": 1,
+                "records": [
+                    {
+                        "type": "changed",
+                        "key_text": "ID=1",
+                        "old": {"C1": "OLD"},
+                        "new": {"C1": "NEW"},
+                        "changed": {"C1": True},
+                    }
+                ],
+            }
+        ],
+    }
+    html = render_report_html(payload)
+    assert "value-added" in html
+    assert "value-removed" in html
+    assert "background: #fee2e2" not in html

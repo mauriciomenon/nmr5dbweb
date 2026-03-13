@@ -875,6 +875,18 @@ def _html_cell(value) -> str:
     return html.escape(str(value))
 
 
+def _value_css(row_type: str, line_kind: str, changed: bool) -> str:
+    if not changed:
+        return ""
+    if row_type == "changed":
+        return "value-removed" if line_kind == "old" else "value-added"
+    if row_type == "added" and line_kind == "new":
+        return "value-added"
+    if row_type == "removed" and line_kind == "old":
+        return "value-removed"
+    return ""
+
+
 def _html_table_detail(detail: dict) -> str:
     cols = detail.get("visible_columns") or []
     if not cols:
@@ -890,19 +902,29 @@ def _html_table_detail(detail: dict) -> str:
         old_cells = []
         new_cells = []
         for col in cols:
-            css = "changed-cell" if changed_map.get(col) else ""
-            old_cells.append(f"<td class='{css}'>{_html_cell(old_vals.get(col, ''))}</td>")
-            new_cells.append(f"<td class='{css}'>{_html_cell(new_vals.get(col, ''))}</td>")
+            old_css = _value_css(row_type, "old", bool(changed_map.get(col)))
+            new_css = _value_css(row_type, "new", bool(changed_map.get(col)))
+            old_class = f" class='{old_css}'" if old_css else ""
+            new_class = f" class='{new_css}'" if new_css else ""
+            old_cells.append(f"<td{old_class}>{_html_cell(old_vals.get(col, ''))}</td>")
+            new_cells.append(f"<td{new_class}>{_html_cell(new_vals.get(col, ''))}</td>")
+        status_class = ""
+        if row_type == "added":
+            status_class = " class='value-added'"
+        elif row_type == "removed":
+            status_class = " class='value-removed'"
+        elif row_type == "changed":
+            status_class = " class='value-changed'"
         body_rows.append(
-            "<tr class='old-row'>"
+            "<tr>"
             f"<td rowspan='2'>{key_text}</td>"
-            f"<td rowspan='2'>{html.escape(row_type)}</td>"
+            f"<td rowspan='2'{status_class}>{html.escape(row_type)}</td>"
             "<td>anterior</td>"
             + "".join(old_cells)
             + "</tr>"
         )
         body_rows.append(
-            "<tr class='new-row'>"
+            "<tr>"
             "<td>novo</td>"
             + "".join(new_cells)
             + "</tr>"
@@ -940,7 +962,7 @@ def render_report_html(payload: dict) -> str:
   <meta charset="utf-8" />
   <title>DB Compare Report</title>
   <style>
-    body {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; margin: 24px; color: #1f2937; background: #f8fafc; }}
+    body {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; margin: 24px; color: #1f2937; background: #ffffff; }}
     .wrap {{ max-width: 1200px; margin: 0 auto; }}
     .card {{ background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; padding: 16px; margin-bottom: 16px; }}
     h1 {{ margin: 0 0 10px; font-size: 24px; }}
@@ -953,13 +975,9 @@ def render_report_html(payload: dict) -> str:
     th, td {{ border: 1px solid #dbe3ef; padding: 8px; text-align: left; vertical-align: top; }}
     th {{ background: #eff6ff; position: sticky; top: 0; }}
     table.detail th {{ position: static; }}
-    tr.diff td {{ background: #fff7ed; }}
-    tr.same td {{ background: #f0fdf4; }}
-    tr.warn td {{ background: #fffbeb; }}
-    tr.error td {{ background: #fef2f2; }}
-    tr.old-row td {{ background: #f8fafc; }}
-    tr.new-row td {{ background: #eef6ff; }}
-    td.changed-cell {{ background: #fee2e2 !important; color: #7f1d1d; font-weight: 600; }}
+    .value-added {{ color: #0b7a0b; font-weight: 700; }}
+    .value-removed {{ color: #c00000; font-weight: 700; }}
+    .value-changed {{ color: #7a1f1f; font-weight: 700; }}
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
   </style>
 </head>
