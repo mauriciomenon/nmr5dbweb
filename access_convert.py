@@ -12,14 +12,52 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("access_convert")
-_access_parser_logger = logging.getLogger("access_parser")
-if str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_VERBOSE", "")).strip().lower() not in (
-    "1",
-    "true",
-    "yes",
-    "on",
-):
-    _access_parser_logger.setLevel(logging.WARNING)
+
+
+def _access_parser_verbose_enabled() -> bool:
+    return str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_VERBOSE", "")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+class _AccessParserNoiseFilter(logging.Filter):
+    """Suppresses noisy info lines from access_parser about empty tables."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if _access_parser_verbose_enabled():
+            return True
+        name = str(getattr(record, "name", "") or "")
+        if not name.startswith("access_parser"):
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+        if "has no data" in str(message):
+            return False
+        return True
+
+
+def _configure_access_parser_logging() -> None:
+    if _access_parser_verbose_enabled():
+        return
+    # Reduce generic parser noise by level.
+    logging.getLogger("access_parser").setLevel(logging.WARNING)
+    # Enforce suppression even if parser sets INFO internally.
+    root = logging.getLogger()
+    for handler in root.handlers:
+        has_filter = any(
+            isinstance(existing, _AccessParserNoiseFilter)
+            for existing in getattr(handler, "filters", [])
+        )
+        if not has_filter:
+            handler.addFilter(_AccessParserNoiseFilter())
+
+
+_configure_access_parser_logging()
 
 def _ensure_clean_duckdb(path):
     try:
