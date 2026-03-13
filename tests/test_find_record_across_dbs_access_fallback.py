@@ -1,4 +1,6 @@
 import interface.find_record_across_dbs as track
+import sqlite3
+import duckdb
 
 
 class FakeParser:
@@ -93,3 +95,22 @@ def test_search_in_table_access_sem_odbc_nao_lista_colunas(tmp_path, monkeypatch
     assert found is True
     assert sample is not None
     assert sample["RTUNO"] == 1
+
+
+def test_detect_engine_db_com_header_sqlite(tmp_path):
+    db_path = tmp_path / "sample.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE alpha (id INTEGER)")
+    conn.commit()
+    conn.close()
+
+    assert track.detect_engine(db_path) == "sqlite"
+
+
+def test_detect_engine_db_duckdb_quando_nao_sqlite(tmp_path):
+    db_path = tmp_path / "sample.db"
+    conn = duckdb.connect(str(db_path))
+    conn.execute("CREATE TABLE alpha (id INTEGER)")
+    conn.close()
+
+    assert track.detect_engine(db_path) == "duckdb"

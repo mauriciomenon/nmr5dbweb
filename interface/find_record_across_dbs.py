@@ -182,10 +182,20 @@ def detect_engine(path: Path) -> str:
     if sfx == ".duckdb":
         return "duckdb"
     if sfx in (".sqlite", ".sqlite3", ".db"):
+        if sfx == ".db":
+            return "sqlite" if looks_like_sqlite_file(path) else "duckdb"
         return "sqlite"
     if sfx in (".mdb", ".accdb"):
         return "access"
     return "sqlite"
+
+
+def looks_like_sqlite_file(path: Path) -> bool:
+    try:
+        with Path(path).open("rb") as handle:
+            return handle.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
 
 
 def list_tables_sqlite(path: Path) -> List[str]:
