@@ -52,6 +52,11 @@ function buildCompareSummary(data, rows, changedRows) {
     }
   }
 
+  const sortedColDiff = Object.entries(colDiffCounts).sort((a, b) => b[1] - a[1]);
+  const previewLimit = 12;
+  const shownCols = sortedColDiff.slice(0, previewLimit);
+  const hiddenCols = Math.max(0, sortedColDiff.length - shownCols.length);
+
   return {
     same,
     onlyInDbA,
@@ -59,10 +64,8 @@ function buildCompareSummary(data, rows, changedRows) {
     changed,
     totalKeys,
     netDelta: onlyInDbA - onlyInDbB,
-    colDiffList: Object.entries(colDiffCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([col, count]) => `${col}: ${count}`)
-      .join(', '),
+    colDiffList: shownCols.map(([col, count]) => `${col}: ${count}`).join(', '),
+    colDiffHiddenCount: hiddenCols,
   };
 }
 
@@ -596,7 +599,7 @@ function renderCompareSummary(data, summaryData) {
             <span class="badge changed">±${summaryData.changed} alterados (chave existe em ambos, mas com diferenca)</span>
           </div>
         </div>
-        ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${escapeHtmlText(summaryData.colDiffList)}</div>` : ''}
+        ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${escapeHtmlText(summaryData.colDiffList)}${summaryData.colDiffHiddenCount ? ` · (+${summaryData.colDiffHiddenCount} coluna(s) adicionais)` : ''}</div>` : ''}
         ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.map((item) => escapeHtmlText(item)).join('<br>')}</div>` : ''}
         ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.map((item) => escapeHtmlText(item)).join('<br>')}</div>` : ''}
         ${topKeysHtml ? `<div class="result-col-diff"><strong>Chaves para revisar primeiro:</strong>${topKeysHtml}</div>` : ''}
