@@ -446,7 +446,7 @@ function escapeCsvCell(val) {
   if (val === null || typeof val === 'undefined') return '';
   let s = String(val);
   if (s.includes('"')) s = s.replace(/"/g, '""');
-  if (s.includes(';') || s.includes('\n') || s.includes('\r')) {
+  if (s.includes('"') || s.includes(';') || s.includes('\n') || s.includes('\r')) {
     s = '"' + s + '"';
   }
   return s;

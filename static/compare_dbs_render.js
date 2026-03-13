@@ -326,9 +326,13 @@ function buildCompareDomainRiskSignals(changedRows) {
 
   changedRows.forEach((row, index) => {
     const changedColumns = (row && row.changed_columns) || [];
-    const compareColumns = Object.keys((row || {}).a || {}).concat(
-      Object.keys((row || {}).b || {})
-    );
+    const compareColumns = [
+      ...new Set(
+        Object.keys((row || {}).a || {}).concat(
+          Object.keys((row || {}).b || {})
+        )
+      ),
+    ];
     const diffCols = changedColumns.length
       ? changedColumns
       : compareColumns.filter((column) =>
