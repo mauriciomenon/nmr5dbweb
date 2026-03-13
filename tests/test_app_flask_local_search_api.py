@@ -1082,6 +1082,19 @@ def test_start_access_conversion_repassa_prefer_odbc_false(tmp_path, monkeypatch
     monkeypatch.setattr(local_search, "maybe_start_auto_index", lambda p: calls.setdefault("index_path", str(p)))
     monkeypatch.setattr(
         local_search,
+        "validate_conversion_output",
+        lambda _src, _duck, _sqlite: (
+            True,
+            {"status": "ok", "summary": {"table_issues": 0}, "issues": []},
+        ),
+    )
+    monkeypatch.setattr(
+        local_search,
+        "persist_conversion_validation_report",
+        lambda _report: str(tmp_path / "validation.json"),
+    )
+    monkeypatch.setattr(
+        local_search,
         "convert_status",
         {
             "running": False,
@@ -1137,6 +1150,19 @@ def test_start_access_conversion_repassa_prefer_odbc_true(tmp_path, monkeypatch)
     monkeypatch.setattr(local_search, "maybe_start_auto_index", lambda p: calls.setdefault("index_path", str(p)))
     monkeypatch.setattr(
         local_search,
+        "validate_conversion_output",
+        lambda _src, _duck, _sqlite: (
+            True,
+            {"status": "ok", "summary": {"table_issues": 0}, "issues": []},
+        ),
+    )
+    monkeypatch.setattr(
+        local_search,
+        "persist_conversion_validation_report",
+        lambda _report: str(tmp_path / "validation.json"),
+    )
+    monkeypatch.setattr(
+        local_search,
         "convert_status",
         {
             "running": False,
@@ -1166,6 +1192,104 @@ def test_start_access_conversion_repassa_prefer_odbc_true(tmp_path, monkeypatch)
     assert calls["prefer_odbc"] is True
     assert calls["db_path"] == str(output)
     assert calls["index_path"] == str(output)
+
+
+def test_start_access_conversion_falha_quando_validacao_reprova(tmp_path, monkeypatch):
+    source = tmp_path / "sample.accdb"
+    output = tmp_path / "sample.duckdb"
+    source.write_bytes(b"access")
+    calls = {}
+
+    class FakeThread:
+        def __init__(self, target=None, daemon=False):
+            self.target = target
+            self.daemon = daemon
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            if self.target is not None:
+                self.target()
+
+    monkeypatch.setattr(local_search.threading, "Thread", FakeThread)
+    monkeypatch.setattr(local_search, "should_prefer_odbc_for_conversion", lambda: False)
+    monkeypatch.setattr(local_search, "set_db_path", lambda p: calls.setdefault("db_path", p))
+    monkeypatch.setattr(local_search, "maybe_start_auto_index", lambda p: calls.setdefault("index_path", str(p)))
+    monkeypatch.setattr(
+        local_search,
+        "validate_conversion_output",
+        lambda _src, _duck, _sqlite: (
+            False,
+            {
+                "status": "failed",
+                "summary": {"table_issues": 2, "sample_mismatches": 1},
+                "issues": ["sample_mismatch:T_A:offset=10"],
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        local_search,
+        "persist_conversion_validation_report",
+        lambda _report: str(tmp_path / "validation_failed.json"),
+    )
+    monkeypatch.setattr(
+        local_search,
+        "convert_status",
+        {
+            "running": False,
+            "ok": None,
+            "msg": "",
+            "input": "",
+            "output": "",
+            "total_tables": 0,
+            "processed_tables": 0,
+            "current_table": "",
+            "percent": 0,
+            "validation": {},
+            "validation_report": "",
+        },
+    )
+
+    def fake_converter(src, dst, chunk_size=0, progress_callback=None, prefer_odbc=None):
+        calls["src"] = src
+        calls["dst"] = dst
+        calls["chunk_size"] = chunk_size
+        calls["prefer_odbc"] = prefer_odbc
+        return True, "converted via access-parser"
+
+    local_search.start_access_conversion(source, output, fake_converter)
+
+    assert calls["prefer_odbc"] is False
+    assert "db_path" not in calls
+    assert local_search.convert_status["ok"] is False
+    assert local_search.convert_status["msg"] == "conversion_validation_failed"
+    assert local_search.convert_status["validation"]["status"] == "failed"
+    assert local_search.convert_status["validation_report"].endswith(
+        "validation_failed.json"
+    )
+
+
+def test_validate_conversion_output_sucesso_em_base_minima(tmp_path):
+    source = tmp_path / "sample.accdb"
+    duck_path = tmp_path / "sample.duckdb"
+    sqlite_path = tmp_path / "sample.sqlite"
+    source.write_bytes(b"access")
+
+    conn = duckdb.connect(str(duck_path))
+    conn.execute("CREATE TABLE T1 (id INTEGER, name VARCHAR)")
+    conn.execute("INSERT INTO T1 VALUES (1, 'a'), (2, 'b'), (3, 'c')")
+    conn.close()
+
+    ok, report = local_search.validate_conversion_output(source, duck_path, sqlite_path)
+
+    assert ok is True
+    assert report["status"] == "ok"
+    assert report["summary"]["duckdb_tables"] == 1
+    assert report["summary"]["sqlite_tables"] == 1
+    assert report["summary"]["table_issues"] == 0
+    assert report["summary"]["sample_mismatches"] == 0
+    assert sqlite_path.exists()
 
 
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):

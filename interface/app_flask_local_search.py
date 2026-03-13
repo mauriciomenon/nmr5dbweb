@@ -21,6 +21,7 @@ import shutil
 import sqlite3
 import threading
 import importlib.util
+import math
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
@@ -113,7 +114,9 @@ convert_status = {
     "total_tables": 0,
     "processed_tables": 0,
     "current_table": "",
-    "percent": 0
+    "percent": 0,
+    "validation": {},
+    "validation_report": "",
 }
 convert_thread = None
 
@@ -1002,6 +1005,10 @@ def build_access_conversion_output(filename):
     return UPLOAD_DIR / f"{Path(filename).stem}.duckdb"
 
 
+def build_access_conversion_sqlite_output(filename):
+    return UPLOAD_DIR / f"{Path(filename).stem}.sqlite"
+
+
 def find_access_shadow_duckdb(db_path):
     """Retorna o DuckDB derivado de um Access selecionado, quando existir."""
     try:
@@ -1038,6 +1045,259 @@ def maybe_start_auto_index(db_path):
         index_thread.start()
 
 
+def _list_duckdb_tables_for_validation(conn):
+    rows = conn.execute("SHOW TABLES").fetchall()
+    tables = []
+    for row in rows:
+        name = str(row[0])
+        low = name.lower()
+        if low.startswith("duckdb_") or low.startswith("sqlite_"):
+            continue
+        if low == "_fulltext":
+            continue
+        tables.append(name)
+    return sorted(tables)
+
+
+def _list_sqlite_tables_for_validation(conn):
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    return [str(row[0]) for row in rows if str(row[0]).lower() != "_fulltext"]
+
+
+def _map_duck_to_sqlite_type(dtype):
+    t = str(dtype or "").upper()
+    if any(token in t for token in ("INT", "HUGEINT", "UBIGINT")):
+        return "INTEGER"
+    if any(token in t for token in ("DOUBLE", "FLOAT", "REAL", "DECIMAL", "NUMERIC")):
+        return "REAL"
+    if any(token in t for token in ("BLOB", "BYTEA", "BINARY")):
+        return "BLOB"
+    return "TEXT"
+
+
+def _duckdb_to_sqlite_file(duckdb_path, sqlite_path):
+    src = None
+    dst = None
+    try:
+        if sqlite_path.exists():
+            sqlite_path.unlink()
+        src = duckdb.connect(str(duckdb_path), read_only=True)
+        dst = sqlite3.connect(str(sqlite_path))
+        tables = _list_duckdb_tables_for_validation(src)
+        if not tables:
+            return False, "duckdb sem tabelas de usuario"
+        for table in tables:
+            info_rows = src.execute(f"PRAGMA table_info({quote_identifier(table)})").fetchall()
+            columns = [str(row[1]) for row in info_rows]
+            types = [_map_duck_to_sqlite_type(str(row[2] or "")) for row in info_rows]
+            if not columns:
+                continue
+            create_cols = ", ".join(
+                f"{quote_identifier(col)} {col_type}" for col, col_type in zip(columns, types)
+            )
+            dst.execute(f"DROP TABLE IF EXISTS {quote_identifier(table)}")
+            dst.execute(f"CREATE TABLE {quote_identifier(table)} ({create_cols})")
+
+            col_list = ", ".join(quote_identifier(col) for col in columns)
+            query = src.execute(f"SELECT {col_list} FROM {quote_identifier(table)}")
+            insert_sql = (
+                f"INSERT INTO {quote_identifier(table)} ({col_list}) VALUES ("
+                + ", ".join(["?"] * len(columns))
+                + ")"
+            )
+            while True:
+                chunk = query.fetchmany(2000)
+                if not chunk:
+                    break
+                dst.executemany(insert_sql, chunk)
+        dst.commit()
+        return True, "duckdb_to_sqlite_ok"
+    except Exception as exc:
+        return False, f"duckdb_to_sqlite_failed: {exc}"
+    finally:
+        try:
+            if src is not None:
+                src.close()
+        except Exception:
+            pass
+        try:
+            if dst is not None:
+                dst.close()
+        except Exception:
+            pass
+
+
+def _normalize_sample_value(value):
+    if value is None:
+        return None
+    if isinstance(value, memoryview):
+        value = bytes(value)
+    if isinstance(value, (bytes, bytearray)):
+        return {"bytes_hex": bytes(value).hex()}
+    if isinstance(value, bool):
+        return 1 if value else 0
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        if math.isnan(value):
+            return "NaN"
+        if math.isinf(value):
+            return "Infinity" if value > 0 else "-Infinity"
+        return format(value, ".15g")
+    return str(value)
+
+
+def _build_sample_offsets(total_rows, max_points=9):
+    if total_rows <= 0:
+        return []
+    if total_rows <= max_points:
+        return list(range(total_rows))
+    idxs = {0, total_rows - 1}
+    for i in range(1, max_points - 1):
+        idx = int(round(i * (total_rows - 1) / (max_points - 1)))
+        idxs.add(max(0, min(total_rows - 1, idx)))
+    return sorted(idxs)
+
+
+def _build_validation_report_path(stamp):
+    reports_dir = UPLOAD_DIR / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    report_file = reports_dir / f"conversion_validation_{stamp}.json"
+    latest_file = reports_dir / "latest_conversion_validation.json"
+    return report_file, latest_file
+
+
+def validate_conversion_output(source_path, duckdb_path, sqlite_path):
+    report = {
+        "generated_at": datetime.now().isoformat(),
+        "source_path": str(source_path),
+        "duckdb_path": str(duckdb_path),
+        "sqlite_path": str(sqlite_path),
+        "status": "failed",
+        "issues": [],
+        "summary": {
+            "duckdb_tables": 0,
+            "sqlite_tables": 0,
+            "common_tables": 0,
+            "table_issues": 0,
+            "sample_checked": 0,
+            "sample_mismatches": 0,
+        },
+    }
+
+    if not duckdb_path.exists():
+        report["issues"].append("duckdb_output_missing")
+        return False, report
+
+    ok_sqlite, sqlite_msg = _duckdb_to_sqlite_file(duckdb_path, sqlite_path)
+    if not ok_sqlite:
+        report["issues"].append(sqlite_msg)
+        return False, report
+
+    dconn = None
+    sconn = None
+    try:
+        dconn = duckdb.connect(str(duckdb_path), read_only=True)
+        sconn = sqlite3.connect(str(sqlite_path))
+        duck_tables = _list_duckdb_tables_for_validation(dconn)
+        sqlite_tables = _list_sqlite_tables_for_validation(sconn)
+        duck_set = set(duck_tables)
+        sqlite_set = set(sqlite_tables)
+        common_tables = sorted(duck_set & sqlite_set)
+        missing_in_sqlite = sorted(duck_set - sqlite_set)
+        extra_in_sqlite = sorted(sqlite_set - duck_set)
+        report["summary"]["duckdb_tables"] = len(duck_tables)
+        report["summary"]["sqlite_tables"] = len(sqlite_tables)
+        report["summary"]["common_tables"] = len(common_tables)
+
+        if missing_in_sqlite:
+            report["issues"].append(
+                "missing_tables_in_sqlite: " + ", ".join(missing_in_sqlite[:20])
+            )
+        if extra_in_sqlite:
+            report["issues"].append(
+                "extra_tables_in_sqlite: " + ", ".join(extra_in_sqlite[:20])
+            )
+
+        table_issues = 0
+        sample_checked = 0
+        sample_mismatches = 0
+        for table in common_tables:
+            duck_columns = get_table_columns_duckdb_conn(dconn, table)
+            sqlite_columns = get_table_columns_sqlite_conn(sconn, table)
+            if duck_columns != sqlite_columns:
+                table_issues += 1
+                report["issues"].append(f"column_mismatch:{table}")
+                continue
+            duck_count = int(
+                dconn.execute(
+                    f"SELECT COUNT(*) FROM {quote_identifier(table)}"
+                ).fetchone()[0]
+            )
+            sqlite_count = int(
+                sconn.execute(
+                    f"SELECT COUNT(*) FROM {quote_identifier(table)}"
+                ).fetchone()[0]
+            )
+            if duck_count != sqlite_count:
+                table_issues += 1
+                report["issues"].append(
+                    f"row_count_mismatch:{table}:{duck_count}!={sqlite_count}"
+                )
+                continue
+            for offset in _build_sample_offsets(duck_count):
+                sample_checked += 1
+                duck_row = dconn.execute(
+                    f"SELECT * FROM {quote_identifier(table)} LIMIT 1 OFFSET ?",
+                    [offset],
+                ).fetchone()
+                sqlite_row = sconn.execute(
+                    f"SELECT * FROM {quote_identifier(table)} LIMIT 1 OFFSET ?",
+                    (offset,),
+                ).fetchone()
+                norm_duck = [_normalize_sample_value(v) for v in (duck_row or [])]
+                norm_sqlite = [_normalize_sample_value(v) for v in (sqlite_row or [])]
+                if norm_duck != norm_sqlite:
+                    sample_mismatches += 1
+                    if sample_mismatches <= 20:
+                        report["issues"].append(f"sample_mismatch:{table}:offset={offset}")
+                    break
+
+        report["summary"]["table_issues"] = table_issues
+        report["summary"]["sample_checked"] = sample_checked
+        report["summary"]["sample_mismatches"] = sample_mismatches
+        if not report["issues"]:
+            report["status"] = "ok"
+            return True, report
+        report["status"] = "failed"
+        return False, report
+    except Exception as exc:
+        report["issues"].append(f"validation_exception:{exc}")
+        return False, report
+    finally:
+        try:
+            if dconn is not None:
+                dconn.close()
+        except Exception:
+            pass
+        try:
+            if sconn is not None:
+                sconn.close()
+        except Exception:
+            pass
+
+
+def persist_conversion_validation_report(report):
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_file, latest_file = _build_validation_report_path(stamp)
+    payload = json.dumps(report, ensure_ascii=True, indent=2)
+    report_file.write_text(payload, encoding="utf-8")
+    latest_file.write_text(payload, encoding="utf-8")
+    return str(report_file)
+
+
 def should_prefer_odbc_for_conversion():
     return os.name == "nt"
 
@@ -1063,11 +1323,26 @@ def start_access_conversion(source_path, output_path, converter):
                 progress_callback=progress_cb,
                 prefer_odbc=should_prefer_odbc_for_conversion(),
             )
+            validation_report = {}
+            validation_path = ""
+            if ok:
+                sqlite_output = build_access_conversion_sqlite_output(source_path.name)
+                validation_ok, validation_report = validate_conversion_output(
+                    source_path,
+                    output_path,
+                    sqlite_output,
+                )
+                validation_path = persist_conversion_validation_report(validation_report)
+                if not validation_ok:
+                    ok = False
+                    msg = "conversion_validation_failed"
             with convert_lock:
                 convert_status["running"] = False
                 convert_status["ok"] = bool(ok)
                 convert_status["msg"] = msg
                 convert_status["percent"] = 100 if ok else convert_status.get("percent", 0)
+                convert_status["validation"] = dict(validation_report)
+                convert_status["validation_report"] = validation_path
             if ok:
                 set_db_path(str(output_path))
                 maybe_start_auto_index(output_path)
@@ -1076,6 +1351,8 @@ def start_access_conversion(source_path, output_path, converter):
                 convert_status["running"] = False
                 convert_status["ok"] = False
                 convert_status["msg"] = f"exception: {exc}"
+                convert_status["validation"] = {}
+                convert_status["validation_report"] = ""
 
     convert_thread = threading.Thread(target=run_convert, daemon=True)
     convert_thread.start()
@@ -1833,7 +2110,8 @@ def admin_upload():
             convert_status.update({
                 "running": True, "ok": None, "msg": "started",
                 "input": str(dest), "output": str(out_duckdb),
-                "total_tables": 0, "processed_tables": 0, "current_table": "", "percent": 0
+                "total_tables": 0, "processed_tables": 0, "current_table": "", "percent": 0,
+                "validation": {}, "validation_report": "",
             })
             start_access_conversion(dest, out_duckdb, active_converter)
         return jsonify({"ok": True, "status": "converting", "input": str(dest), "output": str(out_duckdb)})
@@ -1896,6 +2174,8 @@ def admin_select():
                     "processed_tables": 0,
                     "current_table": "",
                     "percent": 0,
+                    "validation": {},
+                    "validation_report": "",
                 })
                 start_access_conversion(fpath, out_duckdb, active_converter)
             return jsonify({
