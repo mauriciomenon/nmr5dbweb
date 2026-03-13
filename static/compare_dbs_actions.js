@@ -633,6 +633,38 @@ function buildCompareReportSummary(meta, allRows) {
       label: item.label,
       detail: item.detail,
     }));
+  const recommendedActions = [];
+  if (blankKeyRows > 0) {
+    recommendedActions.push(
+      `Revisar ${blankKeyRows} linha(s) com chave incompleta antes de consolidar a comparacao.`
+    );
+  }
+  if (duplicateKeyRows > 0) {
+    recommendedActions.push(
+      `Revisar ${duplicateKeyRows} ocorrencia(s) de chave duplicada no recorte comparado.`
+    );
+  }
+  if (impactedPct >= 25) {
+    recommendedActions.push(
+      `Volume de mudanca alto (${Number(impactedPct.toFixed(1))}%). Priorizar validacao por lote antes de aplicar.`
+    );
+  }
+  if (topStateTransitions.length > 0) {
+    const topTransition = topStateTransitions[0];
+    recommendedActions.push(
+      `Validar transicao dominante "${topTransition.transition}" (${topTransition.count} ocorrencia(s)).`
+    );
+  }
+  if (topPriorityAnomalies.length > 0) {
+    recommendedActions.push(
+      `Comecar pela anomalia de maior score: ${topPriorityAnomalies[0].label}.`
+    );
+  }
+  if (recommendedActions.length === 0) {
+    recommendedActions.push(
+      'Sem sinal critico no recorte atual; manter monitoramento por amostragem.'
+    );
+  }
 
   let priority = 'baixa';
   if (impactedPct >= 50 || byType.changed >= 10) {
@@ -662,6 +694,7 @@ function buildCompareReportSummary(meta, allRows) {
     top_null_transitions: topNullTransitions,
     top_numeric_drift: topNumericDrift,
     top_priority_anomalies: topPriorityAnomalies,
+    recommended_actions: recommendedActions.slice(0, 6),
   };
 }
 
