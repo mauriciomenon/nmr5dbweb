@@ -62,7 +62,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 ## Quando precisam estar juntos?
 
 - Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade, compare e rastreio):
-  - Necessários: `app_flask_local_search.py`, `create_fulltext.py`, `utils.py` e os assets em `static/`.
+  - Necessarios: `app_flask_local_search.py`, `compare_dbs.py`, `find_record_across_dbs.py`, `create_fulltext.py`, `utils.py` e os assets em `static/`.
   - O `check_progress.py` é opcional (diagnóstico).
   - `access_convert.py` é opcional, porém necessário para conversão de `.mdb/.accdb` para `.duckdb` via UI.
   - `pyodbc` é opcional (apenas para fallback Access).
