@@ -1950,22 +1950,28 @@ if (!window.__appSearchFlowBound) {
     }
   };
 
+  const selectDbByName = async (name, closeOnSuccess) => {
+    const msg = $('uploadMsg');
+    if (msg) msg.textContent = 'Selecionando: ' + name;
+    try {
+      const response = await requestSelectDb(name);
+      await handleSelectDbResult(name, msg, response, closeOnSuccess);
+    } catch (e) {
+      if (msg) msg.textContent = 'Erro ao selecionar DB';
+      setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
+      logUi('ERROR', 'select db falhou');
+    }
+  };
+
   const selectUpload = async (nameEnc, btn) => {
     const name = decodeURIComponent(nameEnc);
-    const msg = $('uploadMsg');
     const restoreBtn = setBusyButton(
       btn,
       'Selecionando...',
       btn ? btn.textContent : 'Selecionar'
     );
-    if (msg) msg.textContent = 'Selecionando: ' + name;
     try {
-      const j = await requestSelectDb(name);
-      await handleSelectDbResult(name, msg, j, true);
-    } catch (e) {
-      if (msg) msg.textContent = 'Erro ao selecionar DB';
-      setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-      logUi('ERROR', 'select db falhou');
+      await selectDbByName(name, true);
     } finally {
       restoreBtn();
     }
@@ -1973,16 +1979,7 @@ if (!window.__appSearchFlowBound) {
 
   const selectDbFromTab = async (nameEnc) => {
     const name = decodeURIComponent(nameEnc);
-    const msg = $('uploadMsg');
-    if (msg) msg.textContent = 'Selecionando: ' + name;
-    try {
-      const j = await requestSelectDb(name);
-      await handleSelectDbResult(name, msg, j, false);
-    } catch (e) {
-      if (msg) msg.textContent = 'Erro ao selecionar DB';
-      setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-      logUi('ERROR', 'select db falhou');
-    }
+    await selectDbByName(name, false);
   };
 
   const blockSearch = (metaText, bannerText) => {
