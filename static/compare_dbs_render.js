@@ -532,6 +532,39 @@ function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
   };
 }
 
+function buildCompareRecommendedActions(summaryData, anomalySignals, valueSignals, riskSignals) {
+  const actions = [];
+  const impactedPct = Number(summaryData && summaryData.totalKeys)
+    ? ((Number(summaryData.changed || 0) + Number(summaryData.onlyInDbA || 0) + Number(summaryData.onlyInDbB || 0)) /
+        Number(summaryData.totalKeys)) *
+      100
+    : 0;
+
+  if ((anomalySignals.highImpact || []).length) {
+    actions.push(
+      `Revisar primeiro as chaves com alto impacto (topo da lista de anomalias prioritarias).`
+    );
+  }
+  if ((riskSignals.topRiskRows || []).length) {
+    actions.push(`Validar manualmente as chaves com risco operacional acima de 3.`);
+  }
+  if ((valueSignals.topNullTransitions || []).length) {
+    actions.push(`Conferir transicoes de vazio/preenchido antes de promover alteracoes.`);
+  }
+  if ((valueSignals.topNumericDrift || []).length) {
+    actions.push(`Auditar os maiores deltas numericos para evitar regressao de valores.`);
+  }
+  if (impactedPct >= 25) {
+    actions.push(
+      `Volume de mudanca alto (${impactedPct.toFixed(1)}%). Executar validacao por lote antes de aplicar em producao.`
+    );
+  }
+  if (!actions.length) {
+    actions.push('Sem sinal critico no recorte atual; manter monitoramento por amostragem.');
+  }
+  return actions.slice(0, 6);
+}
+
 function buildPriorityAnomalyItems(
   anomalySignals,
   riskSignals,
@@ -657,6 +690,12 @@ function renderCompareSummary(data, summaryData) {
   const valueSignals = buildCompareValueSignals(data, changedRows);
   const severitySignals = buildCompareSeveritySignals(
     summaryData,
+    valueSignals,
+    riskSignals
+  );
+  const recommendedActions = buildCompareRecommendedActions(
+    summaryData,
+    anomalySignals,
     valueSignals,
     riskSignals
   );
@@ -801,6 +840,13 @@ function renderCompareSummary(data, summaryData) {
         )
         .join('')}</div>`
     : '';
+  const recommendedActionsHtml = recommendedActions.length
+    ? `<div class="result-col-diff"><strong>Acoes recomendadas:</strong>${recommendedActions
+        .map(
+          (action) => `<div class="report-review-item"><span>${safe(action)}</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -828,6 +874,7 @@ function renderCompareSummary(data, summaryData) {
         ${transitionsHtml ? `<div class="result-col-diff"><strong>Transicoes de estado observadas:</strong>${transitionsHtml}</div>` : ''}
         <div class="result-col-diff"><strong>Indice de divergencia:</strong> ${changedDensity}% das chaves por status alterado</div>
         <div class="result-col-diff"><strong>Prioridade de revisao:</strong> <span class="badge ${severitySignals.badgeClass}">${safe(severitySignals.label)}</span> ${safe(severitySignals.reasonText)}</div>
+        ${recommendedActionsHtml}
         ${priorityAnomaliesHtml}
         ${anomalyHighImpactHtml}
         ${anomalyColsHtml}
