@@ -347,23 +347,43 @@ function updateConversionModeText(status) {
     return;
   }
   const precheck = status.access_precheck || null;
+  const backendPreferred = status.conversion_backend_preferred || '';
+  const backendLast = status.conversion_backend_last || '';
+  const lastText = backendLast
+    ? `Ultima conversao: ${backendLast}. `
+    : '';
   if (precheck && precheck.ready === false) {
     const reason = precheck.reason || 'ambiente incompleto';
     el.textContent =
-      'Conversao Access indisponivel neste ambiente: ' + reason + '.';
+      lastText + 'Conversao Access indisponivel neste ambiente: ' + reason + '.';
+    return;
+  }
+  if (backendPreferred === 'odbc') {
+    el.textContent =
+      lastText + 'Modo atual: ODBC preferencial com fallback.';
+    return;
+  }
+  if (backendPreferred === 'access_parser') {
+    el.textContent =
+      lastText + 'Modo atual: access-parser (sem dependencia de ODBC).';
+    return;
+  }
+  if (backendPreferred === 'mdbtools') {
+    el.textContent =
+      lastText + 'Modo atual: mdbtools (suporte principal para .mdb).';
     return;
   }
   const mode = status.conversion_mode || 'odbc_preferred';
   const odbcEnabled = status.odbc_enabled !== false;
   if (!odbcEnabled) {
-    el.textContent = 'Modo atual: ODBC indisponivel.';
+    el.textContent = lastText + 'Modo atual: ODBC indisponivel.';
     return;
   }
   if (mode === 'pure_only') {
-    el.textContent = 'Modo atual: conversao sem ODBC.';
+    el.textContent = lastText + 'Modo atual: conversao sem ODBC.';
     return;
   }
-  el.textContent = 'Modo atual: ODBC preferencial com fallback.';
+  el.textContent = lastText + 'Modo atual: ODBC preferencial com fallback.';
 }
 
 function updatePrimaryHint(status, showHint) {
@@ -1845,6 +1865,24 @@ if (!window.__appSearchFlowBound) {
     });
   };
 
+  const handleSelectDbResult = async (name, msg, response, closeOnSuccess) => {
+    if (response && response.ok) {
+      if (msg) msg.textContent = 'DB selecionado: ' + name;
+      manualFlowOverride = '';
+      setFlowBanner('', '');
+      await refreshUiState();
+      if (closeOnSuccess) closeModal();
+      return;
+    }
+    const err = (response && response.error) || 'falha ao selecionar';
+    if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
+    setFlowBanner(
+      'Nao foi possivel selecionar o arquivo. Tente novamente.',
+      'error'
+    );
+    logUi('ERROR', 'select db falhou');
+  };
+
   const deleteUpload = async (nameEnc, btn) => {
     if (!confirm('Deseja realmente excluir este arquivo?')) return;
     const name = decodeURIComponent(nameEnc);
@@ -1893,21 +1931,7 @@ if (!window.__appSearchFlowBound) {
     if (msg) msg.textContent = 'Selecionando: ' + name;
     try {
       const j = await requestSelectDb(name);
-      if (j && j.ok) {
-        if (msg) msg.textContent = 'DB selecionado: ' + name;
-        manualFlowOverride = '';
-        setFlowBanner('', '');
-        await refreshUiState();
-        closeModal();
-      } else {
-        const err = (j && j.error) || 'falha ao selecionar';
-        if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-        setFlowBanner(
-          'Nao foi possivel selecionar o arquivo. Tente novamente.',
-          'error'
-        );
-        logUi('ERROR', 'select db falhou');
-      }
+      await handleSelectDbResult(name, msg, j, true);
     } catch (e) {
       if (msg) msg.textContent = 'Erro ao selecionar DB';
       setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
@@ -1923,20 +1947,7 @@ if (!window.__appSearchFlowBound) {
     if (msg) msg.textContent = 'Selecionando: ' + name;
     try {
       const j = await requestSelectDb(name);
-      if (j && j.ok) {
-        if (msg) msg.textContent = 'DB selecionado: ' + name;
-        manualFlowOverride = '';
-        setFlowBanner('', '');
-        await refreshUiState();
-      } else {
-        const err = (j && j.error) || 'falha ao selecionar';
-        if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-        setFlowBanner(
-          'Nao foi possivel selecionar o arquivo. Tente novamente.',
-          'error'
-        );
-        logUi('ERROR', 'select db falhou');
-      }
+      await handleSelectDbResult(name, msg, j, false);
     } catch (e) {
       if (msg) msg.textContent = 'Erro ao selecionar DB';
       setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');

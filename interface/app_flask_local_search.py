@@ -279,6 +279,37 @@ def evaluate_access_conversion_support(ext):
     }
 
 
+def get_conversion_backend_preferred(accdb_precheck, mdb_precheck):
+    accdb_precheck = accdb_precheck or {}
+    mdb_precheck = mdb_precheck or {}
+    accdb_odbc_ready = bool(
+        accdb_precheck.get("odbc", {}).get("pyodbc_available")
+        and accdb_precheck.get("odbc", {}).get("access_driver_available")
+    )
+    if accdb_odbc_ready:
+        return "odbc"
+    if bool(accdb_precheck.get("access_parser_available")):
+        return "access_parser"
+    if bool(mdb_precheck.get("mdbtools_available")):
+        return "mdbtools"
+    return "unavailable"
+
+
+def parse_conversion_backend_from_msg(message):
+    text = str(message or "").strip().lower()
+    if not text:
+        return ""
+    if "via pyodbc" in text:
+        return "pyodbc"
+    if "via pypyodbc" in text:
+        return "pypyodbc"
+    if "via mdbtools" in text:
+        return "mdbtools"
+    if "via access-parser" in text:
+        return "access_parser"
+    return ""
+
+
 def get_persisted_db_path():
     return str(cfg.get("db_path") or "")
 
@@ -322,6 +353,10 @@ def build_admin_status():
         "mdb_precheck": mdb_precheck,
         "odbc_enabled": bool(access_precheck.get("odbc", {}).get("pyodbc_available")),
         "conversion_mode": "odbc_preferred" if access_precheck.get("ready") else "pure_only",
+        "conversion_backend_preferred": get_conversion_backend_preferred(
+            access_precheck, mdb_precheck
+        ),
+        "conversion_backend_last": "",
     }
     if not capabilities.get("duckdb_fulltext", False):
         status["indexer_error"] = OPTIONAL_IMPORT_ERRORS.get(
@@ -332,6 +367,9 @@ def build_admin_status():
             status["indexing"] = True
     with convert_lock:
         status["conversion"] = dict(convert_status)
+    status["conversion_backend_last"] = parse_conversion_backend_from_msg(
+        status.get("conversion", {}).get("msg")
+    )
     status["priority_tables"] = cfg.get("priority_tables", [])
     status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
 

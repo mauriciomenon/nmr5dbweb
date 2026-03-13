@@ -266,6 +266,14 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     assert payload["capabilities"]["duckdb_fulltext"] in {True, False}
     assert payload["capabilities"]["access_conversion"] in {True, False}
     assert payload["capabilities"]["access_fallback"] in {True, False}
+    assert payload["capabilities"]["access_parser_available"] in {True, False}
+    assert payload["conversion_backend_preferred"] in {
+        "odbc",
+        "access_parser",
+        "mdbtools",
+        "unavailable",
+    }
+    assert isinstance(payload["conversion_backend_last"], str)
     assert isinstance(payload["indexer_available"], bool)
     if payload["indexer_available"]:
         assert payload["indexer_error"] == ""
