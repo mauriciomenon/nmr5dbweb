@@ -23,8 +23,9 @@ import html
 import os
 import re
 import sqlite3
-from decimal import Decimal
+from contextlib import closing
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import Sequence
 
@@ -378,7 +379,7 @@ def convert_duckdb_to_sqlite(duck_path: Path, sqlite_path: Path) -> tuple[bool, 
     try:
         if sqlite_path.exists():
             sqlite_path.unlink()
-        with duckdb.connect(str(duck_path), read_only=True) as src, sqlite3.connect(str(sqlite_path)) as dst:
+        with duckdb.connect(str(duck_path), read_only=True) as src, closing(sqlite3.connect(str(sqlite_path))) as dst:
             tables = _list_duck_tables(src)
             if not tables:
                 return False, "duckdb sem tabelas de usuario"
@@ -415,7 +416,7 @@ def convert_sqlite_to_duckdb(sqlite_path: Path, duckdb_path: Path) -> tuple[bool
     try:
         if duckdb_path.exists():
             duckdb_path.unlink()
-        with sqlite3.connect(str(sqlite_path)) as scon, duckdb.connect(str(duckdb_path)) as dcon:
+        with closing(sqlite3.connect(str(sqlite_path))) as scon, duckdb.connect(str(duckdb_path)) as dcon:
             tables = _list_sqlite_tables(scon)
             if not tables:
                 return False, "sqlite sem tabelas de usuario"
