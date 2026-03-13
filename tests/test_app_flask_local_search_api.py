@@ -756,6 +756,84 @@ def test_admin_select_access_resolve_para_duckdb_derivado(tmp_path, monkeypatch)
     assert selected == [str(duck_path.resolve())]
 
 
+def test_admin_select_access_sem_derivado_inicia_conversao(tmp_path, monkeypatch):
+    client = app.test_client()
+    selected = []
+    started = {}
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "set_db_path", selected.append)
+    monkeypatch.setattr(local_search, "convert_access_to_duckdb", object())
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda _ext: {"ready": True, "reason": "", "odbc": {}, "access_parser_available": True},
+    )
+    monkeypatch.setattr(
+        local_search,
+        "start_access_conversion",
+        lambda src, out, _converter: started.update({"src": str(src), "out": str(out)}),
+    )
+    monkeypatch.setitem(local_search.convert_status, "running", False)
+
+    resp = client.post("/admin/select", json={"filename": "sample.accdb"})
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["ok"] is True
+    assert payload["status"] == "converting"
+    assert payload["input"] == str(access_path)
+    assert payload["output"] == str(tmp_path / "sample.duckdb")
+    assert payload["resolved_from_access"] is False
+    assert started == {"src": str(access_path), "out": str(tmp_path / "sample.duckdb")}
+    assert selected == []
+
+
+def test_admin_select_access_sem_derivado_rejeita_quando_precheck_falha(tmp_path, monkeypatch):
+    client = app.test_client()
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda _ext: {
+            "ready": False,
+            "reason": "need pyodbc+Access ODBC or access-parser for .accdb",
+            "odbc": {"pyodbc_available": False, "access_driver_available": False},
+            "access_parser_available": False,
+        },
+    )
+
+    resp = client.post("/admin/select", json={"filename": "sample.accdb"})
+
+    assert resp.status_code == 503
+    payload = resp.get_json()
+    assert payload["error"] == "Conversao Access indisponivel neste ambiente"
+    assert payload["reason"] == "need pyodbc+Access ODBC or access-parser for .accdb"
+    assert payload["precheck"]["ready"] is False
+
+
+def test_admin_select_access_sem_derivado_rejeita_conversao_em_execucao(tmp_path, monkeypatch):
+    client = app.test_client()
+    access_path = tmp_path / "sample.accdb"
+    access_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "convert_access_to_duckdb", object())
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda _ext: {"ready": True, "reason": "", "odbc": {}, "access_parser_available": True},
+    )
+    monkeypatch.setitem(local_search.convert_status, "running", True)
+
+    resp = client.post("/admin/select", json={"filename": "sample.accdb"})
+
+    assert resp.status_code == 409
+    assert resp.get_json()["error"] == "Já existe uma conversão em execução"
+
+
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):
     active_db = tmp_path / "active.duckdb"
     route_db = tmp_path / "route.duckdb"

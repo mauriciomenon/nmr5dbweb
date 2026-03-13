@@ -1614,11 +1614,49 @@ def admin_select():
     selected_path = str(fpath)
     resolved_path = selected_path
     resolved_from_access = False
-    if fpath.suffix.lower() in ACCESS_EXTENSIONS:
+    ext = fpath.suffix.lower()
+    if ext in ACCESS_EXTENSIONS:
         shadow_duckdb = find_access_shadow_duckdb(selected_path)
         if shadow_duckdb:
             resolved_path = shadow_duckdb
             resolved_from_access = True
+        else:
+            precheck = evaluate_access_conversion_support(ext)
+            if not precheck.get("ready"):
+                return jsonify({
+                    "error": "Conversao Access indisponivel neste ambiente",
+                    "reason": precheck.get("reason", "precheck_failed"),
+                    "precheck": precheck,
+                }), 503
+            with convert_lock:
+                if convert_status.get("running"):
+                    return jsonify({"error": "Já existe uma conversão em execução"}), 409
+                active_converter = convert_access_to_duckdb
+                if active_converter is None:
+                    return jsonify({
+                        "error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"
+                    }), 500
+                out_duckdb = build_access_conversion_output(fpath.name)
+                convert_status.update({
+                    "running": True,
+                    "ok": None,
+                    "msg": "started",
+                    "input": str(fpath),
+                    "output": str(out_duckdb),
+                    "total_tables": 0,
+                    "processed_tables": 0,
+                    "current_table": "",
+                    "percent": 0,
+                })
+                start_access_conversion(fpath, out_duckdb, active_converter)
+            return jsonify({
+                "ok": True,
+                "status": "converting",
+                "input": str(fpath),
+                "output": str(out_duckdb),
+                "selected_path": selected_path,
+                "resolved_from_access": False,
+            })
     set_db_path(resolved_path)
     return jsonify({
         "ok": True,
