@@ -4,17 +4,29 @@ import json
 
 import pytest
 import sqlite3
-from playwright.sync_api import sync_playwright
-from playwright._impl._errors import Error as PlaywrightError
-from werkzeug.serving import make_server
+try:
+    from werkzeug.serving import make_server
+except ImportError:  # pragma: no cover
+    make_server = None
 
 try:
     import duckdb
 except ImportError:  # pragma: no cover
     duckdb = None
 
+try:
+    from playwright.sync_api import sync_playwright
+    from playwright._impl._errors import Error as PlaywrightError
+except ImportError:  # pragma: no cover
+    sync_playwright = None
+    PlaywrightError = Exception
+
 if duckdb is None:
     pytest.skip("duckdb ausente, testes de UI com backend duckdb ignorados", allow_module_level=True)
+if sync_playwright is None:
+    pytest.skip("playwright nao instalado para testes de navegador", allow_module_level=True)
+if make_server is None:
+    pytest.skip("werkzeug nao instalado para servir app no teste de UI", allow_module_level=True)
 
 import interface.app_flask_local_search as local_search
 
