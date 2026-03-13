@@ -85,6 +85,8 @@ ALLOWED_EXTENSIONS = {".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"}
 ACCESS_EXTENSIONS = {".mdb", ".accdb"}
 SQLITE_EXTENSIONS = {".sqlite", ".sqlite3"}
 DUCKDB_EXTENSIONS = {".duckdb"}
+COMPARE_PAGE_SIZE_DEFAULT = 100
+COMPARE_PAGE_SIZE_MAX = 1000
 
 # Conversion & index state
 convert_lock = threading.Lock()
@@ -272,7 +274,26 @@ def normalize_priority_tables(value):
 
 
 def parse_enabled_flag(data, field_name="enabled"):
-    return bool((data or {}).get(field_name, False))
+    """Converte um campo booleano da requisicao com validação explicita."""
+    if not isinstance(data, dict):
+        raise ValueError(f"{field_name} invalido")
+    if field_name not in data:
+        raise ValueError(f"{field_name} e obrigatorio")
+
+    value = data.get(field_name)
+    if isinstance(value, bool):
+        return value
+    if value in (0, 1):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "t", "yes", "on", "ativado", "sim", "s", "v"}:
+            return True
+        if normalized in {"0", "false", "f", "no", "off", "desativado", "nao", "n"}:
+            return False
+    if value is None:
+        raise ValueError(f"{field_name} e obrigatorio")
+    raise ValueError(f"{field_name} precisa ser um booleano valido")
 
 
 def list_existing_record_dirs():
@@ -301,7 +322,13 @@ def list_directory_roots():
 
 
 def list_child_directories(base_path):
-    path = Path(base_path)
+    if not isinstance(base_path, str):
+        raise ValueError("base_path deve ser texto")
+    if "\x00" in base_path:
+        raise ValueError("base_path possui caractere invalido")
+
+    path = Path(base_path).expanduser()
+    path = path.resolve(strict=False)
     if not path.exists() or not path.is_dir():
         raise ValueError(f"diretorio invalido: {base_path}")
 
@@ -1253,7 +1280,10 @@ def admin_set_auto_index():
     Usado pelo toggle "Auto indexacao apos conversao (Access)" na interface.
     """
     data = request.get_json() or {}
-    enabled = parse_enabled_flag(data)
+    try:
+        enabled = parse_enabled_flag(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     cfg["auto_index_after_convert"] = enabled
     save_config(cfg)
     return jsonify({"ok": True, "auto_index_after_convert": enabled})
@@ -1407,7 +1437,7 @@ def api_compare_db_rows():
     key_filter_str = (data.get("key_filter") or "").strip()
     change_types = data.get("change_types")
     changed_column = (data.get("changed_column") or "").strip() or None
-    page = data.get("page") or 1
+    page = data.get("page", 1)
     page_size = data.get("page_size")
 
     try:
@@ -1441,9 +1471,9 @@ def api_compare_db_rows():
     try:
         page = int(page)
     except (TypeError, ValueError):
-        page = 1
+        return jsonify({"error": "page deve ser um inteiro"}), 400
     if page < 1:
-        page = 1
+        return jsonify({"error": "page deve ser maior ou igual a 1"}), 400
 
     if page_size is not None:
         try:
@@ -1452,12 +1482,20 @@ def api_compare_db_rows():
             return jsonify({"error": "page_size deve ser um inteiro"}), 400
         if page_size < 1:
             return jsonify({"error": "page_size deve ser maior ou igual a 1"}), 400
+        if page_size > COMPARE_PAGE_SIZE_MAX:
+            return jsonify({
+                "error": "page_size deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX,
+            }), 400
     else:
         # se não informado, usamos row_limit (quando houver) ou um padrão seguro
         if isinstance(row_limit, int) and row_limit > 0:
+            if row_limit > COMPARE_PAGE_SIZE_MAX:
+                return jsonify({
+                    "error": "row_limit deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX,
+                }), 400
             page_size = row_limit
         else:
-            page_size = 100
+            page_size = COMPARE_PAGE_SIZE_DEFAULT
 
     # valida opcionalmente a lista de tipos de mudança
     valid_types = {"added", "removed", "changed"}

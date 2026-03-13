@@ -193,6 +193,37 @@ def test_admin_set_auto_index_persiste_valor(monkeypatch):
     assert saved[-1]["auto_index_after_convert"] is True
 
 
+def test_admin_set_auto_index_aceita_false_como_texto(monkeypatch):
+    client = app.test_client()
+    saved = []
+    monkeypatch.setattr(local_search, "save_config", lambda data: saved.append(dict(data)))
+
+    resp = client.post("/admin/set_auto_index", json={"enabled": "false"})
+
+    assert resp.status_code == 200
+    assert resp.get_json()["auto_index_after_convert"] is False
+    assert local_search.cfg["auto_index_after_convert"] is False
+    assert saved[-1]["auto_index_after_convert"] is False
+
+
+def test_admin_set_auto_index_rejeita_valor_invalido(monkeypatch):
+    client = app.test_client()
+
+    resp = client.post("/admin/set_auto_index", json={"enabled": "talvez"})
+
+    assert resp.status_code == 400
+    assert "booleano valido" in resp.get_json()["error"]
+
+
+def test_admin_set_auto_index_rejeita_campo_obrigatorio(monkeypatch):
+    client = app.test_client()
+
+    resp = client.post("/admin/set_auto_index", json={})
+
+    assert resp.status_code == 400
+    assert "obrigatorio" in resp.get_json()["error"]
+
+
 def test_admin_set_priority_normaliza_lista(monkeypatch):
     client = app.test_client()
     saved = []
@@ -242,6 +273,15 @@ def test_api_browse_dirs_rejeita_diretorio_invalido(tmp_path):
 
     assert resp.status_code == 400
     assert "diretorio invalido" in resp.get_json()["error"]
+
+
+def test_api_browse_dirs_rejeita_path_malformado():
+    client = app.test_client()
+
+    resp = client.get("/api/browse_dirs?path=%00")
+
+    assert resp.status_code == 400
+    assert "caractere invalido" in resp.get_json()["error"]
 
 
 def test_api_browse_dirs_lista_subdiretorios_e_has_db(tmp_path):

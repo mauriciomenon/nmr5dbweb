@@ -584,3 +584,74 @@ def test_api_compare_pagination_uses_full_diff_set(monkeypatch, tmp_path):
     assert data_page_2["page"] == 2
     assert data_page_1["rows"][0]["key"]["id"] == 2
     assert data_page_2["rows"][0]["key"]["id"] == 2
+
+
+def test_api_compare_page_invalid_returns_400():
+    client = app.test_client()
+    db1 = Path("/tmp/db1.duckdb")
+    db2 = Path("/tmp/db2.duckdb")
+    db1.touch()
+    db2.touch()
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "page": "abc",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "page deve ser um inteiro"
+
+
+def test_api_compare_page_size_excessivo_eh_rejeitado(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+    monkeypatch.setattr(local_search, "compare_table_duckdb_paged", lambda *_args, **_kwargs: {})
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "page_size": 5000,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "page_size deve ser no maximo" in resp.get_json()["error"]
+
+
+def test_api_compare_row_limit_muito_alto_eh_rejeitado(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+    monkeypatch.setattr(local_search, "compare_table_duckdb_paged", lambda *_args, **_kwargs: {})
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "row_limit": 5000,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "row_limit deve ser no maximo" in resp.get_json()["error"]
