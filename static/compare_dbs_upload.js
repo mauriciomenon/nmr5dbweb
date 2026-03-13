@@ -142,9 +142,22 @@ async function handleFileUpload(side) {
 
   try {
     const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-    const data = await res.json();
+    const rawBody = await res.text();
+    let data = {};
+    if (rawBody) {
+      try {
+        data = JSON.parse(rawBody);
+      } catch (parseErr) {
+        const statusLabel = `${res.status} ${res.statusText}`.trim();
+        throw new Error(
+          `Resposta invalida do servidor no upload (${statusLabel || 'sem status'}).`,
+          { cause: parseErr }
+        );
+      }
+    }
     if (!res.ok || data.error) {
-      throw new Error(data.error || res.statusText);
+      const fallbackMsg = res.statusText || `HTTP ${res.status}`;
+      throw new Error(data.error || fallbackMsg);
     }
     if (data.db_path) {
       pathInput.value = data.db_path;

@@ -79,12 +79,14 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=True))
         return 5
 
+    temporary_output = False
     if args.output:
         out = Path(args.output).resolve()
     else:
         fd, tmp_name = tempfile.mkstemp(prefix="accdb_smoke_", suffix=".duckdb")
         os.close(fd)
         out = Path(tmp_name)
+        temporary_output = True
     if out == src:
         result["details"] = "output_equals_input_not_allowed"
         result["output"] = str(out)
@@ -97,12 +99,22 @@ def main() -> int:
     ok, msg = convert_access_to_duckdb(str(src), str(out), prefer_odbc=True)
     result["details"] = str(msg)
     if not ok or not out.exists():
+        if temporary_output and out.exists():
+            try:
+                out.unlink()
+            except OSError:
+                pass
         print(json.dumps(result, ensure_ascii=True))
         return 6
 
     tables = list_tables(out)
     result["table_count"] = len(tables)
     if not tables:
+        if temporary_output and out.exists():
+            try:
+                out.unlink()
+            except OSError:
+                pass
         result["details"] = "converted_without_user_tables"
         print(json.dumps(result, ensure_ascii=True))
         return 7

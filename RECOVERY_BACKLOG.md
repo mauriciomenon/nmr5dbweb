@@ -60,6 +60,11 @@ Track real product debt that should not be fixed in the current slice.
 30. Revisit forced-columns policy per table (for example SOSTAT/SOANLG) to keep operator readability without hiding real changed columns.
 31. Keep conversion validation visibility coherent between runtime `/admin/status` and generated validation artifacts to avoid contradictory operator signals.
 32. Add a short release checklist item to always sync control docs (`ROUND_STATUS.md`, `HANDOFF.md`, `PROJECT_STRUCTURE.md`, `interface/README.md`) after each completed feature slice.
+33. Keep triaging PR bot comments by impact and scope, separating:
+   - short-slice reliability/security fixes (do now)
+   - broad complexity/style debt in large modules (defer unless explicit scope)
+34. Re-check compare upload error handling when backend/proxy returns HTML or empty body, and keep frontend behavior stable for operators.
+35. Re-check Windows smoke temporary artifact cleanup in future runs where conversion fails before table listing.
 
 ## Do Not Pull Into Slice 1
 

@@ -2,6 +2,12 @@
 
 Este diretório contém o backend Flask e utilitários para busca local em bases DuckDB (com fallback opcional para Access via ODBC) e a construção do índice `_fulltext`.
 
+## Atualizacao rapida (2026-03-13)
+
+- O contexto de PR ativo para este produto e `mauriciomenon/nmr5dbweb` PR `#2` (`codex/dev` -> `master`).
+- O cliente de comparacao agora trata resposta de upload invalida (nao JSON) sem quebrar o fluxo de erro na UI.
+- O smoke Windows de conversao Access remove arquivo temporario de saida quando a conversao falha ou nao gera tabelas de usuario.
+
 ## Componentes
 
 - `app_flask_local_search.py`: Backend Flask completo para operação local.

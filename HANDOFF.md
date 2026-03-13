@@ -1,5 +1,15 @@
 # Handoff
 
+## Latest Round Update (2026-03-13)
+
+- Active product repo validated as `mauriciomenon/nmr5dbweb`.
+- Active PR context validated as `#2` on this repo (`codex/dev` -> `master`).
+- The similarly numbered PR in `allysonalmeidaa/mdb2sql_fork` is closed and is not the working PR for this product branch.
+- Latest reliability patch already pushed in this cycle before this note: `4112773`.
+- Current short-slice hardening added:
+  - safe non-JSON handling in compare upload flow (`static/compare_dbs_upload.js`)
+  - cleanup of temporary output file in Windows Access smoke failure paths (`tools/windows_access_smoke.py`)
+
 ## Current Context
 
 This repo is being turned from a student fork into a product-owned repository.

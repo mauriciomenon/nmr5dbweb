@@ -1,5 +1,52 @@
 # Round Status
 
+## Current Slice: PR Triage And Reliability Guard Rails (2026-03-13)
+
+### Goal
+
+1. Sync control docs with the real repository and real open PR target.
+2. Apply only low-risk reliability fixes in active compare/upload and Windows smoke paths.
+3. Separate real PR findings from broad legacy noise.
+
+### Applied
+
+1. Confirmed PR context for this repo:
+   - repo: `mauriciomenon/nmr5dbweb`
+   - PR: `#2` (`codex/dev` -> `master`)
+   - state: `OPEN`
+2. Implemented low-risk reliability fixes:
+   - `static/compare_dbs_upload.js`:
+     - upload response now handles non-JSON body safely
+     - clearer HTTP fallback error message
+   - `tools/windows_access_smoke.py`:
+     - temporary output cleanup on conversion failure or empty-table result
+3. Updated control docs requested in this conversation:
+   - `ROUND_STATUS.md`
+   - `HANDOFF.md`
+   - `PROJECT_STRUCTURE.md`
+   - `RECOVERY_BACKLOG.md`
+   - `interface/README.md`
+
+### Validation After Changes
+
+- `uv run python -m py_compile tools/windows_access_smoke.py`: passed
+- `uv run ruff check tools/windows_access_smoke.py`: passed
+- `pnpm -s eslint static/compare_dbs_upload.js`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_access_conversion_windows_smoke.py`: `1 skipped` (expected outside Windows)
+
+### Real Pending Vs Noise (Current)
+
+1. Real pending (actionable, small):
+   - keep handling unstable/non-JSON upload responses in compare flow (done in this slice)
+   - keep Windows smoke temp artifacts bounded on failure paths (done in this slice)
+2. Large legacy debt (not a short-slice blocker):
+   - broad qlty complexity/returns warnings on large backend files
+   - broad bandit/qlty heuristics on dynamic SQL areas already constrained by identifier validation
+3. External checks status during this slice:
+   - `DeepScan`: failing in current run
+   - `qlty`: pending in current run
+   - `cubic`: pending in current run
+
 ## Current Slice: Auto Compare Report Hardening And Operator Readability
 
 ### Goal

@@ -4,6 +4,13 @@
 
 Map the current product structure in a stable way so future rounds can update this file instead of rediscovering the repo each time.
 
+## Latest Snapshot (2026-03-13)
+
+- Product PR context for active development is on `mauriciomenon/nmr5dbweb` PR `#2` (`codex/dev` -> `master`).
+- The `allysonalmeidaa/mdb2sql_fork` PR `#2` context is not the active product PR flow.
+- Compare upload flow now tolerates invalid/non-JSON upload responses without crashing the client logic (`static/compare_dbs_upload.js`).
+- Windows Access smoke path now removes temporary output files on failure states (`tools/windows_access_smoke.py`).
+
 ## Top Level
 
 - `main.py`
