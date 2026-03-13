@@ -65,6 +65,10 @@ Track real product debt that should not be fixed in the current slice.
    - broad complexity/style debt in large modules (defer unless explicit scope)
 34. Re-check compare upload error handling when backend/proxy returns HTML or empty body, and keep frontend behavior stable for operators.
 35. Re-check Windows smoke temporary artifact cleanup in future runs where conversion fails before table listing.
+36. Decide whether `tools/windows_access_smoke.py` should auto-delete temporary output after successful conversion when `--output` is omitted.
+37. Decide whether compare upload should treat empty success payload as hard error (`/admin/upload` response without usable path fields).
+38. Keep triaging `DeepScan` "2 new" findings and classify real bug vs analyzer limitation before broad refactor.
+39. Keep permanent docs free of transient PR/branch references to avoid stale operational guidance.
 
 ## Do Not Pull Into Slice 1
 

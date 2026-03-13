@@ -1,5 +1,70 @@
 # Round Status
 
+## Current Slice: Hard PR Comment Triage And Targeted Fixes (2026-03-13)
+
+### Goal
+
+1. Resolve high-impact bot findings first (data fidelity, stale state, export safety).
+2. Keep patches minimal and behavior-preserving.
+3. Keep control docs synchronized with the true repository state.
+
+### Applied
+
+1. Compare and render hardening:
+   - `static/compare_dbs_render.js`
+     - escaped summary fragments used in `innerHTML`
+     - explicit side-value routing for `added`/`removed` row sections
+   - `static/compare_dbs_upload.js`
+     - robust non-JSON upload response handling
+     - reset stale compare payload/meta when A/B path changes
+     - restore table selection from saved `table` key
+     - reset stale tables-overview cache/visibility on DB change
+   - `static/compare_dbs_actions.js`
+     - CSV formula injection neutralization for values starting with `=`, `+`, `-`, `@`
+2. Conversion and startup reliability:
+   - `access_convert.py`
+     - strict mode no longer rejects valid all-empty user tables
+     - strict mode still fails when there are real skipped tables
+   - `main.py`
+     - clearer split between `EADDRINUSE` and generic startup `OSError`
+   - `tools/windows_access_smoke.py`
+     - output guard and temporary cleanup in failure/no-table paths
+3. Report conversion/cache path:
+   - `tools/auto_compare_report.py`
+     - explicit sqlite handle close
+     - local timezone mtime output
+     - safer derived-cache rebuild sequence to avoid wiping last good derivative on transient open failures
+
+### Commits In This Slice Sequence
+
+- `4112773` fix(compare): sanitize diff html, reset stale payload, and harden smoke output guard
+- `6fc1fbc` fix(docs+compare): sync control docs and harden upload/smoke error paths
+- `f16ca0f` fix(report): keep source mtime in local timezone
+- `95d601a` fix(report): close sqlite handles explicitly in conversion paths
+- `8fe3843` fix(core): harden rendering escapes, conversion strictness, and bind error handling
+- `3aeb628` fix(review): address hard bot findings in compare state/render and report cache
+- `8f230c8` fix(review): resolve hard findings on strict conversion, overview cache, and startup errors
+- `4844060` fix(compare-csv): neutralize spreadsheet formula injection payloads
+
+### Validation After Changes
+
+- `pnpm -s eslint static/compare_dbs_render.js static/compare_dbs_upload.js static/compare_dbs_actions.js`: passed
+- `uv run python -m py_compile access_convert.py tools/auto_compare_report.py main.py tests/test_main_port_fallback.py`: passed
+- `uv run ruff check access_convert.py tools/auto_compare_report.py main.py tests/test_main_port_fallback.py`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_main_port_fallback.py tests/test_access_convert_parser_strict.py tests/test_auto_compare_report.py`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: passed
+- browser compare smoke (`tests/test_frontend_invalid_flows_browser.py -k "compare_page or compare_pagination_and_export"`): passed
+- windows smoke test remains environment-gated outside Windows: expected skip
+
+### Real Pending Vs Legacy Noise (Now)
+
+1. Real pending:
+   - decide whether `tools/windows_access_smoke.py` should auto-delete temp output after success when `--output` is omitted
+   - decide whether empty successful upload responses should be treated as hard error in compare upload flow
+2. Legacy/noise still outside short patch scope:
+   - `qlty` blocking set is mostly structural complexity/returns debt in large legacy modules
+   - broad `bandit/qlty` heuristic flags around dynamic SQL construction where identifier validation already exists
+
 ## Current Slice: PR Triage And Reliability Guard Rails (2026-03-13)
 
 ### Goal

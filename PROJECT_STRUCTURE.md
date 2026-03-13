@@ -6,10 +6,13 @@ Map the current product structure in a stable way so future rounds can update th
 
 ## Latest Snapshot (2026-03-13)
 
-- Product PR context for active development is on `mauriciomenon/nmr5dbweb` PR `#2` (`codex/dev` -> `master`).
-- The `allysonalmeidaa/mdb2sql_fork` PR `#2` context is not the active product PR flow.
-- Compare upload flow now tolerates invalid/non-JSON upload responses without crashing the client logic (`static/compare_dbs_upload.js`).
-- Windows Access smoke path now removes temporary output files on failure states (`tools/windows_access_smoke.py`).
+- Compare upload flow tolerates invalid/non-JSON upload responses and resets stale compare/overview state when DB A/B changes (`static/compare_dbs_upload.js`).
+- Compare export flow now neutralizes spreadsheet formula payloads on CSV output (`static/compare_dbs_actions.js`).
+- Compare row rendering now keeps explicit source-side routing for added/removed row value blocks (`static/compare_dbs_render.js`).
+- Access conversion strict mode now treats valid all-empty user tables as successful conversion while still failing on real skipped-table scenarios (`access_convert.py`).
+- Auto compare report conversion now avoids deleting previous derivatives before source reopen/validation and keeps explicit sqlite handle close (`tools/auto_compare_report.py`).
+- Windows Access smoke path keeps temporary output cleanup on failure/no-table results and guards output==input (`tools/windows_access_smoke.py`).
+- Startup path distinguishes bind-in-use from generic OS startup errors (`main.py`).
 
 ## Top Level
 

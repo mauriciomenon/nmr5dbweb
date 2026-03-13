@@ -2,13 +2,18 @@
 
 ## Latest Round Update (2026-03-13)
 
-- Active product repo validated as `mauriciomenon/nmr5dbweb`.
-- Active PR context validated as `#2` on this repo (`codex/dev` -> `master`).
-- The similarly numbered PR in `allysonalmeidaa/mdb2sql_fork` is closed and is not the working PR for this product branch.
-- Latest reliability patch already pushed in this cycle before this note: `4112773`.
-- Current short-slice hardening added:
-  - safe non-JSON handling in compare upload flow (`static/compare_dbs_upload.js`)
-  - cleanup of temporary output file in Windows Access smoke failure paths (`tools/windows_access_smoke.py`)
+- Control docs synchronized after hard PR-comment triage.
+- Latest reliability/security commits in sequence:
+  - `3aeb628` compare state/render + report cache fixes
+  - `8f230c8` strict conversion, overview cache, startup error semantics
+  - `4844060` CSV formula-injection neutralization in compare export
+- Current compare/report/operator path now includes:
+  - safer upload state reset for A/B swaps
+  - stale overview cache reset on DB pair change
+  - explicit added/removed side-value routing in row rendering
+  - safer derived-cache rebuild path for auto compare report
+  - strict conversion behavior that accepts valid all-empty-table Access DBs
+  - startup error messaging split between bind-in-use and generic OS startup failures
 
 ## Current Context
 

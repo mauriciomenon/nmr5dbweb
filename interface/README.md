@@ -4,9 +4,10 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 ## Atualizacao rapida (2026-03-13)
 
-- O contexto de PR ativo para este produto e `mauriciomenon/nmr5dbweb` PR `#2` (`codex/dev` -> `master`).
 - O cliente de comparacao agora trata resposta de upload invalida (nao JSON) sem quebrar o fluxo de erro na UI.
+- O cliente de comparacao agora reseta estado stale (payload/meta, tabelas e overview em cache) quando o par de DBs muda.
 - O smoke Windows de conversao Access remove arquivo temporario de saida quando a conversao falha ou nao gera tabelas de usuario.
+- O export CSV da comparacao agora neutraliza payloads que poderiam ser interpretados como formula em planilhas.
 
 ## Componentes
 
