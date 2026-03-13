@@ -12,6 +12,14 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("access_convert")
+_access_parser_logger = logging.getLogger("access_parser")
+if str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_VERBOSE", "")).strip().lower() not in (
+    "1",
+    "true",
+    "yes",
+    "on",
+):
+    _access_parser_logger.setLevel(logging.WARNING)
 
 def _ensure_clean_duckdb(path):
     try:

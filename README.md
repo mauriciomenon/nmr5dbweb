@@ -267,6 +267,15 @@ uv run python tools/run_validation_pipeline.py \
   --skip-benchmark
 ```
 
+Observacao operacional:
+- por padrao, logs detalhados do `access_parser` ficam reduzidos para evitar ruido em conversoes grandes.
+- para habilitar log completo temporariamente:
+
+```bash
+NMR5DBWEB_ACCESS_PARSER_VERBOSE=1 \
+uv run python tools/run_validation_pipeline.py --input-dir output --out-root artifacts/validation --skip-benchmark
+```
+
 ---
 
 ## Uso (CLI)
