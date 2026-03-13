@@ -1,5 +1,49 @@
 # Round Status
 
+## Current Slice: PR Hard Comments Frontend Async/Modal Guard (2026-03-13)
+
+### Goal
+
+1. Resolve hard frontend review comments with real runtime risk first.
+2. Keep patch minimal and behavior-preserving.
+3. Confirm no regression in browser flow.
+
+### Applied
+
+1. `main.py`
+   - preserve `UPLOAD_FOLDER` precedence as `CLI > env > default`.
+2. `tests/test_main_port_fallback.py`
+   - added regression test for env override preservation when `--upload-folder` is omitted.
+3. `static/app.js`
+   - added `.catch()` for async `/client/log` telemetry posts to avoid unhandled rejection noise.
+   - added source-modal guard in delayed close timers to avoid closing a new modal opened after timer scheduling.
+4. `static/app_bootstrap_actions.js`
+   - auto-index toggle now uses guarded async request (`apiJSON` + `try/catch`) with consistent UI error feedback.
+5. `static/app_bootstrap_modals.js`
+   - `openSearchWorkspace` now awaits `refreshStatus()` before focus/select on `q`.
+   - updated call sites to await the async flow.
+
+### Commits In This Slice Sequence
+
+- `9d03576` fix(startup): normalize upload folder env and assert no-fallback message
+- `6d65a20` fix(startup): preserve UPLOAD_FOLDER env when flag is omitted
+- `2b7a50b` fix(ui): harden modal timing and async log/index handlers
+
+### Validation After Changes
+
+- `uv run python -m py_compile main.py tests/test_main_port_fallback.py`: passed
+- `uv run ruff check main.py tests/test_main_port_fallback.py`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_main_port_fallback.py`: `7 passed`
+- `pnpm -s eslint static/app.js static/app_bootstrap_actions.js static/app_bootstrap_modals.js`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_frontend_invalid_flows_browser.py`: `18 passed`
+
+### Real Pending Vs Noise (Now)
+
+1. Real pending:
+   - wait for fresh PR checks (`DeepScan`, `qlty`) and triage only new, still-valid findings.
+2. Noise/legacy:
+   - broad complexity/style debt in large legacy modules remains outside this short patch scope.
+
 ## Current Slice: Hard PR Comment Triage And Targeted Fixes (2026-03-13)
 
 ### Goal

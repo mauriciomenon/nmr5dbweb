@@ -4,6 +4,9 @@
 
 - Control docs synchronized after hard PR-comment triage.
 - Latest reliability/security commits in sequence:
+  - `2b7a50b` frontend hardening for async logging, modal timer guards, and index-toggle error flow
+  - `6d65a20` startup precedence fix for `UPLOAD_FOLDER` env override
+  - `9d03576` startup env normalization + fallback output assertion
   - `3aeb628` compare state/render + report cache fixes
   - `8f230c8` strict conversion, overview cache, startup error semantics
   - `4844060` CSV formula-injection neutralization in compare export
@@ -14,6 +17,8 @@
   - safer derived-cache rebuild path for auto compare report
   - strict conversion behavior that accepts valid all-empty-table Access DBs
   - startup error messaging split between bind-in-use and generic OS startup failures
+  - safer frontend async paths for logging and auto-index update
+  - modal-close timers that no longer close the wrong modal after user navigation
 
 ## Current Context
 
