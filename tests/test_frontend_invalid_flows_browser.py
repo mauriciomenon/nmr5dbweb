@@ -359,7 +359,11 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
         report_download.save_as(str(report_path))
         assert report_path.exists()
         payload = json.loads(report_path.read_text(encoding="utf-8"))
+        assert payload["report_version"] == "1.1"
         assert payload["source"]["table"] == "items"
+        assert payload["export"]["rows_exported"] >= 1
+        assert payload["export"]["total_pages"] >= 1
+        assert payload["export"]["generated_from"] == "compare_db_rows_fast_path"
         assert payload["summary"]["total_keys"] >= 1
         assert payload["summary"]["priority"] in {
             "estavel",

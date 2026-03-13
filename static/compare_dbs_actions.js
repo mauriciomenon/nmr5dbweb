@@ -534,6 +534,7 @@ function buildCompareReportSummary(meta, allRows) {
 
 function buildCompareReportPayload(meta, allRows, basePayload) {
   return {
+    report_version: "1.1",
     generated_at: new Date().toISOString(),
     source: {
       db1_path: meta.db1 || basePayload.db1_path || '',
@@ -546,6 +547,12 @@ function buildCompareReportPayload(meta, allRows, basePayload) {
         change_types: basePayload.change_types || [],
         changed_column: basePayload.changed_column || null,
       },
+    },
+    export: {
+      rows_exported: allRows.length,
+      total_pages: Number(meta.total_pages || 1),
+      page_size: Number(meta.page_size || 0),
+      generated_from: 'compare_db_rows_fast_path',
     },
     summary: buildCompareReportSummary(meta, allRows),
     rows: allRows,
@@ -561,7 +568,7 @@ async function collectCompareExportData(progressPrefix) {
     return null;
   }
   const basePayload = { ...compareDbState.lastComparePayload };
-  const { meta, allRows } = await fetchAllComparisonRows(
+  const { meta, allRows, totalPages } = await fetchAllComparisonRows(
     basePayload,
     ({ page, totalPages }) => {
       setCompareStatus(
@@ -574,7 +581,17 @@ async function collectCompareExportData(progressPrefix) {
     setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
     return null;
   }
-  return { basePayload, meta, allRows };
+  return {
+    basePayload,
+    meta: { ...meta, total_pages: totalPages },
+    allRows,
+  };
+}
+
+function setExportUnexpectedError(prefix, err, flowText) {
+  const detail = err && err.message ? err.message : String(err);
+  setCompareStatus(`${prefix}: ${detail}`, 'error');
+  setFlowHint(flowText, 'error');
 }
 
 async function exportComparison() {
@@ -604,12 +621,11 @@ async function exportComparison() {
     );
   } catch (err) {
     console.error(err);
-    setCompareStatus(
-      'Erro inesperado ao exportar: ' +
-        (err && err.message ? err.message : String(err)),
-      'error'
+    setExportUnexpectedError(
+      'Erro inesperado ao exportar',
+      err,
+      'Falha ao exportar a comparacao.'
     );
-    setFlowHint('Falha ao exportar a comparacao.', 'error');
   } finally {
     restoreBtn();
   }
@@ -642,12 +658,11 @@ async function exportComparisonReport() {
     );
   } catch (err) {
     console.error(err);
-    setCompareStatus(
-      'Erro inesperado ao exportar relatorio: ' +
-        (err && err.message ? err.message : String(err)),
-      'error'
+    setExportUnexpectedError(
+      'Erro inesperado ao exportar relatorio',
+      err,
+      'Falha ao exportar relatorio JSON.'
     );
-    setFlowHint('Falha ao exportar relatorio JSON.', 'error');
   } finally {
     restoreBtn();
   }
