@@ -2045,7 +2045,7 @@ def api_compare_db_rows():
         app.logger.exception("DuckDB IOException em api_compare_db_rows")
         return jsonify({"error": "duckdb_io", "message": msg}), 500
     except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        return compare_bad_request(exc)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_rows")
         return jsonify({"error": "erro_interno", "message": str(exc)}), 500
