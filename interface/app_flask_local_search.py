@@ -1976,7 +1976,18 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
     return build_search_response(q, q_norm, len(candidates), total_count, grouped, table_max)
 
 # Fallback search for Access DBs via ODBC (pyodbc)
-def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, total_limit=500, token_mode="any", min_score=None, max_tables=500, max_rows_per_table=2000):
+def fallback_search_access(
+    access_path,
+    q,
+    per_table=10,
+    candidate_limit=1000,
+    total_limit=500,
+    token_mode="any",
+    min_score=None,
+    tables=None,
+    max_tables=500,
+    max_rows_per_table=2000,
+):
     if pyodbc is None:
         return {"error": "pyodbc not installed; fallback unavailable"}
     q_norm = normalize_text(q)
@@ -2018,6 +2029,11 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                 tables = []
         if not tables:
             return {"error": "No user tables found in Access DB."}
+        allowed_tables = {str(t).strip() for t in tables or [] if str(t).strip()} or None
+        if allowed_tables is not None:
+            tables = [name for name in tables if name in allowed_tables]
+        if not tables:
+            return {"q": q, "q_norm": q_norm, "candidate_count": 0, "returned_count": 0, "results": {}}
         tables = tables[:max_tables]
         def build_where_for_columns(cols):
             if not tokens:
@@ -2030,6 +2046,8 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                     parts.append(" AND ".join([f"{col} LIKE ?" for _ in tokens]))
             return "(" + " OR ".join(parts) + ")" if parts else None
         for t in tables:
+            if candidate_count >= candidate_limit or returned_count >= total_limit:
+                break
             cols = []
             try:
                 cols_info = cur.columns(table=t)
@@ -2147,9 +2165,17 @@ def run_search_for_context(ctx, search_args):
             total_limit=search_args["total_limit"],
             token_mode=search_args["token_mode"],
             min_score=search_args["min_score"],
+            tables=search_args["tables"],
         )
         if isinstance(payload, dict) and payload.get("error"):
-            return {"error": payload.get("error")}, 500
+            error_text = str(payload.get("error") or "")
+            lowered = error_text.lower()
+            if "pyodbc" in lowered or "odbc" in lowered or "driver" in lowered:
+                return {
+                    "error": error_text,
+                    "hint": "Access search unavailable in this environment. Convert to DuckDB first.",
+                }, 503
+            return {"error": error_text}, 500
         return payload, None
     return {"error": f"Unsupported DB format: {ctx['db_path']}"}, 400
 

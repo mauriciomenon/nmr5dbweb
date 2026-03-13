@@ -632,6 +632,61 @@ def test_api_search_busca_textual_duckdb_prioriza_tabela(tmp_path, monkeypatch):
     assert list(payload["results"].keys())[0] == "alpha"
 
 
+def test_api_search_access_driver_error_retorna_503(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(
+        local_search,
+        "fallback_search_access",
+        lambda *_args, **_kwargs: {"error": "pyodbc not installed; fallback unavailable"},
+    )
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 503
+    payload = resp.get_json()
+    assert "pyodbc not installed" in payload["error"]
+    assert "Convert to DuckDB first" in payload["hint"]
+
+
+def test_api_search_access_encaminha_filtro_tables(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    captured = {}
+
+    def fake_access_search(
+        _db_path,
+        _q,
+        per_table=10,
+        candidate_limit=1000,
+        total_limit=500,
+        token_mode="any",
+        min_score=None,
+        tables=None,
+        **_kwargs,
+    ):
+        captured["tables"] = tables
+        return {
+            "q": _q,
+            "q_norm": _q,
+            "candidate_count": 0,
+            "returned_count": 0,
+            "results": {},
+        }
+
+    monkeypatch.setattr(local_search, "fallback_search_access", fake_access_search)
+
+    resp = client.get("/api/search?q=alpha&tables=t1,t2")
+
+    assert resp.status_code == 200
+    assert captured["tables"] == ["t1", "t2"]
+
+
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):
     active_db = tmp_path / "active.duckdb"
     route_db = tmp_path / "route.duckdb"
