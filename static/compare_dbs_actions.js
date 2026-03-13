@@ -241,6 +241,11 @@ function hasDuplicateItems(values) {
 }
 
 function validateCompareRequest(compareRequest) {
+  if (!compareRequest || typeof compareRequest !== 'object') {
+    applyCompareMissingDbState();
+    return false;
+  }
+  const payload = compareRequest.payload || {};
   if (!compareRequest.db1 || !compareRequest.db2) {
     applyCompareMissingDbState();
     return false;
@@ -282,7 +287,7 @@ function validateCompareRequest(compareRequest) {
     setStepState('stepCompare', 'Chave K faltando', 'warn');
     return false;
   }
-  if (hasDuplicateItems(compareRequest.payload && compareRequest.payload.key_columns)) {
+  if (hasDuplicateItems(payload.key_columns)) {
     setCompareStatus('A chave K contem colunas duplicadas.', 'warn');
     setFlowHint(
       'Remova colunas duplicadas da chave K antes de comparar.',
@@ -291,9 +296,7 @@ function validateCompareRequest(compareRequest) {
     setStepState('stepCompare', 'Chave K duplicada', 'warn');
     return false;
   }
-  if (
-    hasDuplicateItems(compareRequest.payload && compareRequest.payload.compare_columns)
-  ) {
+  if (hasDuplicateItems(payload.compare_columns)) {
     setCompareStatus('As colunas de comparacao contem duplicidade.', 'warn');
     setFlowHint(
       'Remova colunas repetidas no campo de comparacao.',
@@ -302,12 +305,7 @@ function validateCompareRequest(compareRequest) {
     setStepState('stepCompare', 'Colunas duplicadas', 'warn');
     return false;
   }
-  if (
-    compareRequest &&
-    compareRequest.payload &&
-    Array.isArray(compareRequest.payload.change_types) &&
-    compareRequest.payload.change_types.length === 0
-  ) {
+  if (Array.isArray(payload.change_types) && payload.change_types.length === 0) {
     setCompareStatus(
       'Selecione ao menos um tipo de diferenca (alterada, nova ou removida).',
       'warn'
