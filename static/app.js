@@ -1830,6 +1830,14 @@ if (!window.__appSearchFlowBound) {
     selectUpload(nameEnc, null);
   };
 
+  const requestSelectDb = async (name) => {
+    return apiJSON('/admin/select', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: name }),
+    });
+  };
+
   const deleteUpload = async (nameEnc, btn) => {
     if (!confirm('Deseja realmente excluir este arquivo?')) return;
     const name = decodeURIComponent(nameEnc);
@@ -1877,11 +1885,7 @@ if (!window.__appSearchFlowBound) {
     );
     if (msg) msg.textContent = 'Selecionando: ' + name;
     try {
-      const j = await apiJSON('/admin/select', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ filename: name }),
-      });
+      const j = await requestSelectDb(name);
       if (j && j.ok) {
         if (msg) msg.textContent = 'DB selecionado: ' + name;
         manualFlowOverride = '';
@@ -1911,11 +1915,7 @@ if (!window.__appSearchFlowBound) {
     const msg = $('uploadMsg');
     if (msg) msg.textContent = 'Selecionando: ' + name;
     try {
-      const j = await apiJSON('/admin/select', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ filename: name }),
-      });
+      const j = await requestSelectDb(name);
       if (j && j.ok) {
         if (msg) msg.textContent = 'DB selecionado: ' + name;
         manualFlowOverride = '';

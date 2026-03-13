@@ -1,5 +1,37 @@
 # Round Status
 
+## Current Slice: Help Matrix, JS Lint Recovery, And Windows Access Smoke Path
+
+### Goal
+
+1. Clarify in-product help for Access/SQLite/DuckDB usage and compare/index behavior.
+2. Remove the reported JS quality regressions in `static/app.js` and `static/app_results.js`.
+3. Add a real Windows-oriented smoke path for `.accdb -> .duckdb` conversion.
+4. Improve browser regression coverage for compare CSV export content.
+
+### Applied
+
+1. Updated in-page help:
+   - `static/index.html`
+   - `static/compare_dbs.html`
+2. Fixed JS warnings:
+   - no-inner-declarations block in `static/app.js`
+   - constant conditions in `static/app_results.js`
+3. Reduced duplication in DB selection flow:
+   - added shared `requestSelectDb(...)` helper in `static/app.js`
+4. Added Windows smoke tooling for Access conversion:
+   - `tools/windows_access_smoke.py`
+   - `tests/test_access_conversion_windows_smoke.py` (Windows + env gated)
+5. Expanded browser smoke for compare CSV export:
+   - `tests/test_frontend_invalid_flows_browser.py`
+
+### Validation After Changes
+
+- `pnpm -s eslint static`: passed
+- `uv run python -m py_compile tools/windows_access_smoke.py tests/test_access_conversion_windows_smoke.py`: passed
+- `uv run ruff check tools/windows_access_smoke.py tests/test_access_conversion_windows_smoke.py`: passed
+- `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with pytest --with playwright --with duckdb --with flask --with rapidfuzz --with werkzeug python -m pytest -q tests/test_frontend_invalid_flows_browser.py -k "compare_pagination_and_export" tests/test_access_conversion_windows_smoke.py`: passed
+
 ## Current Slice: Validation Pipeline With Real Local Files
 
 ### Goal

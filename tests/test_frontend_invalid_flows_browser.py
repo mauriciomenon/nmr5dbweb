@@ -300,7 +300,7 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert page.locator("#compareViewModeAnchor .pill-btn").count() >= 2
 
 
-def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_data):
+def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_data, tmp_path):
     with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/compare_dbs")
         page.wait_for_selector("#db1Path")
@@ -321,6 +321,14 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
         download = download_info.value
         assert download.suggested_filename.endswith(".csv")
         assert "comparacao_items" in download.suggested_filename
+        export_path = tmp_path / download.suggested_filename
+        download.save_as(str(export_path))
+        assert export_path.exists()
+        csv_text = export_path.read_text(encoding="utf-8")
+        assert "type" in csv_text
+        assert "K_id" in csv_text
+        assert "beta-new" in csv_text
+        assert "beta-old" in csv_text
 
 
 def test_success_frontend_smoke_track_page(ui_server, sample_data):
