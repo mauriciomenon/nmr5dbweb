@@ -36,7 +36,7 @@ def test_main_port_fallback_automatico(monkeypatch):
     assert calls["kwargs"]["host"] == "127.0.0.1"
 
 
-def test_main_port_fallback_desativado(monkeypatch):
+def test_main_port_fallback_desativado(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["main.py", "--no-port-fallback"])
     monkeypatch.setattr(app_main, "validar_configuracao", lambda _args: [])
     monkeypatch.setattr(app_main, "verificar_porta_disponivel", lambda _host, _port: False)
@@ -46,6 +46,8 @@ def test_main_port_fallback_desativado(monkeypatch):
         app_main.main()
 
     assert exc.value.code == 1
+    captured = capsys.readouterr().out
+    assert "Fallback de porta desativado" in captured
 
 
 def test_main_port_livre_mantem_porta(monkeypatch):

@@ -171,6 +171,8 @@ Exemplos de uso:
     )
 
     args = parser.parse_args()
+    if not args.upload_folder:
+        args.upload_folder = default_upload_dir
 
     # Gerar timestamp unico para esta execucao
     timestamp_exec = datetime.now().isoformat()
@@ -212,8 +214,7 @@ Exemplos de uso:
     os.environ["FLASK_PORT"] = str(args.port)
     os.environ["FLASK_DEBUG"] = str(args.debug)
 
-    if args.upload_folder:
-        os.environ["UPLOAD_FOLDER"] = args.upload_folder
+    os.environ["UPLOAD_FOLDER"] = args.upload_folder
 
     os.environ["MAX_CONTENT_LENGTH"] = str(args.max_content_length)
 
