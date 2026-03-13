@@ -16,10 +16,18 @@ Map the current product structure in a stable way so future rounds can update th
   - Access to DuckDB conversion alternatives and benchmarks.
 - `tools/`
   - Analysis, reporting, and record tracking support scripts.
+  - Includes validation pipeline scripts:
+    - `tools/prepare_validation_artifacts.py`
+    - `tools/benchmark_validation_flows.py`
 - `docs/`
   - End-user setup and usage guides.
 - `artifacts/`
   - Runtime/generated artifacts guidance only. Generated content must stay out of git.
+  - Includes local validation pipeline outputs under `artifacts/validation/`:
+    - `input/`
+    - `derived/duckdb/`
+    - `derived/sqlite/`
+    - `reports/`
 - `output/`
   - Local validation area with real operator samples and smoke fixtures.
   - Useful for manual proof-of-use rounds, but not part of the product runtime contract.

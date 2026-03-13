@@ -48,6 +48,12 @@ Track real product debt that should not be fixed in the current slice.
 22. Reassess the legacy `.eslintrc.cjs` fallback only after external analyzers stop depending on old `ESLint 8.x` behavior.
 23. If the real operator datasets keep exposing the same column families, consider making the frontend column-priority list configurable instead of hard-coded.
 24. Reassess whether the operator preview cards in the search screen should become collapsible when datasets with many short tables dominate usage.
+25. Access `.accdb` conversion still depends on local driver/runtime setup in this environment:
+   - `pyodbc` package in uv env
+   - compatible Access ODBC driver
+   - optional `mdbtools` path for `.mdb`
+26. Decide if `artifacts/validation/derived/` should stay local-only forever or gain a curated tiny committed fixture subset for CI.
+27. Add a dedicated compare-browser smoke for report export payload quality (not only filename/download status).
 
 ## Do Not Pull Into Slice 1
 

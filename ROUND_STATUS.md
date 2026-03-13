@@ -1,5 +1,57 @@
 # Round Status
 
+## Current Slice: Validation Pipeline With Real Local Files
+
+### Goal
+
+1. Build a reproducible local pipeline that materializes canonical `duckdb` and `sqlite` files from real samples.
+2. Measure key runtime timings (browse/search/compare) and store evidence in repo-local reports.
+3. Improve compare report reliability/readability without touching the fast keyed compare backend path.
+4. Prove browser behavior with Playwright on the compare flow.
+
+### Applied
+
+1. Added `tools/prepare_validation_artifacts.py`:
+   - scans `output/` recursively
+   - writes canonical inputs into `artifacts/validation/input/`
+   - materializes canonical `duckdb` and `sqlite` outputs under:
+     - `artifacts/validation/derived/duckdb/`
+     - `artifacts/validation/derived/sqlite/`
+   - emits `artifacts/validation/reports/dataset_manifest.json`
+2. Added `tools/benchmark_validation_flows.py`:
+   - times list/read/search flows on generated artifacts
+   - times keyed compare between compatible DuckDB pairs
+   - emits:
+     - `artifacts/validation/reports/benchmark_times.csv`
+     - `artifacts/validation/reports/benchmark_summary.md`
+3. Added operator-facing docs for this validation pipeline:
+   - `artifacts/validation/reports/README.md`
+4. Hardened compare summary rendering in `static/compare_dbs_render.js`:
+   - stable anchor for view-mode controls (`#compareViewModeAnchor`)
+   - no fragile `nth-child` selector coupling
+   - broader HTML escaping in report sections fed by DB values
+5. Expanded compare smoke assertions in browser tests:
+   - `tests/test_frontend_invalid_flows_browser.py`
+   - validates A/B labels, volume/saldo text, and view-mode controls.
+
+### What Was Proved
+
+- The local validation pipeline now runs end-to-end and stores reproducible artifacts and timing reports.
+- Access `.accdb` conversion is still environment-gated on this machine (`pyodbc`/driver not available).
+- Smoke fixtures under `output/smoke/` are now converted both ways and benchmarked.
+- Compare summary controls no longer depend on brittle DOM position.
+- Playwright compare smoke passed with the new assertions.
+
+### Validation After Changes
+
+- `uv run python -m py_compile tools/prepare_validation_artifacts.py tools/benchmark_validation_flows.py`: passed
+- `uv run ruff check tools/prepare_validation_artifacts.py tools/benchmark_validation_flows.py interface`: passed
+- `pnpm -s eslint static/compare_dbs_render.js`: passed
+- `env PYTHONPATH=. uv run --with duckdb --with pandas python tools/prepare_validation_artifacts.py`: passed
+- `env PYTHONPATH=. uv run --with duckdb --with flask --with rapidfuzz python tools/benchmark_validation_flows.py`: passed
+- `env PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with pytest --with playwright --with duckdb --with flask --with rapidfuzz --with werkzeug python -m pytest -q tests/test_frontend_invalid_flows_browser.py -k "compare_page or compare_pagination_and_export"`: `2 passed`
+- `env PYTHONPATH=. PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 uv run --with pytest --with duckdb --with flask --with rapidfuzz python -m pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py`: `27 passed`
+
 ## Current Slice: Operator-Focused Search And Anomaly Reading
 
 ### Goal
