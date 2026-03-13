@@ -3,10 +3,13 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import duckdb
+
 from tools.auto_compare_report import (
     build_table_detail_compact,
     render_report_html,
     list_candidate_files,
+    prepare_source,
     run_compare_pipeline,
     suggest_two_sources,
 )
@@ -19,6 +22,16 @@ def _write_sqlite(db_path: Path, rows: list[tuple[int, str]]) -> None:
         conn.execute("DELETE FROM T1")
         conn.executemany("INSERT INTO T1 (id, value) VALUES (?, ?)", rows)
         conn.commit()
+    finally:
+        conn.close()
+
+
+def _write_duckdb(db_path: Path, rows: list[tuple[int, str]]) -> None:
+    conn = duckdb.connect(str(db_path))
+    try:
+        conn.execute("CREATE TABLE IF NOT EXISTS T1 (id INTEGER, value VARCHAR)")
+        conn.execute("DELETE FROM T1")
+        conn.executemany("INSERT INTO T1 (id, value) VALUES (?, ?)", rows)
     finally:
         conn.close()
 
@@ -56,13 +69,38 @@ def test_run_compare_pipeline_sqlite_inputs(tmp_path: Path) -> None:
     assert (reports / "latest_db_compare_report.html").exists()
     assert (reports / "latest_db_compare_report.md").exists()
     assert (reports / "latest_db_compare_report.txt").exists()
-    assert (docs / "2026-01-29 DB2.duckdb").exists()
-    assert (docs / "2026-02-27 DB4.duckdb").exists()
+    cache_dir = docs / ".auto_compare_cache"
+    assert cache_dir.exists()
+    assert len(list(cache_dir.glob("*.duckdb"))) >= 2
 
     md_text = outputs["md"].read_text(encoding="utf-8")
     assert "diff_tables" in md_text
     assert "T1" in md_text
     assert "fonte_a_size" in md_text
+
+
+def test_prepare_source_nao_colide_quando_stem_e_igual(tmp_path: Path) -> None:
+    docs = tmp_path / "documentos"
+    docs.mkdir()
+    sqlite_path = docs / "foo.sqlite"
+    duck_path = docs / "foo.duckdb"
+    _write_sqlite(sqlite_path, [(1, "S")])
+    _write_duckdb(duck_path, [(1, "D")])
+
+    prepared_sqlite = prepare_source(sqlite_path, docs)
+    prepared_duck = prepare_source(duck_path, docs)
+
+    assert prepared_sqlite.duckdb_path.exists()
+    assert prepared_sqlite.duckdb_path != duck_path.resolve()
+    assert prepared_duck.sqlite_path.exists()
+    assert prepared_duck.sqlite_path != sqlite_path.resolve()
+
+    conn = duckdb.connect(str(duck_path), read_only=True)
+    try:
+        row = conn.execute("SELECT value FROM T1 WHERE id = 1").fetchone()
+    finally:
+        conn.close()
+    assert row and row[0] == "D"
 
 
 def test_build_table_detail_compact_usa_uniao_de_colunas_alteradas() -> None:

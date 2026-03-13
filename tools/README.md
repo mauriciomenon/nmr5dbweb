@@ -18,15 +18,15 @@ Este diretório contém utilitários para:
 - **O que faz**: compara 2 bancos e gera report em `HTML`, `MD` e `TXT` com foco em leitura operacional.
 - **Engines**: aceita fonte Access (`.mdb/.accdb`), DuckDB e SQLite; prepara derivados quando necessario.
 - **Saidas**:
-  - `documentos/reports/db_compare_<timestamp>_... .html`
-  - `documentos/reports/db_compare_<timestamp>_... .md`
-  - `documentos/reports/db_compare_<timestamp>_... .txt`
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.html`
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.md`
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.txt`
   - atalhos `latest_db_compare_report.*`
 - **Modo default (2 ultimos Access)**:
 ```bash
 PYTHONPATH=. uv run python tools/auto_compare_report.py
 ```
-  - no prompt `Usar sugestao? [S/n]:`, pressione `Enter` para seguir direto com o default dos 2 ultimos `.accdb`.
+  - no prompt `Comandos: Enter=manter | m=alterar | q=sair` e `>`, pressione `Enter` para seguir direto com o default dos 2 ultimos `.accdb`.
 - **Modo direto (sem menu)**:
 ```bash
 PYTHONPATH=. uv run python tools/auto_compare_report.py \

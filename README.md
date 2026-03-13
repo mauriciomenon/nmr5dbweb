@@ -110,7 +110,7 @@ PYTHONPATH=. uv run python tools/auto_compare_report.py
 
 Modo rapido com default dos 2 ultimos `.accdb`:
 1. rode o comando acima sem `--db1` e sem `--db2`
-2. quando aparecer `Usar sugestao? [S/n]:`, pressione `Enter`
+2. quando aparecer `Comandos: Enter=manter | m=alterar | q=sair` e o prompt `>`, pressione `Enter`
 3. o script segue direto com os 2 ultimos e gera HTML/MD/TXT em `documentos/reports/`
 
 Fluxo:
