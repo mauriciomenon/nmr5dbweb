@@ -1245,3 +1245,17 @@ def test_api_compare_db_tables_rejeita_quando_path_nao_e_arquivo(tmp_path):
 
     assert resp.status_code == 400
     assert "esperado arquivo" in resp.get_json()["error"]
+
+
+def test_api_compare_db_tables_rejeita_mesmo_arquivo(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "same.duckdb"
+    duckdb.connect(str(db1)).close()
+
+    resp = client.post(
+        "/api/compare_db_tables",
+        json={"db1_path": str(db1), "db2_path": str(db1)},
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "db1_path e db2_path nao podem ser o mesmo arquivo"
