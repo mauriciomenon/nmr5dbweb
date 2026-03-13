@@ -350,6 +350,25 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
         assert "beta-new" in csv_text
         assert "beta-old" in csv_text
 
+        with page.expect_download() as report_download_info:
+            page.locator("#btnExportReportJson").click()
+        report_download = report_download_info.value
+        assert report_download.suggested_filename.endswith("_report.json")
+        report_path = tmp_path / report_download.suggested_filename
+        report_download.save_as(str(report_path))
+        assert report_path.exists()
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        assert payload["source"]["table"] == "items"
+        assert payload["summary"]["total_keys"] >= 1
+        assert payload["summary"]["priority"] in {
+            "estavel",
+            "baixa",
+            "media",
+            "alta",
+            "critica",
+        }
+        assert payload["summary"]["by_type"]["changed"] >= 1
+
 
 def test_success_frontend_smoke_track_page(ui_server, sample_data):
     with with_browser() as (_browser, _browser_context, page):

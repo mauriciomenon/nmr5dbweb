@@ -104,6 +104,7 @@ function getCompareActionButtons() {
     runCompare: document.getElementById('runCompareBtn'),
     tablesOverview: document.getElementById('btnTablesOverview'),
     exportComparison: document.getElementById('btnExportComparison'),
+    exportReportJson: document.getElementById('btnExportReportJson'),
   };
 }
 

@@ -314,6 +314,210 @@ async function changePage(newPage) {
   }
 }
 
+async function fetchAllComparisonRows(basePayload, onProgress) {
+  let page = 1;
+  let totalPages = 1;
+  let allRows = [];
+  let meta = null;
+
+  while (page <= totalPages) {
+    if (typeof onProgress === 'function') {
+      onProgress({ page, totalPages });
+    }
+    const payload = { ...basePayload, page };
+    const data = await postJson('/api/compare_db_rows', payload);
+    if (!meta) meta = data;
+    allRows = allRows.concat(data.rows || []);
+    totalPages = data.total_pages || 1;
+    page += 1;
+  }
+  return { meta, allRows, totalPages };
+}
+
+function normalizeExportTableName(meta) {
+  return (meta.table || 'tabela').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function triggerBlobDownload(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsvCell(val) {
+  if (val === null || typeof val === 'undefined') return '';
+  let s = String(val);
+  if (s.includes('"')) s = s.replace(/"/g, '""');
+  if (s.includes(';') || s.includes('\n') || s.includes('\r')) {
+    s = '"' + s + '"';
+  }
+  return s;
+}
+
+function buildCompareCsvLines(meta, allRows) {
+  const keyCols = meta.key_columns || [];
+  const cmpCols = meta.compare_columns || [];
+  const headers = [];
+  for (const k of keyCols) headers.push('K_' + k);
+  headers.push('type');
+  for (const c of cmpCols) {
+    headers.push('A_' + c);
+    headers.push('B_' + c);
+  }
+  const lines = [headers.join(';')];
+  for (const r of allRows) {
+    const rowCells = [];
+    for (const k of keyCols) rowCells.push(escapeCsvCell((r.key || {})[k]));
+    rowCells.push(escapeCsvCell(r.type));
+    for (const c of cmpCols) {
+      rowCells.push(escapeCsvCell((r.a || {})[c]));
+      rowCells.push(escapeCsvCell((r.b || {})[c]));
+    }
+    lines.push(rowCells.join(';'));
+  }
+  return lines;
+}
+
+function isBlankExportValue(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  return false;
+}
+
+function toFiniteExportNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function buildCompareReportSummary(meta, allRows) {
+  const compareColumns = meta.compare_columns || [];
+  const byType = { added: 0, removed: 0, changed: 0, same: 0 };
+  const changedColumnsCount = {};
+  const nullTransitions = {};
+  const numericDrift = {};
+
+  allRows.forEach((row) => {
+    const rowType = String(row.type || '').toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(byType, rowType)) {
+      byType[rowType] += 1;
+    }
+    if (rowType !== 'changed') return;
+    compareColumns.forEach((column) => {
+      const valueA = (row.a || {})[column];
+      const valueB = (row.b || {})[column];
+      if (!valuesDifferent(valueA, valueB)) return;
+
+      changedColumnsCount[column] = (changedColumnsCount[column] || 0) + 1;
+
+      const oldBlank = isBlankExportValue(valueB);
+      const newBlank = isBlankExportValue(valueA);
+      if (oldBlank !== newBlank) {
+        const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
+        const key = `${column} | ${direction}`;
+        nullTransitions[key] = (nullTransitions[key] || 0) + 1;
+      }
+
+      const numA = toFiniteExportNumber(valueA);
+      const numB = toFiniteExportNumber(valueB);
+      if (numA === null || numB === null) return;
+      const delta = numA - numB;
+      const absDelta = Math.abs(delta);
+      if (!absDelta) return;
+      const stat = numericDrift[column] || {
+        count: 0,
+        sumAbsDelta: 0,
+        maxAbsDelta: 0,
+        maxSignedDelta: 0,
+      };
+      stat.count += 1;
+      stat.sumAbsDelta += absDelta;
+      if (absDelta > stat.maxAbsDelta) {
+        stat.maxAbsDelta = absDelta;
+        stat.maxSignedDelta = delta;
+      }
+      numericDrift[column] = stat;
+    });
+  });
+
+  const totalKeys = allRows.length;
+  const impactedKeys = byType.added + byType.removed + byType.changed;
+  const impactedPct = totalKeys > 0 ? (impactedKeys / totalKeys) * 100 : 0;
+  const topChangedColumns = Object.entries(changedColumnsCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([column, count]) => ({ column, count }));
+  const topNullTransitions = Object.entries(nullTransitions)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, count]) => ({ label, count }));
+  const topNumericDrift = Object.entries(numericDrift)
+    .map(([column, info]) => ({
+      column,
+      count: info.count,
+      sum_abs_delta: Number(info.sumAbsDelta.toFixed(4)),
+      max_signed_delta: Number(info.maxSignedDelta.toFixed(4)),
+    }))
+    .sort((a, b) => b.sum_abs_delta - a.sum_abs_delta)
+    .slice(0, 8);
+
+  let priority = 'baixa';
+  if (impactedPct >= 50 || byType.changed >= 10) {
+    priority = 'critica';
+  } else if (impactedPct >= 25 || byType.changed >= 5 || topNullTransitions.length >= 3) {
+    priority = 'alta';
+  } else if (impactedPct >= 10 || topNumericDrift.length >= 2) {
+    priority = 'media';
+  } else if (impactedKeys === 0) {
+    priority = 'estavel';
+  }
+
+  return {
+    total_keys: totalKeys,
+    impacted_keys: impactedKeys,
+    impacted_pct: Number(impactedPct.toFixed(2)),
+    by_type: byType,
+    priority,
+    top_changed_columns: topChangedColumns,
+    top_null_transitions: topNullTransitions,
+    top_numeric_drift: topNumericDrift,
+  };
+}
+
+function buildCompareReportPayload(meta, allRows, basePayload) {
+  return {
+    generated_at: new Date().toISOString(),
+    source: {
+      db1_path: meta.db1 || basePayload.db1_path || '',
+      db2_path: meta.db2 || basePayload.db2_path || '',
+      table: meta.table || basePayload.table || '',
+      key_columns: meta.key_columns || basePayload.key_columns || [],
+      compare_columns: meta.compare_columns || basePayload.compare_columns || [],
+      filters: {
+        key_filter: basePayload.key_filter || null,
+        change_types: basePayload.change_types || [],
+        changed_column: basePayload.changed_column || null,
+      },
+    },
+    summary: buildCompareReportSummary(meta, allRows),
+    rows: allRows,
+  };
+}
+
 async function exportComparison() {
   const exportBtn = document.getElementById('btnExportComparison');
   const restoreBtn = setButtonBusy(
@@ -330,74 +534,27 @@ async function exportComparison() {
     return;
   }
   try {
-    setCompareStatus(
-      'Preparando exportacao (carregando todas as paginas)...',
-      'info'
-    );
     const basePayload = { ...compareDbState.lastComparePayload };
-    let page = 1;
-    let totalPages = 1;
-    let allRows = [];
-    let meta = null;
-
-    while (page <= totalPages) {
-      const payload = { ...basePayload, page };
-      const data = await postJson('/api/compare_db_rows', payload);
-      if (!meta) meta = data;
-      allRows = allRows.concat(data.rows || []);
-      totalPages = data.total_pages || 1;
-      page += 1;
-    }
-
+    const { meta, allRows } = await fetchAllComparisonRows(
+      basePayload,
+      ({ page, totalPages }) => {
+        setCompareStatus(
+          `Preparando exportacao CSV (pagina ${page} de ${totalPages || '?'})...`,
+          'info'
+        );
+      }
+    );
     if (!meta) {
       setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
       return;
     }
-
-    const keyCols = meta.key_columns || [];
-    const cmpCols = meta.compare_columns || [];
-    const headers = [];
-    for (const k of keyCols) headers.push('K_' + k);
-    headers.push('type');
-    for (const c of cmpCols) {
-      headers.push('A_' + c);
-      headers.push('B_' + c);
-    }
-
-    const escapeCell = (val) => {
-      if (val === null || typeof val === 'undefined') return '';
-      let s = String(val);
-      if (s.includes('"')) s = s.replace(/"/g, '""');
-      if (s.includes(';') || s.includes('\n') || s.includes('\r')) {
-        s = '"' + s + '"';
-      }
-      return s;
-    };
-
-    const lines = [headers.join(';')];
-    for (const r of allRows) {
-      const rowCells = [];
-      for (const k of keyCols) rowCells.push(escapeCell((r.key || {})[k]));
-      rowCells.push(escapeCell(r.type));
-      for (const c of cmpCols) {
-        rowCells.push(escapeCell((r.a || {})[c]));
-        rowCells.push(escapeCell((r.b || {})[c]));
-      }
-      lines.push(rowCells.join(';'));
-    }
-
-    const blob = new Blob([lines.join('\r\n')], {
-      type: 'text/csv;charset=utf-8;',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const tableName = (meta.table || 'tabela').replace(/[^a-zA-Z0-9_-]/g, '_');
-    a.href = url;
-    a.download = `comparacao_${tableName}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const lines = buildCompareCsvLines(meta, allRows);
+    const tableName = normalizeExportTableName(meta);
+    triggerBlobDownload(
+      lines.join('\r\n'),
+      'text/csv;charset=utf-8;',
+      `comparacao_${tableName}.csv`
+    );
     setCompareStatus('Exportacao concluida. Arquivo CSV baixado.', 'info');
     setFlowHint(
       'Exportacao concluida. O CSV foi baixado com o recorte atual.',
@@ -411,6 +568,61 @@ async function exportComparison() {
       'error'
     );
     setFlowHint('Falha ao exportar a comparacao.', 'error');
+  } finally {
+    restoreBtn();
+  }
+}
+
+async function exportComparisonReport() {
+  const exportBtn = document.getElementById('btnExportReportJson');
+  const restoreBtn = setButtonBusy(
+    exportBtn,
+    'Exportando relatorio...',
+    exportBtn ? exportBtn.textContent : 'Exportar relatorio JSON'
+  );
+  if (!compareDbState.lastComparePayload) {
+    setCompareStatus(
+      'Nenhuma comparacao para exportar. Execute a comparacao primeiro.',
+      'warn'
+    );
+    restoreBtn();
+    return;
+  }
+  try {
+    const basePayload = { ...compareDbState.lastComparePayload };
+    const { meta, allRows } = await fetchAllComparisonRows(
+      basePayload,
+      ({ page, totalPages }) => {
+        setCompareStatus(
+          `Preparando relatorio JSON (pagina ${page} de ${totalPages || '?'})...`,
+          'info'
+        );
+      }
+    );
+    if (!meta) {
+      setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
+      return;
+    }
+    const report = buildCompareReportPayload(meta, allRows, basePayload);
+    const tableName = normalizeExportTableName(meta);
+    triggerBlobDownload(
+      JSON.stringify(report, null, 2),
+      'application/json;charset=utf-8;',
+      `comparacao_${tableName}_report.json`
+    );
+    setCompareStatus('Exportacao concluida. Relatorio JSON baixado.', 'info');
+    setFlowHint(
+      'Relatorio JSON exportado com resumo, prioridade e dados de diferenca.',
+      'info'
+    );
+  } catch (err) {
+    console.error(err);
+    setCompareStatus(
+      'Erro inesperado ao exportar relatorio: ' +
+        (err && err.message ? err.message : String(err)),
+      'error'
+    );
+    setFlowHint('Falha ao exportar relatorio JSON.', 'error');
   } finally {
     restoreBtn();
   }
@@ -562,6 +774,7 @@ window.collectCompareRequest = collectCompareRequest;
 window.runCompare = runCompare;
 window.changePage = changePage;
 window.exportComparison = exportComparison;
+window.exportComparisonReport = exportComparisonReport;
 window.generateTablesOverview = generateTablesOverview;
 window.toggleTablesOverview = toggleTablesOverview;
 window.renderTablesOverview = renderTablesOverview;
