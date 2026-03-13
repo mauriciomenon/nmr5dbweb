@@ -123,8 +123,8 @@ def test_report_nao_exibe_tabela_same_no_bloco_de_alteracoes(tmp_path: Path) -> 
 
     outputs = run_compare_pipeline(db1, db2, docs, reports)
     md_text = outputs["md"].read_text(encoding="utf-8")
-    assert "| T1 | diff |" in md_text
-    assert "| T2 | same |" not in md_text
+    assert "| T1 | alterado |" in md_text
+    assert "| T2 | igual |" not in md_text
 
 
 def test_build_table_detail_compact_sostat_forca_colunas_padrao() -> None:
@@ -244,3 +244,5 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "value-added" in html
     assert "value-removed" in html
     assert "background: #fee2e2" not in html
+    assert "col-filter-input" in html
+    assert "db 2026-03-13" in html

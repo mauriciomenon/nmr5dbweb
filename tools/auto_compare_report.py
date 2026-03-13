@@ -859,7 +859,7 @@ def _html_rows(rows: Sequence[dict]) -> str:
             + css
             + "'>"
             + f"<td>{html.escape(str(row.get('table') or ''))}</td>"
-            + f"<td>{html.escape(status)}</td>"
+            + f"<td>{html.escape(_status_label(status))}</td>"
             + f"<td>{html.escape(str(row.get('row_count_a', '')))}</td>"
             + f"<td>{html.escape(str(row.get('row_count_b', '')))}</td>"
             + f"<td>{html.escape(str(row.get('diff_count', '')))}</td>"
@@ -887,14 +887,59 @@ def _value_css(row_type: str, line_kind: str, changed: bool) -> str:
     return ""
 
 
-def _html_table_detail(detail: dict) -> str:
+def _type_label(row_type: str) -> str:
+    if row_type == "changed":
+        return "modificado"
+    if row_type == "added":
+        return "novo"
+    if row_type == "removed":
+        return "excluido"
+    return row_type
+
+
+def _status_label(status: str) -> str:
+    if status == "diff":
+        return "alterado"
+    if status == "same":
+        return "igual"
+    if status == "no_key":
+        return "sem_chave"
+    if status == "error":
+        return "erro"
+    return status
+
+
+def _source_line_labels(payload: dict) -> tuple[str, str]:
+    src_a = payload.get("source_a") or {}
+    src_b = payload.get("source_b") or {}
+    iso_a = str(src_a.get("iso_date") or "").strip()
+    iso_b = str(src_b.get("iso_date") or "").strip()
+    if not iso_a:
+        iso_a = (parse_iso_prefix(str(src_a.get("file") or "")) or "").isoformat() if parse_iso_prefix(str(src_a.get("file") or "")) else ""
+    if not iso_b:
+        iso_b = (parse_iso_prefix(str(src_b.get("file") or "")) or "").isoformat() if parse_iso_prefix(str(src_b.get("file") or "")) else ""
+    label_a = f"db {iso_a}" if iso_a else "velho"
+    label_b = f"db {iso_b}" if iso_b else "novo"
+    return label_a, label_b
+
+
+def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table_idx: int) -> str:
     cols = detail.get("visible_columns") or []
     if not cols:
         return "<div class='meta'>Sem colunas para exibir no modo compacto.</div>"
     header_cells = "".join([f"<th>{html.escape(str(col))}</th>" for col in cols])
+    filter_cells = "".join(
+        [
+            f"<th><input class='col-filter-input' data-col='{html.escape(str(col))}' "
+            "type='text' placeholder='filtro'></th>"
+            for col in cols
+        ]
+    )
+    table_id = f"detail-table-{table_idx}"
     body_rows = []
-    for item in detail.get("records") or []:
+    for row_idx, item in enumerate(detail.get("records") or []):
         row_type = str(item.get("type") or "")
+        row_type_label = _type_label(row_type)
         key_text = html.escape(str(item.get("key_text") or "-"))
         old_vals = item.get("old") or {}
         new_vals = item.get("new") or {}
@@ -906,8 +951,12 @@ def _html_table_detail(detail: dict) -> str:
             new_css = _value_css(row_type, "new", bool(changed_map.get(col)))
             old_class = f" class='{old_css}'" if old_css else ""
             new_class = f" class='{new_css}'" if new_css else ""
-            old_cells.append(f"<td{old_class}>{_html_cell(old_vals.get(col, ''))}</td>")
-            new_cells.append(f"<td{new_class}>{_html_cell(new_vals.get(col, ''))}</td>")
+            old_cells.append(
+                f"<td data-col='{html.escape(str(col))}'{old_class}>{_html_cell(old_vals.get(col, ''))}</td>"
+            )
+            new_cells.append(
+                f"<td data-col='{html.escape(str(col))}'{new_class}>{_html_cell(new_vals.get(col, ''))}</td>"
+            )
         status_class = ""
         if row_type == "added":
             status_class = " class='value-added'"
@@ -916,23 +965,28 @@ def _html_table_detail(detail: dict) -> str:
         elif row_type == "changed":
             status_class = " class='value-changed'"
         body_rows.append(
-            "<tr>"
-            f"<td rowspan='2'>{key_text}</td>"
-            f"<td rowspan='2'{status_class}>{html.escape(row_type)}</td>"
-            "<td>anterior</td>"
+            f"<tr data-pair='{row_idx}'>"
+            f"<td data-col='key' rowspan='2'>{key_text}</td>"
+            f"<td data-col='tipo' rowspan='2'{status_class}>{html.escape(row_type_label)}</td>"
+            f"<td data-col='linha'>{html.escape(line_a_label)}</td>"
             + "".join(old_cells)
             + "</tr>"
         )
         body_rows.append(
-            "<tr>"
-            "<td>novo</td>"
+            f"<tr data-pair='{row_idx}'>"
+            f"<td data-col='linha'>{html.escape(line_b_label)}</td>"
             + "".join(new_cells)
             + "</tr>"
         )
     return (
-        "<table class='detail'>"
+        f"<table class='detail' id='{table_id}'>"
         "<thead><tr><th>key</th><th>tipo</th><th>linha</th>"
         + header_cells
+        + "</tr><tr class='filter-row'>"
+        "<th><input class='col-filter-input' data-col='key' type='text' placeholder='filtro'></th>"
+        "<th><input class='col-filter-input' data-col='tipo' type='text' placeholder='filtro'></th>"
+        "<th><input class='col-filter-input' data-col='linha' type='text' placeholder='filtro'></th>"
+        + filter_cells
         + "</tr></thead><tbody>"
         + "\n".join(body_rows)
         + "</tbody></table>"
@@ -945,15 +999,16 @@ def render_report_html(payload: dict) -> str:
     b = payload["source_b"]
     rows = payload["rows"]
     details = payload.get("table_details") or []
+    line_a_label, line_b_label = _source_line_labels(payload)
     details_blocks = []
-    for detail in details:
+    for idx, detail in enumerate(details):
         details_blocks.append(
             "<div class='card'>"
             f"<h2>Tabela: {html.escape(str(detail.get('table') or ''))}</h2>"
             f"<div class='meta'>colunas compactas: {html.escape(', '.join(detail.get('visible_columns') or []))}</div>"
             f"<div class='meta'>linhas diff retornadas: {detail.get('rows_returned', 0)} "
             f"(total detectado: {detail.get('rows_total', 0)})</div>"
-            + _html_table_detail(detail)
+            + _html_table_detail(detail, line_a_label, line_b_label, idx)
             + "</div>"
         )
     return f"""<!doctype html>
@@ -979,6 +1034,8 @@ def render_report_html(payload: dict) -> str:
     .value-removed {{ color: #c00000; font-weight: 700; }}
     .value-changed {{ color: #7a1f1f; font-weight: 700; }}
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
+    .filter-row th {{ background: #ffffff; }}
+    .col-filter-input {{ width: 95%; min-width: 90px; font-size: 12px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; }}
   </style>
 </head>
 <body>
@@ -1038,6 +1095,51 @@ def render_report_html(payload: dict) -> str:
     </div>
     {"".join(details_blocks)}
   </div>
+  <script>
+  (function() {{
+    function applyFilters(table) {{
+      const inputs = Array.from(table.querySelectorAll('.col-filter-input'));
+      const active = inputs
+        .map((inp) => [inp.getAttribute('data-col') || '', (inp.value || '').trim().toLowerCase()])
+        .filter((it) => it[0] && it[1]);
+      const rows = Array.from(table.querySelectorAll('tbody tr[data-pair]'));
+      const pairMap = new Map();
+      rows.forEach((tr) => {{
+        const id = tr.getAttribute('data-pair') || '';
+        if (!pairMap.has(id)) pairMap.set(id, []);
+        pairMap.get(id).push(tr);
+      }});
+      pairMap.forEach((pairRows) => {{
+        let ok = true;
+        for (const item of active) {{
+          const col = item[0];
+          const term = item[1];
+          const matched = pairRows.some((row) => {{
+            const cells = Array.from(row.querySelectorAll(`td[data-col="${{col}}"]`));
+            return cells.some((cell) => (cell.textContent || '').toLowerCase().includes(term));
+          }});
+          if (!matched) {{
+            ok = false;
+            break;
+          }}
+        }}
+        pairRows.forEach((row) => {{
+          row.style.display = ok ? '' : 'none';
+        }});
+      }});
+    }}
+
+    const tables = Array.from(document.querySelectorAll('table.detail'));
+    tables.forEach((table) => {{
+      const inputs = Array.from(table.querySelectorAll('.col-filter-input'));
+      inputs.forEach((input) => {{
+        input.addEventListener('input', function() {{
+          applyFilters(table);
+        }});
+      }});
+    }});
+  }})();
+  </script>
 </body>
 </html>
 """
@@ -1046,6 +1148,7 @@ def render_report_html(payload: dict) -> str:
 def render_report_md(payload: dict) -> str:
     s = payload["summary"]
     details = payload.get("table_details") or []
+    line_a_label, line_b_label = _source_line_labels(payload)
     lines = [
         "# Comparacao automatizada de bancos",
         "",
@@ -1077,8 +1180,9 @@ def render_report_md(payload: dict) -> str:
         "|---|---:|---:|---:|---:|---|",
     ]
     for row in payload["rows"]:
+        status_label = _status_label(str(row.get("status") or ""))
         lines.append(
-            f"| {row.get('table','')} | {row.get('status','')} | {row.get('row_count_a','')} | "
+            f"| {row.get('table','')} | {status_label} | {row.get('row_count_a','')} | "
             f"{row.get('row_count_b','')} | {row.get('diff_count','')} | {row.get('error','')} |"
         )
     lines.append("")
@@ -1097,13 +1201,14 @@ def render_report_md(payload: dict) -> str:
             cols = detail.get("visible_columns") or []
             old_vals = [str((item.get("old") or {}).get(c, "")) for c in cols]
             new_vals = [str((item.get("new") or {}).get(c, "")) for c in cols]
+            row_type = _type_label(str(item.get("type") or ""))
             lines.append(
-                f"| {item.get('key_text','-')} | {item.get('type','')} | anterior | "
+                f"| {item.get('key_text','-')} | {row_type} | {line_a_label} | "
                 + " | ".join(old_vals)
                 + " |"
             )
             lines.append(
-                f"| {item.get('key_text','-')} | {item.get('type','')} | novo | "
+                f"| {item.get('key_text','-')} | {row_type} | {line_b_label} | "
                 + " | ".join(new_vals)
                 + " |"
             )
@@ -1113,6 +1218,7 @@ def render_report_md(payload: dict) -> str:
 def render_report_txt(payload: dict) -> str:
     s = payload["summary"]
     details = payload.get("table_details") or []
+    line_a_label, line_b_label = _source_line_labels(payload)
     out = [
         "COMPARACAO AUTOMATIZADA DE BANCOS",
         f"Gerado em: {payload['generated_at']}",
@@ -1138,9 +1244,10 @@ def render_report_txt(payload: dict) -> str:
         "TABELAS COM ALTERACAO",
     ]
     for row in payload["rows"]:
+        status_label = _status_label(str(row.get("status") or ""))
         out.append(
             "  - "
-            + f"{row.get('table','')} | status={row.get('status','')} "
+            + f"{row.get('table','')} | status={status_label} "
             + f"| rows_a={row.get('row_count_a','')} rows_b={row.get('row_count_b','')} "
             + f"| diff={row.get('diff_count','')} "
             + (f"| error={row.get('error','')}" if row.get("error") else "")
@@ -1157,12 +1264,13 @@ def render_report_txt(payload: dict) -> str:
             f"  linhas_diff: {detail.get('rows_returned', 0)} de {detail.get('rows_total', 0)}"
         )
         for item in detail.get("records") or []:
-            out.append(f"  key={item.get('key_text','-')} tipo={item.get('type','')}")
+            row_type = _type_label(str(item.get("type") or ""))
+            out.append(f"  key={item.get('key_text','-')} tipo={row_type}")
             cols = detail.get("visible_columns") or []
             old_pairs = [f"{c}={str((item.get('old') or {}).get(c, ''))}" for c in cols]
             new_pairs = [f"{c}={str((item.get('new') or {}).get(c, ''))}" for c in cols]
-            out.append("    anterior: " + " | ".join(old_pairs))
-            out.append("    novo    : " + " | ".join(new_pairs))
+            out.append(f"    {line_a_label}: " + " | ".join(old_pairs))
+            out.append(f"    {line_b_label}: " + " | ".join(new_pairs))
     return "\n".join(out) + "\n"
 
 
