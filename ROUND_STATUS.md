@@ -1,5 +1,47 @@
 # Round Status
 
+## Current Slice: Full UI Playwright Reliability Sweep
+
+### Goal
+
+1. Raise real usability confidence on all main web pages (`/`, `/admin.html`, `/compare_dbs`, `/track_record`) with browser-level validation.
+2. Cover missing UI operations that were not exercised by the prior smoke set.
+3. Keep fixes minimal and focused on reliable operation, not broad refactor.
+
+### Applied
+
+1. Expanded browser suite in:
+   - `tests/test_frontend_invalid_flows_browser.py`
+2. Added new end-to-end coverage for:
+   - shell options menu + help toggle + theme persistence
+   - main files panel open/close, tab switch, delete flow
+   - advanced search controls (`token_mode`, `tablesFilter`, `clearTablesFilter`)
+   - search export-all CSV flow
+   - admin upload -> active DB selection -> priority save -> index trigger
+   - track page directory browse modal + selection + execution
+   - compare options/help, overview toggle, and additional run mode checks
+3. Hardened fixture realism:
+   - sample data now pre-populates upload catalog with multiple DuckDB files to exercise real tab/file operations.
+
+### What Was Proved
+
+- Browser suite now validates both invalid flows and core success operations across all primary UI pages.
+- Real user operations now covered include file lifecycle actions, advanced search inputs, compare summary/report controls, and track directory navigation.
+- No backend/UI regressions detected in integrated API + browser validation.
+
+### Validation After Changes
+
+- `PYTHONPATH=. uv run --python 3.13 python -m py_compile tests/test_frontend_invalid_flows_browser.py`: passed
+- `uv run --python 3.13 ruff check tests/test_frontend_invalid_flows_browser.py`: passed
+- `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_frontend_invalid_flows_browser.py`: `17 passed`
+- `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_db_rows_api.py tests/test_compare_dbs.py tests/test_find_record_across_dbs_access_fallback.py tests/test_main_port_fallback.py tests/test_frontend_invalid_flows_browser.py`: `132 passed`
+
+### Remaining Superficial Pending
+
+1. Add drag-and-drop priority reorder browser assertion in `admin.html` (today we validate save/update, not DnD movement).
+2. Add browser assertion for compare CSV content under each isolated change type (`changed` only, `added` only, `removed` only).
+3. Add browser assertion for track modal `dirUpBtn` navigation behavior on nested directories.
+
 ## Current Slice: Help Matrix, JS Lint Recovery, And Windows Access Smoke Path
 
 ### Goal

@@ -1,6 +1,7 @@
 import threading
 from contextlib import contextmanager
 import json
+import shutil
 
 import pytest
 import sqlite3
@@ -81,7 +82,7 @@ def ui_server(tmp_path, monkeypatch):
 
 
 @pytest.fixture()
-def sample_data(tmp_path, monkeypatch):
+def sample_data(tmp_path, monkeypatch, ui_server):
     search_db = tmp_path / "search.duckdb"
     conn = duckdb.connect(str(search_db))
     conn.execute("CREATE TABLE signals (id INTEGER, name VARCHAR, note VARCHAR)")
@@ -151,10 +152,19 @@ def sample_data(tmp_path, monkeypatch):
     sqlite_conn.commit()
     sqlite_conn.close()
 
+    upload_dir = local_search.UPLOAD_DIR
+    uploaded_primary = upload_dir / "search.duckdb"
+    uploaded_secondary = upload_dir / "search_extra.duckdb"
+    shutil.copy2(search_db, uploaded_primary)
+    shutil.copy2(search_db, uploaded_secondary)
+
     monkeypatch.setitem(local_search.runtime_state, "db_path", str(search_db))
-    monkeypatch.setitem(local_search.cfg, "db_path", str(search_db))
+    monkeypatch.setitem(local_search.runtime_state, "db_path", str(uploaded_primary))
+    monkeypatch.setitem(local_search.cfg, "db_path", str(uploaded_primary))
     return {
         "search_db": search_db,
+        "uploaded_primary": uploaded_primary,
+        "uploaded_secondary": uploaded_secondary,
         "sqlite_search_db": sqlite_search_db,
         "db_a": db_a,
         "db_b": db_b,
@@ -502,3 +512,202 @@ def test_success_frontend_smoke_track_page(ui_server, sample_data):
             "() => (document.getElementById('summary').textContent || '').includes('Encontrado em 1 arquivo')"
         )
         assert "sample.sqlite3" in (page.locator("#resultsTable").text_content() or "")
+
+
+def test_success_frontend_shell_options_and_files_panel(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/")
+        page.wait_for_selector("#optionsBtn")
+
+        assert page.locator("#optionsMenu").get_attribute("hidden") is not None
+        page.locator("#optionsBtn").click()
+        page.wait_for_function(
+            "() => !document.getElementById('optionsMenu').hasAttribute('hidden')"
+        )
+        page.locator("#openHelpBusca").click()
+        page.wait_for_function(
+            "() => getComputedStyle(document.getElementById('helpBuscaBox')).display !== 'none'"
+        )
+        page.locator("#themeToggle").click()
+        saved_theme = page.evaluate("() => localStorage.getItem('mdb_theme')")
+        assert saved_theme in {"system", "dark", "light"}
+
+        page.locator("#openFilesBtn").click()
+        page.wait_for_function(
+            "() => document.getElementById('filesPanel') && !document.getElementById('filesPanel').hidden"
+        )
+        files_text = page.locator("#filesList").text_content() or ""
+        assert "search.duckdb" in files_text
+        assert "search_extra.duckdb" in files_text
+
+        tabs = page.locator("#dbTabs .db-tab")
+        assert tabs.count() >= 2
+        first_name = (tabs.nth(0).text_content() or "").strip()
+        second_name = (tabs.nth(1).text_content() or "").strip()
+        tabs.nth(1).click()
+        page.wait_for_function(
+            f"() => (document.getElementById('currentDb').textContent || '').includes({json.dumps(second_name)})"
+        )
+
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.locator("#filesList .file-row", has_text=first_name).locator(
+            "button:has-text('Excluir')"
+        ).first.click()
+        page.wait_for_function(
+            f"() => !(document.getElementById('filesList').textContent || '').includes({json.dumps(first_name)})"
+        )
+        remaining_text = page.locator("#filesList").text_content() or ""
+        assert second_name in remaining_text
+        page.locator("#closeFilesBtn").click()
+        page.wait_for_function(
+            "() => document.getElementById('filesPanel') && document.getElementById('filesPanel').hidden"
+        )
+
+
+def test_success_frontend_search_advanced_options_and_export_all(ui_server, sample_data, tmp_path):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/")
+        page.locator("#openSearchInlineMirror").click()
+        page.wait_for_selector("#searchBtn")
+
+        page.locator("#advancedPanel > summary").click()
+        page.locator("#q").fill("alpha aux_unidad")
+        page.locator("#token_mode").select_option("all")
+        page.locator("#tablesFilter").select_option(["signals"])
+        page.locator("#searchBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('searchMeta').textContent || '').includes('Resultados: 1')"
+        )
+        assert "Backend:" in (page.locator("#searchMeta").text_content() or "")
+        assert "signals" in (page.locator("#resultsArea").text_content() or "")
+
+        page.locator("#openSearchInlineMirror").click()
+        page.wait_for_function(
+            "() => { const el = document.getElementById('exportAllBtn'); return !!el && el.offsetParent !== null && !el.disabled; }"
+        )
+        with page.expect_download() as download_info:
+            page.locator("#exportAllBtn").click()
+        download = download_info.value
+        export_path = tmp_path / "search_results.csv"
+        download.save_as(str(export_path))
+        csv_text = export_path.read_text(encoding="utf-8")
+        assert "table" in csv_text
+        assert "signals" in csv_text
+        assert "alpha" in csv_text
+
+        page.locator("#clearTablesFilter").click()
+        selected_count = page.evaluate(
+            "() => Array.from(document.getElementById('tablesFilter').selectedOptions).length"
+        )
+        assert selected_count == 0
+
+        page.locator("#q").fill("inexistente_unico_123")
+        page.locator("#searchBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('searchMeta').textContent || '').includes('Nenhum resultado')"
+        )
+
+
+def test_success_frontend_admin_upload_select_priority_and_index(ui_server, sample_data, tmp_path):
+    upload_db = tmp_path / "admin_uploaded.duckdb"
+    conn = duckdb.connect(str(upload_db))
+    conn.execute("CREATE TABLE admin_items (id INTEGER, txt VARCHAR)")
+    conn.execute("INSERT INTO admin_items VALUES (1, 'a')")
+    conn.close()
+
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/admin.html")
+        page.wait_for_selector("#uploadForm")
+
+        page.set_input_files("#fileInput", str(upload_db))
+        page.locator("#uploadBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('uploadsList').textContent || '').includes('admin_uploaded.duckdb')"
+        )
+        page.wait_for_function(
+            "() => (document.getElementById('currentDb').textContent || '').includes('admin_uploaded.duckdb')"
+        )
+
+        page.locator("#refreshTablesBtn").click()
+        page.wait_for_function(
+            "() => document.querySelectorAll('#priorityList li').length >= 1"
+        )
+        page.locator("#savePriorityBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('priorityMsg').textContent || '').length > 0"
+        )
+
+        page.locator("#startIndex").click()
+        page.wait_for_function(
+            "() => (document.getElementById('indexMsg').textContent || '').length > 0"
+        )
+        index_text = page.locator("#indexMsg").text_content() or ""
+        assert "Selecione um DB ativo" not in index_text
+
+
+def test_success_frontend_track_browse_modal_flow(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/track_record")
+        page.wait_for_selector("#browseDirBtn")
+        page.evaluate(
+            "(path) => localStorage.setItem('track_last_dir', path)",
+            str(sample_data["track_dir"]),
+        )
+
+        page.locator("#browseDirBtn").click()
+        page.wait_for_function(
+            "() => document.getElementById('dirModal').classList.contains('visible')"
+        )
+        page.wait_for_function(
+            "() => (document.getElementById('dirModalPath').textContent || '').length > 0"
+        )
+        page.locator("#dirSelectBtn").click()
+        page.wait_for_function(
+            "() => !document.getElementById('dirModal').classList.contains('visible')"
+        )
+        selected_dir = page.locator("#customDirInput").input_value()
+        assert selected_dir == str(sample_data["track_dir"])
+
+        page.locator("#filtersInput").fill("RTUNO=1,PNTNO=2304")
+        page.locator("#runBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('summary').textContent || '').includes('Encontrado em 1 arquivo')"
+        )
+
+
+def test_success_frontend_compare_options_and_overview(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#optionsBtn")
+        assert page.locator("#optionsMenu").get_attribute("hidden") is not None
+        page.locator("#optionsBtn").click()
+        page.wait_for_function(
+            "() => !document.getElementById('optionsMenu').hasAttribute('hidden')"
+        )
+        page.locator("#openHelpCompare").click()
+        page.wait_for_function(
+            "() => getComputedStyle(document.getElementById('helpCompareBox')).display !== 'none'"
+        )
+        page.locator("#themeToggle").click()
+
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id")
+        page.locator("#rowLimitEnabled").set_checked(False)
+        page.locator("#runCompareBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusCompare').textContent || '').includes('Comparacao concluida.')"
+        )
+        page.locator("#btnTablesOverview").click()
+        page.wait_for_function(
+            "() => (document.getElementById('tablesOverview').style.display || '').toLowerCase() === 'block'"
+        )
+        assert "items" in (page.locator("#tablesOverview").text_content() or "")
+        view_buttons = page.locator("#compareViewModeAnchor .pill-btn")
+        if view_buttons.count() > 1:
+            view_buttons.nth(1).click()
+            assert view_buttons.nth(1).count() == 1

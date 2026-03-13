@@ -20,9 +20,10 @@ Track real product debt that should not be fixed in the current slice.
 9. Expand compare endpoint validation for non-string payload fields if external callers are sending mixed JSON types in practice.
 10. Continue reducing the remaining page-specific CSS duplication now that `static/index.html`, `static/track_record.html`, and `static/admin.html` all use the shared shell/component layer.
 11. Continue shrinking the compare frontend modules (`static/compare_dbs.js`, `static/compare_dbs_render.js`) after the current operator flow stabilizes.
-12. Keep expanding the browser regression beyond the current stable success/invalid coverage:
-   - pagination and export flows
-   - richer compare/report assertions
+12. Keep expanding browser regression on top of the now broader full-UI suite:
+   - admin drag-and-drop priority reorder assertions
+   - compare export assertions by isolated change-type modes
+   - track directory modal upward-navigation assertions
    - environment strategy for Playwright browser bootstrap
 13. Keep hardening the SQLite contract across the main Flask UI/backend flow:
    - explicit status messaging in the UI
@@ -53,7 +54,7 @@ Track real product debt that should not be fixed in the current slice.
    - compatible Access ODBC driver
    - optional `mdbtools` path for `.mdb`
 26. Decide if `artifacts/validation/derived/` should stay local-only forever or gain a curated tiny committed fixture subset for CI.
-27. Add a dedicated compare-browser smoke for report export payload quality (not only filename/download status).
+27. Add a dedicated compare-browser smoke for report export payload quality per filter mode (`changed`, `added`, `removed`), not only combined mode.
 
 ## Do Not Pull Into Slice 1
 
