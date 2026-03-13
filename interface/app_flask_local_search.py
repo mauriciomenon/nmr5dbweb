@@ -1090,8 +1090,7 @@ def list_tables_duckdb(path):
     """Lista tabelas de um arquivo DuckDB."""
     conn = duckdb_connect(path)
     try:
-        rows = conn.execute("SHOW TABLES").fetchall()
-        return [r[0] for r in rows]
+        return list_tables_duckdb_conn(conn)
     finally:
         conn.close()
 
@@ -1100,12 +1099,21 @@ def list_tables_sqlite(path):
     """Lista tabelas de um arquivo SQLite."""
     conn = sqlite_connect(path)
     try:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        ).fetchall()
-        return [r[0] for r in rows]
+        return list_tables_sqlite_conn(conn)
     finally:
         conn.close()
+
+
+def list_tables_duckdb_conn(conn):
+    rows = conn.execute("SHOW TABLES").fetchall()
+    return [r[0] for r in rows]
+
+
+def list_tables_sqlite_conn(conn):
+    rows = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    return [r[0] for r in rows]
 
 
 def list_tables_for_path(path):
@@ -1122,8 +1130,7 @@ def list_tables_for_path(path):
 def get_table_columns_duckdb(path, table):
     conn = duckdb_connect(path)
     try:
-        cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
-        return [column[0] for column in cur.description]
+        return get_table_columns_duckdb_conn(conn, table)
     finally:
         conn.close()
 
@@ -1131,10 +1138,19 @@ def get_table_columns_duckdb(path, table):
 def get_table_columns_sqlite(path, table):
     conn = sqlite_connect(path)
     try:
-        cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
-        return [desc[0] for desc in cur.description or []]
+        return get_table_columns_sqlite_conn(conn, table)
     finally:
         conn.close()
+
+
+def get_table_columns_duckdb_conn(conn, table):
+    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+    return [column[0] for column in cur.description]
+
+
+def get_table_columns_sqlite_conn(conn, table):
+    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+    return [desc[0] for desc in cur.description or []]
 
 
 def build_table_filter_clause(columns, col, q, cast_type):
@@ -1184,11 +1200,11 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
 def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
     conn = duckdb_connect(path)
     try:
-        tables = list_tables_duckdb(path)
+        tables = list_tables_duckdb_conn(conn)
         if table not in tables:
             raise LookupError(f"table not found: {table}")
         quoted_table = quote_identifier(table)
-        cols = get_table_columns_duckdb(path, table)
+        cols = get_table_columns_duckdb_conn(conn, table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -1210,11 +1226,11 @@ def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
 def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
     conn = sqlite_connect(path)
     try:
-        tables = list_tables_sqlite(path)
+        tables = list_tables_sqlite_conn(conn)
         if table not in tables:
             raise LookupError(f"table not found: {table}")
         quoted_table = quote_identifier(table)
-        cols = get_table_columns_sqlite(path, table)
+        cols = get_table_columns_sqlite_conn(conn, table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -2096,6 +2112,47 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
             except Exception:
                 pass
 
+
+def run_search_for_context(ctx, search_args):
+    if ctx["db_engine"] == "duckdb":
+        payload = api_search_duckdb(
+            ctx["db_path"],
+            search_args["q"],
+            search_args["per_table"],
+            search_args["candidate_limit"],
+            search_args["total_limit"],
+            search_args["token_mode"],
+            search_args["min_score"],
+            tables=search_args["tables"],
+        )
+        return payload, None
+    if ctx["db_engine"] == "sqlite":
+        payload = fallback_search_sqlite(
+            ctx["db_path"],
+            search_args["q"],
+            per_table=search_args["per_table"],
+            candidate_limit=search_args["candidate_limit"],
+            total_limit=search_args["total_limit"],
+            token_mode=search_args["token_mode"],
+            min_score=search_args["min_score"],
+            tables=search_args["tables"],
+        )
+        return payload, None
+    if ctx["db_engine"] == "access":
+        payload = fallback_search_access(
+            ctx["db_path"],
+            search_args["q"],
+            per_table=search_args["per_table"],
+            candidate_limit=search_args["candidate_limit"],
+            total_limit=search_args["total_limit"],
+            token_mode=search_args["token_mode"],
+            min_score=search_args["min_score"],
+        )
+        if isinstance(payload, dict) and payload.get("error"):
+            return {"error": payload.get("error")}, 500
+        return payload, None
+    return {"error": f"Unsupported DB format: {ctx['db_path']}"}, 400
+
 @app.route("/api/search", methods=["GET"])
 def api_search():
     try:
@@ -2105,46 +2162,10 @@ def api_search():
     ctx, error_response = get_search_db_context_response()
     if error_response is not None:
         return error_response
-    if ctx["db_engine"] == "duckdb":
-        return jsonify(
-            api_search_duckdb(
-                ctx["db_path"],
-                search_args["q"],
-                search_args["per_table"],
-                search_args["candidate_limit"],
-                search_args["total_limit"],
-                search_args["token_mode"],
-                search_args["min_score"],
-                tables=search_args["tables"],
-            )
-        )
-    if ctx["db_engine"] == "sqlite":
-        return jsonify(
-            fallback_search_sqlite(
-                ctx["db_path"],
-                search_args["q"],
-                per_table=search_args["per_table"],
-                candidate_limit=search_args["candidate_limit"],
-                total_limit=search_args["total_limit"],
-                token_mode=search_args["token_mode"],
-                min_score=search_args["min_score"],
-                tables=search_args["tables"],
-            )
-        )
-    if ctx["db_engine"] == "access":
-        fb = fallback_search_access(
-            ctx["db_path"],
-            search_args["q"],
-            per_table=search_args["per_table"],
-            candidate_limit=search_args["candidate_limit"],
-            total_limit=search_args["total_limit"],
-            token_mode=search_args["token_mode"],
-            min_score=search_args["min_score"],
-        )
-        if isinstance(fb, dict) and fb.get("error"):
-            return jsonify({"error": fb.get("error")}), 500
-        return jsonify(fb)
-    return jsonify({"error": f"Unsupported DB format: {ctx['db_path']}"}), 400
+    payload, status_code = run_search_for_context(ctx, search_args)
+    if status_code is None:
+        return jsonify(payload)
+    return jsonify(payload), status_code
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
