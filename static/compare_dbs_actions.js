@@ -116,6 +116,12 @@ function onTableChange() {
   cmpInput.value = '';
 }
 
+const COMPARE_UI_TO_BACKEND_TYPES = {
+  added: 'removed',
+  removed: 'added',
+  changed: 'changed',
+};
+
 function collectCompareRequest(page = 1) {
   const db1 = document.getElementById('db1Path').value.trim();
   const db2 = document.getElementById('db2Path').value.trim();
@@ -153,9 +159,11 @@ function collectCompareRequest(page = 1) {
   }
 
   const change_types = [];
-  if (!cbChanged || cbChanged.checked) change_types.push('changed');
-  if (!cbAdded || cbAdded.checked) change_types.push('removed');
-  if (!cbRemoved || cbRemoved.checked) change_types.push('added');
+  if (!cbChanged || cbChanged.checked) change_types.push(COMPARE_UI_TO_BACKEND_TYPES.changed);
+  if (!cbAdded || cbAdded.checked)
+    change_types.push(COMPARE_UI_TO_BACKEND_TYPES.added);
+  if (!cbRemoved || cbRemoved.checked)
+    change_types.push(COMPARE_UI_TO_BACKEND_TYPES.removed);
 
   const changed_column = colSelect && colSelect.value ? colSelect.value : null;
   const page_size = row_limit || null;

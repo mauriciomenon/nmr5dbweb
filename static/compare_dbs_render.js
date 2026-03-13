@@ -1,10 +1,48 @@
+const COMPARE_UI_DIFF_TYPES = {
+  added: {
+    sourceLabel: 'banco ANTIGO (B)',
+    directionLabel: 'no banco ANTIGO',
+    uiLabel: 'Removida',
+    badgeClass: 'removed',
+  },
+  removed: {
+    sourceLabel: 'banco NOVO (A)',
+    directionLabel: 'no banco NOVO',
+    uiLabel: 'Nova',
+    badgeClass: 'added',
+  },
+  changed: {
+    sourceLabel: 'A e B',
+    directionLabel: 'em ambos os bancos',
+    uiLabel: 'Alterada',
+    badgeClass: 'changed',
+  },
+};
+
+function escapeHtmlText(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function shortDbLabel(pathValue) {
+  const raw = String(pathValue || '').trim();
+  if (!raw) return '-';
+  const normalized = raw.replace(/\\/g, '/');
+  const parts = normalized.split('/').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : raw;
+}
+
 function buildCompareSummary(data, rows, changedRows) {
   const s = data.summary || {};
   const same = s.same_count ?? 0;
-  const onlyInB = s.added_count ?? rows.added.length;
-  const onlyInA = s.removed_count ?? rows.removed.length;
+  const onlyInDbA = s.removed_count ?? rows.removed.length;
+  const onlyInDbB = s.added_count ?? rows.added.length;
   const changed = s.changed_count ?? changedRows.length;
-  const totalKeys = s.keys_total ?? same + onlyInA + onlyInB + changed;
+  const totalKeys = s.keys_total ?? same + onlyInDbA + onlyInDbB + changed;
   const colDiffCounts = {};
 
   for (const row of changedRows) {
@@ -16,10 +54,11 @@ function buildCompareSummary(data, rows, changedRows) {
 
   return {
     same,
-    onlyInA,
-    onlyInB,
+    onlyInDbA,
+    onlyInDbB,
     changed,
     totalKeys,
+    netDelta: onlyInDbA - onlyInDbB,
     colDiffList: Object.entries(colDiffCounts)
       .sort((a, b) => b[1] - a[1])
       .map(([col, count]) => `${col}: ${count}`)
@@ -36,7 +75,7 @@ function buildCompareHighlights(data, rows, changedRows) {
       .map((key) => `${key}=${JSON.stringify((first.key || {})[key])}`)
       .join(', ');
     highlights.push(
-      `Primeiro registro removido do banco novo: ${keyText || 'sem chave visivel'}`
+      `Primeiro registro ${COMPARE_UI_DIFF_TYPES.added.directionLabel}: ${keyText || 'sem chave visivel'}`
     );
   }
   if (rows.removed.length) {
@@ -45,7 +84,7 @@ function buildCompareHighlights(data, rows, changedRows) {
       .map((key) => `${key}=${JSON.stringify((first.key || {})[key])}`)
       .join(', ');
     highlights.push(
-      `Primeiro registro novo no banco atual: ${keyText || 'sem chave visivel'}`
+      `Primeiro registro ${COMPARE_UI_DIFF_TYPES.removed.directionLabel}: ${keyText || 'sem chave visivel'}`
     );
   }
   if (changedRows.length) {
@@ -429,9 +468,14 @@ function renderCompareSummary(data, summaryData) {
   const domainSignals = buildCompareDomainSignals(changedRows);
   const riskSignals = buildCompareRiskSignals(data, changedRows);
   const domainRiskSignals = buildCompareDomainRiskSignals(changedRows);
-  const totalChanged = summaryData.changed || changedRows.length;
-  const totalKeys = summaryData.totalKeys || 1;
-  const changedDensity = ((totalChanged / totalKeys) * 100).toFixed(1);
+  const totalChanged = Number(summaryData.changed || changedRows.length || 0);
+  const totalKeys = Number(summaryData.totalKeys || 0);
+  const changedDensity = totalKeys > 0 ? ((totalChanged / totalKeys) * 100).toFixed(1) : '0.0';
+  const dbALabel = shortDbLabel(data.db1);
+  const dbBLabel = shortDbLabel(data.db2);
+  const rowsA = Number((data.summary || {}).rows_a || 0);
+  const rowsB = Number((data.summary || {}).rows_b || 0);
+  const netDelta = Number(summaryData.netDelta || 0);
   const topKeysHtml = review.topKeys.length
     ? `<div class="report-review-list">${review.topKeys
         .map(
@@ -538,20 +582,22 @@ function renderCompareSummary(data, summaryData) {
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
-        <div><strong>Tabela analisada:</strong> ${data.table}</div>
-        <div><strong>Chaves (K):</strong> ${(data.key_columns || []).join(', ')}</div>
+        <div><strong>Tabela analisada:</strong> ${escapeHtmlText(data.table)}</div>
+        <div><strong>Chaves (K):</strong> ${(data.key_columns || []).map((key) => escapeHtmlText(key)).join(', ')}</div>
+        <div><strong>A (NOVO):</strong> ${escapeHtmlText(dbALabel)} · <strong>B (ANTIGO):</strong> ${escapeHtmlText(dbBLabel)}</div>
+        <div><strong>Volume bruto:</strong> ${rowsA} registros em A · ${rowsB} registros em B · saldo ${netDelta >= 0 ? '+' : ''}${netDelta}</div>
         <div>
           <strong>Visao geral:</strong> ${summaryData.totalKeys} registros (chaves) analisados
           <div class="result-badges-row">
             <span class="badge same">${summaryData.same} mantidos (iguais em A e B)</span>
-            <span class="badge added">+${summaryData.onlyInA} novos (existem so em A - banco NOVO)</span>
-            <span class="badge removed">-${summaryData.onlyInB} removidos (existiam so em B - banco ANTIGO)</span>
+            <span class="badge added">+${summaryData.onlyInDbA} novos (apenas em A - banco NOVO)</span>
+            <span class="badge removed">-${summaryData.onlyInDbB} removidos (apenas em B - banco ANTIGO)</span>
             <span class="badge changed">±${summaryData.changed} alterados (chave existe em ambos, mas com diferenca)</span>
           </div>
         </div>
-        ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${summaryData.colDiffList}</div>` : ''}
-        ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.join('<br>')}</div>` : ''}
-        ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.join('<br>')}</div>` : ''}
+        ${summaryData.colDiffList ? `<div class="result-col-diff"><strong>Colunas com diferenca (qtd. de registros alterados):</strong> ${escapeHtmlText(summaryData.colDiffList)}</div>` : ''}
+        ${highlights.length ? `<div class="result-col-diff"><strong>Pistas operacionais:</strong><br>${highlights.map((item) => escapeHtmlText(item)).join('<br>')}</div>` : ''}
+        ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.map((item) => escapeHtmlText(item)).join('<br>')}</div>` : ''}
         ${topKeysHtml ? `<div class="result-col-diff"><strong>Chaves para revisar primeiro:</strong>${topKeysHtml}</div>` : ''}
         ${topColumnsHtml ? `<div class="result-col-diff"><strong>Colunas mais impactadas:</strong>${topColumnsHtml}</div>` : ''}
         ${patternsHtml ? `<div class="result-col-diff"><strong>Padroes de alteracao:</strong>${patternsHtml}</div>` : ''}
@@ -646,12 +692,12 @@ function buildCompareSections(data, rows) {
     },
     {
       type: 'added',
-      title: 'Novas - so em A (banco NOVO)',
+      title: `Novas - so em A (${COMPARE_UI_DIFF_TYPES.removed.sourceLabel})`,
       rows: rows.removed,
     },
     {
       type: 'removed',
-      title: 'Removidas - so em B (banco ANTIGO)',
+      title: `Removidas - so em B (${COMPARE_UI_DIFF_TYPES.added.sourceLabel})`,
       rows: rows.added,
     },
   ];
@@ -885,18 +931,9 @@ function renderCompareSection(
     const rowId = `row-${++rowCounterRef.value}`;
     const rowSummary = document.createElement('summary');
     const summaryData = buildRowSummary(data, row, isRangerSostat);
-    const visualType =
-      row.type === 'removed'
-        ? 'added'
-        : row.type === 'added'
-          ? 'removed'
-          : 'changed';
-    const typeLabel =
-      row.type === 'removed'
-        ? 'Nova'
-        : row.type === 'added'
-          ? 'Removida'
-          : 'Alterada';
+    const typeConfig = COMPARE_UI_DIFF_TYPES[row.type] || COMPARE_UI_DIFF_TYPES.changed;
+    const visualType = typeConfig.badgeClass || row.type;
+    const typeLabel = `${typeConfig.uiLabel} (${typeConfig.directionLabel})`;
     rowSummary.innerHTML = `
       <span class="badge ${visualType}" style="margin-right:6px;">${typeLabel}</span>
       <span style="font-size:12px;">${summaryData.keyParts.join(', ')}${isRangerSostat && summaryData.extraParts.length ? ' · ' + summaryData.extraParts.join(' · ') : ''}</span>
