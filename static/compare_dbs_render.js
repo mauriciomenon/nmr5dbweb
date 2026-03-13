@@ -449,6 +449,7 @@ function buildCompareDomainSignals(changedRows) {
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
   if (!summaryEl) return;
+  const safe = escapeHtmlText;
   const changedRows = data.rows
     ? data.rows.filter((row) => row.type === 'changed')
     : [];
@@ -484,7 +485,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${review.topKeys
         .map(
           ([keyText, meta]) =>
-            `<div class="report-review-item"><strong>${keyText}</strong><span>${meta.count} campos mudaram${meta.columns.length ? ' · ' + meta.columns.slice(0, 5).join(', ') : ''}</span></div>`
+            `<div class="report-review-item"><strong>${safe(keyText)}</strong><span>${meta.count} campos mudaram${meta.columns.length ? ' · ' + meta.columns.slice(0, 5).map((item) => safe(item)).join(', ') : ''}</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -492,7 +493,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${review.topColumns
         .map(
           ([column, count]) =>
-            `<div class="report-review-item"><strong>${column}</strong><span>${count} chaves alteradas</span></div>`
+            `<div class="report-review-item"><strong>${safe(column)}</strong><span>${count} chaves alteradas</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -500,7 +501,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${patterns
         .map(
           ([label, meta]) =>
-            `<div class="report-review-item"><strong>${label}</strong><span>${meta.count} chave(s) · exemplo: ${meta.sample}</span></div>`
+            `<div class="report-review-item"><strong>${safe(label)}</strong><span>${meta.count} chave(s) · exemplo: ${safe(meta.sample)}</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -508,7 +509,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${domainSignals.topFamilies
         .map(
           ([family, count]) =>
-            `<div class="report-review-item"><strong>${family}</strong><span>${count} chave(s) alteradas</span></div>`
+            `<div class="report-review-item"><strong>${safe(family)}</strong><span>${count} chave(s) alteradas</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -516,7 +517,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${domainSignals.topTransitions
         .map(
           ([label, count]) =>
-            `<div class="report-review-item"><strong>${label}</strong><span>${count} ocorrencia(s)</span></div>`
+            `<div class="report-review-item"><strong>${safe(label)}</strong><span>${count} ocorrencia(s)</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -524,20 +525,20 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Mudancas com alto impacto (chaves com mais alteracoes):</strong>${anomalySignals.highImpact
         .map(
           (it) =>
-            `<div class="report-review-item"><strong>${it.key}</strong><span>${it.count} colunas alteradas</span></div>`
+            `<div class="report-review-item"><strong>${safe(it.key)}</strong><span>${it.count} colunas alteradas</span></div>`
         )
         .join('')}</div>`
     : '';
   const anomalyMissingKeysHtml = anomalySignals.keyMissing.length
     ? `<div class="result-col-diff"><strong>Chaves sem identificacao primaria completa:</strong>${anomalySignals.keyMissing
-        .map((item) => `<div class="report-review-item">${item}</div>`)
+        .map((item) => `<div class="report-review-item">${safe(item)}</div>`)
         .join('')}</div>`
     : '';
   const anomalyTransitionHtml = anomalySignals.criticalTransition.length
     ? `<div class="result-col-diff"><strong>Transicoes de estado mais impactantes:</strong>${anomalySignals.criticalTransition
         .map(
           ([label, count]) =>
-            `<div class="report-review-item"><strong>${label}</strong><span>${count} registro(s)</span></div>`
+            `<div class="report-review-item"><strong>${safe(label)}</strong><span>${count} registro(s)</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -545,7 +546,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Colunas com maior concentracao de mudanca:</strong>${anomalySignals.topCriticalCols
         .map(
           ([col, count]) =>
-            `<div class="report-review-item"><strong>${col}</strong><span>${count} mudancas</span></div>`
+            `<div class="report-review-item"><strong>${safe(col)}</strong><span>${count} mudancas</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -553,7 +554,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Chaves com risco operacional acima de 3:</strong>${riskSignals.topRiskRows
         .map(
           (item) =>
-            `<div class="report-review-item"><strong>${item.key}</strong><span>${item.score} ponto(s) · ${item.columns} · ${item.transition}</span></div>`
+            `<div class="report-review-item"><strong>${safe(item.key)}</strong><span>${item.score} ponto(s) · ${safe(item.columns)} · ${safe(item.transition)}</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -561,7 +562,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Concentracao repetitiva de risco:</strong>${riskSignals.repeatedRiskKeys
         .map(
           ([keyText, score]) =>
-            `<div class="report-review-item"><strong>${keyText}</strong><span>${score} pontos concentrados</span></div>`
+            `<div class="report-review-item"><strong>${safe(keyText)}</strong><span>${score} pontos concentrados</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -569,9 +570,9 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Familias com risco operacional:</strong>${domainRiskSignals.familyRisk
         .map((item) => {
           const transitionText = item.transitions.length
-            ? ` · transicao principal ${item.transitions[0][0]} (${item.transitions[0][1]})`
+            ? ` · transicao principal ${safe(item.transitions[0][0])} (${item.transitions[0][1]})`
             : '';
-          return `<div class="report-review-item"><strong>${item.family}</strong><span>${item.score} pontos · ${item.count} chave(s)${transitionText}</span></div>`;
+          return `<div class="report-review-item"><strong>${safe(item.family)}</strong><span>${item.score} pontos · ${item.count} chave(s)${transitionText}</span></div>`;
         })
         .join('')}</div>`
     : '';
@@ -579,7 +580,7 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="result-col-diff"><strong>Transicoes operacionais com concentracao:</strong>${domainRiskSignals.transitionRisk
         .map(
           ([transition, count]) =>
-            `<div class="report-review-item"><strong>${transition}</strong><span>${count} ocorrencia(s)</span></div>`
+            `<div class="report-review-item"><strong>${safe(transition)}</strong><span>${count} ocorrencia(s)</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -590,6 +591,7 @@ function renderCompareSummary(data, summaryData) {
         <div><strong>Chaves (K):</strong> ${(data.key_columns || []).map((key) => escapeHtmlText(key)).join(', ')}</div>
         <div><strong>A (NOVO):</strong> ${escapeHtmlText(dbALabel)} · <strong>B (ANTIGO):</strong> ${escapeHtmlText(dbBLabel)}</div>
         <div><strong>Volume bruto:</strong> ${rowsA} registros em A · ${rowsB} registros em B · saldo ${netDelta >= 0 ? '+' : ''}${netDelta}</div>
+        <div id="compareViewModeAnchor"></div>
         <div>
           <strong>Visao geral:</strong> ${summaryData.totalKeys} registros (chaves) analisados
           <div class="result-badges-row">
@@ -978,9 +980,7 @@ function renderResult(data) {
   );
   renderCompareSummary(data, summaryData);
   const controls = createViewModeControls();
-  const summaryCard = document.querySelector(
-    '.result-summary-card .result-summary-grid > div:nth-child(3)'
-  );
+  const summaryCard = document.getElementById('compareViewModeAnchor');
   if (summaryCard) {
     summaryCard.appendChild(controls);
   }

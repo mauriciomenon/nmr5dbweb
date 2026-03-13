@@ -293,6 +293,11 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert "Pistas operacionais" in (page.locator("#summary").text_content() or "")
         assert "Padroes de alteracao" in (page.locator("#summary").text_content() or "")
         assert "Familias mais afetadas" in (page.locator("#summary").text_content() or "")
+        assert "A (NOVO):" in (page.locator("#summary").text_content() or "")
+        assert "B (ANTIGO):" in (page.locator("#summary").text_content() or "")
+        assert "Volume bruto:" in (page.locator("#summary").text_content() or "")
+        assert "saldo" in (page.locator("#summary").text_content() or "")
+        assert page.locator("#compareViewModeAnchor .pill-btn").count() >= 2
 
 
 def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_data):
