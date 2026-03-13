@@ -91,7 +91,7 @@ SOANLG_ALWAYS_COLUMNS = [
     "LLIM6",
     "ITEMNB",
 ]
-INTEGER_DISPLAY_COLUMNS = {"RTUNO", "PNTNO"}
+INTEGER_DISPLAY_COLUMNS = {"RTUNO", "PNTNO", "UNIQID"}
 
 
 @dataclass(frozen=True)
@@ -609,13 +609,12 @@ def infer_key_columns(db1_path: Path, db2_path: Path, table: str, common_columns
     return [ordered[0]]
 
 
-def _key_to_text(key_map: dict) -> str:
-    if not isinstance(key_map, dict) or not key_map:
-        return "-"
-    parts = []
-    for key in sorted(key_map.keys()):
-        parts.append(f"{key}={key_map.get(key)}")
-    return " | ".join(parts)
+def _build_key_values_map(key_map: dict, key_columns: Sequence[str]) -> dict:
+    result = {}
+    key_dict = key_map if isinstance(key_map, dict) else {}
+    for key_col in key_columns:
+        result[key_col] = _format_display_value(key_col, key_dict.get(key_col, ""))
+    return result
 
 
 def _normalize_col_key(name: str) -> str:
@@ -685,6 +684,7 @@ def _format_display_value(column: str, value):
 
 def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[str]) -> dict:
     table = str(compare_payload.get("table") or "")
+    key_columns = list(compare_payload.get("key_columns") or [])
     rows = list(compare_payload.get("rows") or [])
     compare_columns = list(compare_payload.get("compare_columns") or [])
     changed_cols: list[str] = []
@@ -720,7 +720,7 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
     records = []
     for item in rows:
         row_type = str(item.get("type") or "")
-        key_text = _key_to_text(item.get("key") or {})
+        key_values = _build_key_values_map(item.get("key") or {}, key_columns)
         a_vals = item.get("a") or {}
         b_vals = item.get("b") or {}
         old_row = {}
@@ -742,7 +742,7 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
         records.append(
             {
                 "type": row_type,
-                "key_text": key_text,
+                "key_values": key_values,
                 "old": old_row,
                 "new": new_row,
                 "changed": changed_map,
@@ -751,7 +751,7 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
 
     return {
         "table": table,
-        "key_columns": list(compare_payload.get("key_columns") or []),
+        "key_columns": key_columns,
         "visible_columns": visible_cols,
         "rows_total": int(compare_payload.get("total_filtered_rows") or len(rows)),
         "rows_returned": len(records),
@@ -961,10 +961,21 @@ def _source_line_labels(payload: dict) -> tuple[str, str]:
 
 
 def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table_idx: int) -> str:
+    key_cols = list(detail.get("key_columns") or [])
+    if not key_cols:
+        key_cols = ["KEY"]
     cols = detail.get("visible_columns") or []
     if not cols:
         return "<div class='meta'>Sem colunas para exibir no modo compacto.</div>"
+    key_header_cells = "".join([f"<th>{html.escape(str(col))}</th>" for col in key_cols])
     header_cells = "".join([f"<th>{html.escape(str(col))}</th>" for col in cols])
+    key_filter_cells = "".join(
+        [
+            f"<th><input class='col-filter-input' data-col='{html.escape(str(col))}' "
+            "type='text' placeholder='filtro'></th>"
+            for col in key_cols
+        ]
+    )
     filter_cells = "".join(
         [
             f"<th><input class='col-filter-input' data-col='{html.escape(str(col))}' "
@@ -977,7 +988,13 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
     for row_idx, item in enumerate(detail.get("records") or []):
         row_type = str(item.get("type") or "")
         row_type_label = _type_label(row_type)
-        key_text = html.escape(str(item.get("key_text") or "-"))
+        key_values = item.get("key_values") or {}
+        key_cells = "".join(
+            [
+                f"<td data-col='{html.escape(str(col))}' rowspan='2'>{_html_cell(key_values.get(col, ''))}</td>"
+                for col in key_cols
+            ]
+        )
         old_vals = item.get("old") or {}
         new_vals = item.get("new") or {}
         changed_map = item.get("changed") or {}
@@ -1003,26 +1020,28 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
             status_class = " class='value-changed'"
         body_rows.append(
             f"<tr data-pair='{row_idx}'>"
-            f"<td data-col='key' rowspan='2'>{key_text}</td>"
-            f"<td data-col='tipo' rowspan='2'{status_class}>{html.escape(row_type_label)}</td>"
-            f"<td data-col='linha'>{html.escape(line_a_label)}</td>"
+            + key_cells
+            + f"<td data-col='tipo' rowspan='2'{status_class}>{html.escape(row_type_label)}</td>"
+            + f"<td data-col='linha'>{html.escape(line_a_label)}</td>"
             + "".join(old_cells)
             + "</tr>"
         )
         body_rows.append(
             f"<tr data-pair='{row_idx}'>"
-            f"<td data-col='linha'>{html.escape(line_b_label)}</td>"
+            + f"<td data-col='linha'>{html.escape(line_b_label)}</td>"
             + "".join(new_cells)
             + "</tr>"
         )
     return (
         f"<table class='detail' id='{table_id}'>"
-        "<thead><tr><th>key</th><th>tipo</th><th>linha</th>"
+        "<thead><tr>"
+        + key_header_cells
+        + "<th>tipo</th><th>linha</th>"
         + header_cells
         + "</tr><tr class='filter-row'>"
-        "<th><input class='col-filter-input' data-col='key' type='text' placeholder='filtro'></th>"
-        "<th><input class='col-filter-input' data-col='tipo' type='text' placeholder='filtro'></th>"
-        "<th><input class='col-filter-input' data-col='linha' type='text' placeholder='filtro'></th>"
+        + key_filter_cells
+        + "<th><input class='col-filter-input' data-col='tipo' type='text' placeholder='filtro'></th>"
+        + "<th><input class='col-filter-input' data-col='linha' type='text' placeholder='filtro'></th>"
         + filter_cells
         + "</tr></thead><tbody>"
         + "\n".join(body_rows)
@@ -1225,6 +1244,9 @@ def render_report_md(payload: dict) -> str:
     lines.append("")
     lines.append("## Detalhe compacto por tabela")
     for detail in details:
+        key_cols = detail.get("key_columns") or []
+        if not key_cols:
+            key_cols = ["KEY"]
         lines.append("")
         lines.append(f"### {detail.get('table', '')}")
         lines.append(f"- colunas_visiveis: {', '.join(detail.get('visible_columns') or [])}")
@@ -1232,20 +1254,36 @@ def render_report_md(payload: dict) -> str:
             f"- linhas_diff: {detail.get('rows_returned', 0)} de {detail.get('rows_total', 0)}"
         )
         lines.append("")
-        lines.append("| key | tipo | linha | " + " | ".join(detail.get("visible_columns") or []) + " |")
-        lines.append("|---|---|---|" + "|".join(["---"] * len(detail.get("visible_columns") or [])) + "|")
+        lines.append(
+            "| "
+            + " | ".join(key_cols)
+            + " | tipo | linha | "
+            + " | ".join(detail.get("visible_columns") or [])
+            + " |"
+        )
+        lines.append(
+            "|"
+            + "|".join(["---"] * (len(key_cols) + 2 + len(detail.get("visible_columns") or [])))
+            + "|"
+        )
         for item in detail.get("records") or []:
             cols = detail.get("visible_columns") or []
+            key_values = item.get("key_values") or {}
+            key_out = [str(key_values.get(col, "")) for col in key_cols]
             old_vals = [str((item.get("old") or {}).get(c, "")) for c in cols]
             new_vals = [str((item.get("new") or {}).get(c, "")) for c in cols]
             row_type = _type_label(str(item.get("type") or ""))
             lines.append(
-                f"| {item.get('key_text','-')} | {row_type} | {line_a_label} | "
+                "| "
+                + " | ".join(key_out)
+                + f" | {row_type} | {line_a_label} | "
                 + " | ".join(old_vals)
                 + " |"
             )
             lines.append(
-                f"| {item.get('key_text','-')} | {row_type} | {line_b_label} | "
+                "| "
+                + " | ".join(key_out)
+                + f" | {row_type} | {line_b_label} | "
                 + " | ".join(new_vals)
                 + " |"
             )
@@ -1292,8 +1330,12 @@ def render_report_txt(payload: dict) -> str:
     out.append("")
     out.append("DETALHE COMPACTO POR TABELA")
     for detail in details:
+        key_cols = detail.get("key_columns") or []
+        if not key_cols:
+            key_cols = ["KEY"]
         out.append("")
         out.append(f"TABELA {detail.get('table','')}")
+        out.append("  key_columns: " + ", ".join(key_cols))
         out.append(
             "  colunas_visiveis: " + ", ".join(detail.get("visible_columns") or [])
         )
@@ -1302,7 +1344,9 @@ def render_report_txt(payload: dict) -> str:
         )
         for item in detail.get("records") or []:
             row_type = _type_label(str(item.get("type") or ""))
-            out.append(f"  key={item.get('key_text','-')} tipo={row_type}")
+            key_values = item.get("key_values") or {}
+            key_out = " | ".join([f"{col}={key_values.get(col, '')}" for col in key_cols])
+            out.append(f"  key={key_out} tipo={row_type}")
             cols = detail.get("visible_columns") or []
             old_pairs = [f"{c}={str((item.get('old') or {}).get(c, ''))}" for c in cols]
             new_pairs = [f"{c}={str((item.get('new') or {}).get(c, ''))}" for c in cols]

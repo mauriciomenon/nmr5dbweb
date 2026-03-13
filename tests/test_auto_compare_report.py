@@ -96,6 +96,7 @@ def test_build_table_detail_compact_usa_uniao_de_colunas_alteradas() -> None:
     assert len(detail["records"]) == 3
     added = detail["records"][2]
     assert set(added["new"].keys()) == {"C3", "C4"}
+    assert str(added["key_values"]["ID"]) == "3"
 
 
 def test_report_nao_exibe_tabela_same_no_bloco_de_alteracoes(tmp_path: Path) -> None:
@@ -244,13 +245,14 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
         "table_details": [
             {
                 "table": "T1",
+                "key_columns": ["UNIQID"],
                 "visible_columns": ["C1"],
                 "rows_total": 1,
                 "rows_returned": 1,
                 "records": [
                     {
                         "type": "changed",
-                        "key_text": "ID=1",
+                        "key_values": {"UNIQID": "1"},
                         "old": {"C1": "OLD"},
                         "new": {"C1": "NEW"},
                         "changed": {"C1": True},
@@ -265,3 +267,4 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "background: #fee2e2" not in html
     assert "col-filter-input" in html
     assert "db 2026-03-13" in html
+    assert "<th>UNIQID</th>" in html
