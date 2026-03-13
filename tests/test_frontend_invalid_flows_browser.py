@@ -117,12 +117,29 @@ def sample_data(tmp_path, monkeypatch):
     db_a = tmp_path / "compare_a.duckdb"
     db_b = tmp_path / "compare_b.duckdb"
     for path, rows in (
-        (db_a, [(1, "alpha"), (2, "beta-new"), (3, "gamma-new")]),
-        (db_b, [(1, "alpha"), (2, "beta-old"), (3, "gamma-old"), (4, "delta-old")]),
+        (
+            db_a,
+            [
+                (1, "alpha", 10.0, "OK", ""),
+                (2, "beta-new", 55.5, "ALARM", None),
+                (3, "gamma-new", None, "OFF", "nota-nova"),
+            ],
+        ),
+        (
+            db_b,
+            [
+                (1, "alpha", 10.0, "OK", ""),
+                (2, "beta-old", 40.0, "OK", "legacy"),
+                (3, "gamma-old", 4.0, "OFF", None),
+                (4, "delta-old", 7.0, "OFF", "old"),
+            ],
+        ),
     ):
         compare_conn = duckdb.connect(str(path))
-        compare_conn.execute("CREATE TABLE items (id INTEGER, name VARCHAR)")
-        compare_conn.executemany("INSERT INTO items VALUES (?, ?)", rows)
+        compare_conn.execute(
+            "CREATE TABLE items (id INTEGER, name VARCHAR, score DOUBLE, stacon VARCHAR, note VARCHAR)"
+        )
+        compare_conn.executemany("INSERT INTO items VALUES (?, ?, ?, ?, ?)", rows)
         compare_conn.close()
 
     track_dir = tmp_path / "track"
@@ -293,6 +310,8 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert "Pistas operacionais" in (page.locator("#summary").text_content() or "")
         assert "Padroes de alteracao" in (page.locator("#summary").text_content() or "")
         assert "Familias mais afetadas" in (page.locator("#summary").text_content() or "")
+        assert "Mudancas vazio/preenchido" in (page.locator("#summary").text_content() or "")
+        assert "Deltas numericos relevantes" in (page.locator("#summary").text_content() or "")
         assert "A (NOVO):" in (page.locator("#summary").text_content() or "")
         assert "B (ANTIGO):" in (page.locator("#summary").text_content() or "")
         assert "Volume bruto:" in (page.locator("#summary").text_content() or "")

@@ -1955,6 +1955,67 @@ if (!window.__appSearchFlowBound) {
     }
   };
 
+  const blockSearch = (metaText, bannerText) => {
+    setSearchMeta(metaText, 'warn');
+    setFlowBanner(bannerText, 'warn');
+    return false;
+  };
+
+  const canRunSearchNow = () => {
+    try {
+      if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
+        return blockSearch(
+          'Busca bloqueada: conversao em andamento.',
+          'Aguarde a conversao do banco terminar antes de pesquisar.'
+        );
+      }
+      if (lastStatus && lastStatus.indexing) {
+        return blockSearch(
+          'Busca bloqueada: indexacao em andamento.',
+          'Aguarde a indexacao (_fulltext) terminar antes de pesquisar.'
+        );
+      }
+      if (
+        lastStatus &&
+        lastStatus.db &&
+        lastStatus.db.toLowerCase().endsWith('.duckdb') &&
+        !lastStatus.fulltext_count
+      ) {
+        return blockSearch(
+          'Busca bloqueada: indice _fulltext ausente.',
+          'Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.'
+        );
+      }
+    } catch (e) {
+      logUi('WARN', 'falha ao validar status antes da busca');
+    }
+    return true;
+  };
+
+  const buildSearchRequest = (query) => {
+    const per_table = parseInt($('per_table').value, 10) || 10;
+    const candidate_limit = parseInt($('candidate_limit').value, 10) || 1000;
+    const total_limit = parseInt($('total_limit').value, 10) || 500;
+    const token_mode = $('token_mode').value;
+    const min_score = parseInt($('min_score').value, 10) || null;
+    const tablesSel = $('tablesFilter');
+    let tablesParam = '';
+    let selectedTables = [];
+    if (tablesSel) {
+      selectedTables = Array.from(tablesSel.selectedOptions)
+        .map((o) => o.value)
+        .filter(Boolean);
+      if (selectedTables.length) {
+        tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
+      }
+    }
+    const url =
+      `/api/search?q=${encodeURIComponent(query)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}` +
+      (min_score ? `&min_score=${min_score}` : '') +
+      tablesParam;
+    return { url, per_table };
+  };
+
   const doSearch = async (opts) => {
     const q = $('q').value.trim();
     if (!q) {
@@ -1974,66 +2035,16 @@ if (!window.__appSearchFlowBound) {
     if (btn.disabled) return;
     const exportBtn = $('exportAllBtn');
     if (exportBtn) exportBtn.disabled = true;
-    try {
-      if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
-        setSearchMeta('Busca bloqueada: conversao em andamento.', 'warn');
-        setFlowBanner(
-          'Aguarde a conversao do banco terminar antes de pesquisar.',
-          'warn'
-        );
-        return;
-      }
-      if (lastStatus && lastStatus.indexing) {
-        setSearchMeta('Busca bloqueada: indexacao em andamento.', 'warn');
-        setFlowBanner(
-          'Aguarde a indexacao (_fulltext) terminar antes de pesquisar.',
-          'warn'
-        );
-        return;
-      }
-      if (
-        lastStatus &&
-        lastStatus.db &&
-        lastStatus.db.toLowerCase().endsWith('.duckdb') &&
-        !lastStatus.fulltext_count
-      ) {
-        setSearchMeta('Busca bloqueada: indice _fulltext ausente.', 'warn');
-        setFlowBanner(
-          'Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.',
-          'warn'
-        );
-        return;
-      }
-    } catch (e) {
-      logUi('WARN', 'falha ao validar status antes da busca');
-    }
-    const per_table = parseInt($('per_table').value, 10) || 10;
-    const candidate_limit = parseInt($('candidate_limit').value, 10) || 1000;
-    const total_limit = parseInt($('total_limit').value, 10) || 500;
-    const token_mode = $('token_mode').value;
-    const min_score = parseInt($('min_score').value, 10) || null;
+    if (!canRunSearchNow()) return;
+    const request = buildSearchRequest(q);
+    const per_table = request.per_table;
     lastQuery = q;
     setSearchMeta(`Buscando: "${q}" ...`, '');
     setFlowBanner('Busca em andamento. Aguarde os resultados.', 'info');
-    const tablesSel = $('tablesFilter');
-    let tablesParam = '';
-    let selectedTables = [];
-    if (tablesSel) {
-      selectedTables = Array.from(tablesSel.selectedOptions)
-        .map((o) => o.value)
-        .filter(Boolean);
-      if (selectedTables.length) {
-        tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
-      }
-    }
-    const url =
-      `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}` +
-      (min_score ? `&min_score=${min_score}` : '') +
-      tablesParam;
     btn.disabled = true;
     btn.textContent = 'Buscando...';
     try {
-      const res = await fetch(url);
+      const res = await fetch(request.url);
       const data = await res.json();
       if (data.error) {
         setSearchMeta('Erro: ' + data.error, 'error');

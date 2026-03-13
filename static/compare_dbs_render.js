@@ -273,6 +273,90 @@ function buildCompareAnomalySignals(data, changedRows) {
   };
 }
 
+function isBlankValue(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  return false;
+}
+
+function toFiniteNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function buildCompareValueSignals(data, changedRows) {
+  const compareColumns = data.compare_columns || [];
+  const nullTransitions = {};
+  const numericDrift = {};
+
+  changedRows.forEach((row) => {
+    compareColumns.forEach((column) => {
+      const valueA = (row.a || {})[column];
+      const valueB = (row.b || {})[column];
+      if (!valuesDifferent(valueA, valueB)) return;
+
+      const oldBlank = isBlankValue(valueB);
+      const newBlank = isBlankValue(valueA);
+      if (oldBlank !== newBlank) {
+        const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
+        const key = `${column} | ${direction}`;
+        nullTransitions[key] = (nullTransitions[key] || 0) + 1;
+      }
+
+      const numA = toFiniteNumber(valueA);
+      const numB = toFiniteNumber(valueB);
+      if (numA === null || numB === null) return;
+
+      const delta = numA - numB;
+      const absDelta = Math.abs(delta);
+      if (!absDelta) return;
+
+      const stat = numericDrift[column] || {
+        count: 0,
+        sumAbsDelta: 0,
+        maxAbsDelta: 0,
+        maxSignedDelta: 0,
+      };
+      stat.count += 1;
+      stat.sumAbsDelta += absDelta;
+      if (absDelta > stat.maxAbsDelta) {
+        stat.maxAbsDelta = absDelta;
+        stat.maxSignedDelta = delta;
+      }
+      numericDrift[column] = stat;
+    });
+  });
+
+  const topNullTransitions = Object.entries(nullTransitions)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  const topNumericDrift = Object.entries(numericDrift)
+    .map(([column, info]) => ({
+      column,
+      count: info.count,
+      sumAbsDelta: info.sumAbsDelta,
+      maxAbsDelta: info.maxAbsDelta,
+      maxSignedDelta: info.maxSignedDelta,
+    }))
+    .sort((a, b) => b.sumAbsDelta - a.sumAbsDelta)
+    .slice(0, 6);
+
+  return {
+    topNullTransitions,
+    topNumericDrift,
+  };
+}
+
 function buildCompareDomainRiskSignals(changedRows) {
   const stateCols = ['STACON', 'NORMST', 'SOEHIS', 'CLASS'];
   const families = {};
@@ -473,6 +557,7 @@ function renderCompareSummary(data, summaryData) {
   const domainSignals = buildCompareDomainSignals(changedRows);
   const riskSignals = buildCompareRiskSignals(data, changedRows);
   const domainRiskSignals = buildCompareDomainRiskSignals(changedRows);
+  const valueSignals = buildCompareValueSignals(data, changedRows);
   const totalChanged = Number(summaryData.changed || changedRows.length || 0);
   const totalKeys = Number(summaryData.totalKeys || 0);
   const changedDensity = totalKeys > 0 ? ((totalChanged / totalKeys) * 100).toFixed(1) : '0.0';
@@ -584,6 +669,22 @@ function renderCompareSummary(data, summaryData) {
         )
         .join('')}</div>`
     : '';
+  const nullTransitionsHtml = valueSignals.topNullTransitions.length
+    ? `<div class="result-col-diff"><strong>Mudancas vazio/preenchido (top):</strong>${valueSignals.topNullTransitions
+        .map(
+          ([label, count]) =>
+            `<div class="report-review-item"><strong>${safe(label)}</strong><span>${count} ocorrencia(s)</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const numericDriftHtml = valueSignals.topNumericDrift.length
+    ? `<div class="result-col-diff"><strong>Deltas numericos relevantes (top):</strong>${valueSignals.topNumericDrift
+        .map(
+          (item) =>
+            `<div class="report-review-item"><strong>${safe(item.column)}</strong><span>${item.count} mudanca(s) · soma abs ${safe(item.sumAbsDelta.toFixed(2))} · pico ${safe(item.maxSignedDelta.toFixed(2))}</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -616,6 +717,8 @@ function renderCompareSummary(data, summaryData) {
         ${anomalyMissingKeysHtml}
         ${domainRiskHtml}
         ${domainTransitionHtml}
+        ${nullTransitionsHtml}
+        ${numericDriftHtml}
         ${anomalyRiskRowsHtml}
         ${anomalyConcentrationHtml}
       </div>
