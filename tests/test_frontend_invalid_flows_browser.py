@@ -364,6 +364,11 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
         assert payload["export"]["rows_exported"] >= 1
         assert payload["export"]["total_pages"] >= 1
         assert payload["export"]["generated_from"] == "compare_db_rows_fast_path"
+        assert payload["summary"]["key_quality"]["unique_keys"] >= 1
+        assert payload["summary"]["key_quality"]["blank_key_rows"] >= 0
+        assert payload["summary"]["key_quality"]["duplicate_key_rows"] >= 0
+        assert isinstance(payload["summary"]["top_state_transitions"], list)
+        assert isinstance(payload["summary"]["top_families"], list)
         assert payload["summary"]["total_keys"] >= 1
         assert payload["summary"]["priority"] in {
             "estavel",

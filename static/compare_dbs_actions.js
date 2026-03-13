@@ -392,6 +392,16 @@ function isBlankExportValue(value) {
   return false;
 }
 
+function pickFirstNonBlank(rowA, rowB, candidates) {
+  for (const candidate of candidates || []) {
+    const valueA = rowA ? rowA[candidate] : null;
+    if (!isBlankExportValue(valueA)) return String(valueA);
+    const valueB = rowB ? rowB[candidate] : null;
+    if (!isBlankExportValue(valueB)) return String(valueB);
+  }
+  return '';
+}
+
 function toFiniteExportNumber(value) {
   if (value === null || value === undefined) return null;
   if (typeof value === 'number') {
@@ -408,16 +418,64 @@ function toFiniteExportNumber(value) {
 
 function buildCompareReportSummary(meta, allRows) {
   const compareColumns = meta.compare_columns || [];
+  const keyColumns = meta.key_columns || [];
   const byType = { added: 0, removed: 0, changed: 0, same: 0 };
   const changedColumnsCount = {};
   const nullTransitions = {};
   const numericDrift = {};
+  const stateTransitions = {};
+  const familyCounts = {};
+  const keySeen = new Set();
+  let blankKeyRows = 0;
+  let duplicateKeyRows = 0;
 
-  allRows.forEach((row) => {
+  allRows.forEach((row, index) => {
     const rowType = String(row.type || '').toLowerCase();
     if (Object.prototype.hasOwnProperty.call(byType, rowType)) {
       byType[rowType] += 1;
     }
+    const keyObj = row.key || {};
+    const keyText = keyColumns.length
+      ? keyColumns
+          .map((column) => `${column}=${String(keyObj[column] ?? '')}`)
+          .join('|')
+      : `index_${index + 1}`;
+    const hasBlankKey = keyColumns.some((column) =>
+      isBlankExportValue(keyObj[column])
+    );
+    if (hasBlankKey) blankKeyRows += 1;
+    if (keySeen.has(keyText)) duplicateKeyRows += 1;
+    else keySeen.add(keyText);
+
+    if (rowType === 'changed') {
+      const oldState = pickFirstNonBlank(row.b || {}, row.a || {}, [
+        'STACON',
+        'NORMST',
+        'SOEHIS',
+        'CLASS',
+      ]);
+      const newState = pickFirstNonBlank(row.a || {}, row.b || {}, [
+        'STACON',
+        'NORMST',
+        'SOEHIS',
+        'CLASS',
+      ]);
+      if (oldState || newState) {
+        const transitionKey = `${oldState || '-'} -> ${newState || '-'}`;
+        stateTransitions[transitionKey] = (stateTransitions[transitionKey] || 0) + 1;
+      }
+      const family = pickFirstNonBlank(row.a || {}, row.b || {}, [
+        'PNLNAM',
+        'SUBNAM',
+        'DEVNAM',
+        'PNTNAM',
+        'ITEMNB',
+      ]);
+      if (family) {
+        familyCounts[family] = (familyCounts[family] || 0) + 1;
+      }
+    }
+
     if (rowType !== 'changed') return;
     compareColumns.forEach((column) => {
       const valueA = (row.a || {})[column];
@@ -476,6 +534,14 @@ function buildCompareReportSummary(meta, allRows) {
     }))
     .sort((a, b) => b.sum_abs_delta - a.sum_abs_delta)
     .slice(0, 8);
+  const topStateTransitions = Object.entries(stateTransitions)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([transition, count]) => ({ transition, count }));
+  const topFamilies = Object.entries(familyCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([family, count]) => ({ family, count }));
 
   const priorityAnomalies = [];
   topChangedColumns.forEach((item) => {
@@ -524,7 +590,14 @@ function buildCompareReportSummary(meta, allRows) {
     impacted_keys: impactedKeys,
     impacted_pct: Number(impactedPct.toFixed(2)),
     by_type: byType,
+    key_quality: {
+      blank_key_rows: blankKeyRows,
+      duplicate_key_rows: duplicateKeyRows,
+      unique_keys: keySeen.size,
+    },
     priority,
+    top_state_transitions: topStateTransitions,
+    top_families: topFamilies,
     top_changed_columns: topChangedColumns,
     top_null_transitions: topNullTransitions,
     top_numeric_drift: topNumericDrift,
