@@ -295,16 +295,8 @@ function getColumnPriorityScore(name, index) {
 
 function orderColumnsForDisplay(tableName, columns) {
   return [...(columns || [])].sort((a, b) => {
-    const scoreA = getColumnPriorityScore(
-      a,
-      (columns || []).indexOf(a),
-      tableName
-    );
-    const scoreB = getColumnPriorityScore(
-      b,
-      (columns || []).indexOf(b),
-      tableName
-    );
+    const scoreA = getColumnPriorityScore(a, (columns || []).indexOf(a));
+    const scoreB = getColumnPriorityScore(b, (columns || []).indexOf(b));
     if (scoreA !== scoreB) return scoreB - scoreA;
     return (columns || []).indexOf(a) - (columns || []).indexOf(b);
   });
