@@ -1,10 +1,20 @@
 # ROADMAP v0.3.0 - MDB to DuckDB Converter
 
+## Document Status
+
+- Status: archival snapshot (not active execution plan)
+- Original date: 2025-01-06
+- This file is kept only as historical context.
+- Current execution sources for the product:
+  - `ROUND_STATUS.md`
+  - `RECOVERY_BACKLOG.md`
+  - `PROJECT_STRUCTURE.md`
+
 Current version: v0.2.0
 Target version: v0.3.0
 Created: 2025-01-06
-Estimated duration: 12 weeks
-Status: Planning
+Estimated duration: 12 weeks (historical estimate)
+Status: Historical / Archived
 
 ---
 

@@ -7,7 +7,7 @@ Pensado para cenários de auditoria, análise histórica e migração de bases.
 
 ## Requisitos
 
-- Python **3.12.8** (recomendado; testado em 3.12.x)
+- Python **3.13.12** (fallback: **3.13.11**)
 - `uv` para criar o ambiente e sincronizar dependências
 - Acesso à internet para baixar dependências Python e, opcionalmente, JARs/SDKs
 ![alt text](image.png)
@@ -44,11 +44,11 @@ aplicação web e na documentação principal.
 
 ### Início rápido – interface web
 
-No diretório do projeto (primeira vez):
+No diretorio do projeto (primeira vez):
 
 ```bash
 # 1) criar ambiente virtual (recomendado)
-uv venv --python 3.12.8 .venv
+uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
 
 # 2) ativar o ambiente virtual
 # Windows (PowerShell)
@@ -58,8 +58,8 @@ uv venv --python 3.12.8 .venv
 # macOS / Linux
 source .venv/bin/activate
 
-# 3) instalar dependências de runtime
-uv pip sync requirements.txt
+# 3) instalar dependencias de runtime + dev
+uv pip install --python .venv -r requirements-dev.txt
 
 # 4) iniciar a interface Flask
 python main.py
@@ -85,6 +85,11 @@ Fluxo típico na interface:
 
 Os detalhes da interface estão descritos em mais profundidade em
 `interface/README.md`.
+
+### Instaladores por SO
+
+- `install_windows.bat`: wrapper para `tools/windows_access_setup.ps1` (usa `uv`, `.venv`, `requirements-dev.txt`, check de pyodbc/driver).
+- `install_macos.sh` e `install_linux.sh`: setup padrao do projeto com `uv`, `.venv` e `requirements-dev.txt`.
 
 ---
 
@@ -208,15 +213,15 @@ Baseado em testes com 5 arquivos (~90 MB cada) em macOS:
 
 ---
 
-## Início rápido – conversores (CLI)
+## Inicio rapido – conversores (CLI)
 
 ```bash
 # Clonar repositório
 git clone <repository-url>
 cd nmr5dbweb
 
-# Criar ambiente virtual (recomendado) – usar Python 3.12.x
-uv venv --python 3.12.8 .venv
+# Criar ambiente virtual (recomendado)
+uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
 
 # Ativar ambiente virtual
 # macOS/Linux:
@@ -224,8 +229,8 @@ source .venv/bin/activate
 # Windows (PowerShell ou Prompt):
 .venv\Scripts\activate
 
-# Instalar dependências Python
-uv pip sync requirements.txt
+# Instalar dependencias Python
+uv pip install --python .venv -r requirements-dev.txt
 
 # Instalar dependências de sistema (escolha a que você for usar)
 brew install mdbtools            # Para convert_mdbtools.py (macOS)
