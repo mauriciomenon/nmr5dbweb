@@ -737,6 +737,8 @@ def parse_compare_rows_request(data):
     if any(not isinstance(col, str) or not col.strip() for col in key_columns):
         raise ValueError("key_columns deve conter apenas strings nao vazias")
     key_columns = [col.strip() for col in key_columns]
+    if len(set(key_columns)) != len(key_columns):
+        raise ValueError("key_columns nao pode conter colunas duplicadas")
 
     if compare_columns is not None and not isinstance(compare_columns, list):
         raise ValueError("compare_columns deve ser uma lista")
@@ -744,6 +746,8 @@ def parse_compare_rows_request(data):
         if any(not isinstance(col, str) or not col.strip() for col in compare_columns):
             raise ValueError("compare_columns deve conter apenas strings nao vazias")
         compare_columns = [col.strip() for col in compare_columns]
+        if len(set(compare_columns)) != len(compare_columns):
+            raise ValueError("compare_columns nao pode conter colunas duplicadas")
 
     if row_limit is not None:
         try:
