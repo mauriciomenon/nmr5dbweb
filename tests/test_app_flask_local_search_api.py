@@ -150,6 +150,29 @@ def test_admin_access_precheck_retorna_relatorio(monkeypatch):
     assert payload["precheck"]["reason"] == "Access ODBC driver missing"
 
 
+def test_evaluate_access_support_accdb_liberado_com_access_parser(monkeypatch):
+    monkeypatch.setattr(local_search, "convert_access_to_duckdb", object())
+    monkeypatch.setattr(local_search, "has_mdbtools_binaries", lambda: False)
+    monkeypatch.setattr(local_search, "has_access_parser_module", lambda: True)
+    monkeypatch.setattr(
+        local_search,
+        "get_access_odbc_status",
+        lambda: {
+            "platform": "posix",
+            "pyodbc_available": False,
+            "access_driver_available": False,
+            "drivers": [],
+            "error": "pyodbc not installed",
+        },
+    )
+
+    precheck = local_search.evaluate_access_conversion_support(".accdb")
+
+    assert precheck["ready"] is True
+    assert precheck["reason"] == ""
+    assert precheck["access_parser_available"] is True
+
+
 def test_admin_list_uploads_indica_db_inexistente(tmp_path, monkeypatch):
     client = app.test_client()
     monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)

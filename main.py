@@ -15,13 +15,54 @@ from datetime import datetime
 
 
 def verificar_porta_disponivel(host, porta):
-    """Verifica se a porta está disponível para uso."""
+    """Verifica se a porta esta disponivel para uso."""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            resultado = s.connect_ex((host, porta))
-            return resultado != 0
-    except socket.error:
+        family = socket.AF_INET6 if ":" in str(host) else socket.AF_INET
+        with socket.socket(family, socket.SOCK_STREAM) as s:
+            s.bind((host, porta))
+        return True
+    except OSError:
         return False
+
+
+def obter_processo_na_porta(porta):
+    """Retorna informacoes basicas do processo que esta escutando na porta."""
+    try:
+        import psutil
+    except Exception:
+        return None
+
+    try:
+        for conn in psutil.net_connections(kind="tcp"):
+            if conn.status != psutil.CONN_LISTEN:
+                continue
+            if not conn.laddr:
+                continue
+            if int(conn.laddr.port) != int(porta):
+                continue
+            pid = conn.pid
+            nome = ""
+            if pid:
+                try:
+                    nome = psutil.Process(pid).name()
+                except Exception:
+                    nome = ""
+            return {"pid": pid, "name": nome}
+    except Exception:
+        return None
+    return None
+
+
+def encontrar_proxima_porta_livre(host, porta_inicial, max_tentativas=30):
+    """Procura a proxima porta livre a partir de porta_inicial + 1."""
+    porta = int(porta_inicial)
+    for _ in range(max_tentativas):
+        porta += 1
+        if porta > 65535:
+            break
+        if verificar_porta_disponivel(host, porta):
+            return porta
+    return None
 
 
 def validar_configuracao(args):
@@ -97,6 +138,11 @@ Exemplos de uso:
         default=True,
         help="Usar threads para melhor desempenho (padrao: ativado)",
     )
+    parser.add_argument(
+        "--no-port-fallback",
+        action="store_true",
+        help="Nao tenta porta alternativa quando a porta informada estiver ocupada",
+    )
 
     args = parser.parse_args()
 
@@ -112,11 +158,28 @@ Exemplos de uso:
             print(f"  - {erro}")
         sys.exit(1)
 
-    # Verificar se a porta está disponivel
+    # Verificar se a porta esta disponivel
     if not verificar_porta_disponivel(args.host, args.port):
+        proc = obter_processo_na_porta(args.port)
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
-        print(f"Erro: Porta {args.port} ja esta em uso no host {args.host}")
-        sys.exit(1)
+        print(f"Aviso: Porta {args.port} ja esta em uso no host {args.host}")
+        if proc:
+            pid = proc.get("pid")
+            nome = proc.get("name") or "processo_desconhecido"
+            print(f"Processo detectado na porta: pid={pid} nome={nome}")
+        else:
+            print("Processo na porta nao identificado")
+
+        if args.no_port_fallback:
+            print("Fallback de porta desativado por --no-port-fallback")
+            sys.exit(1)
+
+        nova_porta = encontrar_proxima_porta_livre(args.host, args.port, max_tentativas=50)
+        if nova_porta is None:
+            print("Erro: nao foi encontrada porta livre nas proximas 50 tentativas")
+            sys.exit(1)
+        print(f"Usando porta alternativa automaticamente: {nova_porta}")
+        args.port = nova_porta
 
     # Configurar variaveis de ambiente
     os.environ["FLASK_HOST"] = args.host

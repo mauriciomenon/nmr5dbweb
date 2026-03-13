@@ -357,11 +357,13 @@ python -m tools.organize_artifacts
 - Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
 - mdbtools: `brew install mdbtools`
 - Java: `brew install openjdk`
+- Para `.accdb` sem ODBC, o backend da interface tenta fallback com `access-parser`.
 
 ### Linux
 - Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
 - mdbtools: `sudo apt install mdbtools`
 - Java: `sudo apt install default-jdk`
+- Para `.accdb` sem ODBC, o backend da interface tenta fallback com `access-parser`.
 
 ### Windows
 - Usar preferencialmente `convert_pyodbc.py`
@@ -389,6 +391,10 @@ sudo apt install default-jdk
 ### Driver ODBC não encontrado (Windows)
 - Verifique se o **Microsoft Access Database Engine** está instalado.
 - Confira se o driver `Microsoft Access Driver (*.mdb, *.accdb)` aparece em `pyodbc.drivers()`.
+
+### Porta 5000 ja ocupada
+- O `main.py` agora detecta o processo na porta ocupada e tenta automaticamente a proxima porta livre.
+- Para desativar esse comportamento: `python main.py --no-port-fallback`.
 
 ---
 

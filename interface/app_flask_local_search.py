@@ -20,6 +20,7 @@ import json
 import shutil
 import sqlite3
 import threading
+import importlib.util
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
@@ -196,6 +197,7 @@ def get_runtime_capabilities():
     return {
         "access_fallback": pyodbc is not None,
         "access_conversion": convert_access_to_duckdb is not None,
+        "access_parser_available": bool(has_access_parser_module()),
         "duckdb_fulltext": create_or_resume_fulltext is not None,
         "access_odbc_ready": bool(access_odbc.get("pyodbc_available") and access_odbc.get("access_driver_available")),
         "access_mdbtools_available": bool(has_mdbtools_binaries()),
@@ -204,6 +206,13 @@ def get_runtime_capabilities():
 
 def has_mdbtools_binaries():
     return bool(shutil.which("mdb-tables") and shutil.which("mdb-export"))
+
+
+def has_access_parser_module():
+    return bool(
+        importlib.util.find_spec("access_parser")
+        or importlib.util.find_spec("access_parser_access")
+    )
 
 
 def get_access_odbc_status():
@@ -239,23 +248,26 @@ def evaluate_access_conversion_support(ext):
 
     odbc = get_access_odbc_status()
     mdbtools_ok = has_mdbtools_binaries()
+    parser_ok = has_access_parser_module()
     converter_ok = convert_access_to_duckdb is not None
     if not converter_ok:
         reason = "access_convert module not available"
     elif ext_l == ".accdb":
-        if not odbc["pyodbc_available"]:
-            reason = "pyodbc missing"
-        elif not odbc["access_driver_available"]:
-            reason = "Access ODBC driver missing"
-        else:
+        if odbc["pyodbc_available"] and odbc["access_driver_available"]:
             reason = ""
+        elif parser_ok:
+            reason = ""
+        else:
+            reason = "need pyodbc+Access ODBC or access-parser for .accdb"
     else:
         if odbc["pyodbc_available"] and odbc["access_driver_available"]:
             reason = ""
         elif mdbtools_ok:
             reason = ""
+        elif parser_ok:
+            reason = ""
         else:
-            reason = "need pyodbc+Access ODBC or mdbtools for .mdb"
+            reason = "need pyodbc+Access ODBC or mdbtools or access-parser for .mdb"
 
     return {
         "ready": reason == "",
@@ -263,6 +275,7 @@ def evaluate_access_conversion_support(ext):
         "converter_available": converter_ok,
         "odbc": odbc,
         "mdbtools_available": mdbtools_ok,
+        "access_parser_available": parser_ok,
     }
 
 

@@ -9,7 +9,6 @@ import shutil
 import duckdb
 import pandas as pd
 import logging
-from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("access_convert")
@@ -190,7 +189,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             return False, "mdbtools supports only .mdb"
         try:
             proc = subprocess.run(["mdb-tables", "-1", access_path], capture_output=True, text=True, check=True)
-            tbls = [l.strip() for l in proc.stdout.splitlines() if l.strip()]
+            tbls = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
         except Exception as e:
             return False, f"mdb-tables failed: {e}"
         total = len(tbls)
@@ -228,6 +227,137 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             except Exception:
                 pass
 
+    def try_access_parser():
+        try:
+            import access_parser as ap
+        except Exception as e1:
+            try:
+                import access_parser_access as ap
+            except Exception as e2:
+                return False, f"access-parser not installed: {e1}; {e2}"
+
+        try:
+            db = ap.AccessParser(access_path)
+        except Exception as e:
+            return False, f"access-parser open failed: {e}"
+
+        dconn = None
+        try:
+            tables = []
+            try:
+                catalog = getattr(db, "catalog", None)
+                if catalog is not None:
+                    tables = [str(name) for name in catalog.keys()]
+                elif hasattr(db, "tables"):
+                    tables = [str(name) for name in db.tables.keys()]
+            except Exception:
+                tables = []
+
+            tables = [name for name in tables if name and not str(name).startswith("MSys")]
+            if not tables:
+                return False, "No user tables found via access-parser."
+
+            total = len(tables)
+            _ensure_clean_duckdb(duckdb_path)
+            dconn = duckdb.connect(duckdb_path)
+
+            for i, table_name in enumerate(tables):
+                safe_table = str(table_name).replace('"', '""')
+                _report(
+                    total_tables=total,
+                    processed_tables=i,
+                    current_table=str(table_name),
+                    percent=int((i / total) * 100),
+                    msg="starting_table",
+                )
+                try:
+                    parsed = db.parse_table(table_name)
+                    if not parsed:
+                        _report(
+                            total_tables=total,
+                            processed_tables=i + 1,
+                            current_table=str(table_name),
+                            percent=int(((i + 1) / total) * 100),
+                            msg="table_empty",
+                        )
+                        continue
+
+                    if isinstance(parsed, dict):
+                        normalized = {}
+                        max_len = 0
+                        for col_name, col_data in parsed.items():
+                            if isinstance(col_data, (list, tuple, pd.Series)):
+                                seq = list(col_data)
+                            elif col_data is None:
+                                seq = []
+                            else:
+                                seq = [col_data]
+                            normalized[col_name] = seq
+                            if len(seq) > max_len:
+                                max_len = len(seq)
+
+                        if max_len > 0:
+                            for col_name, seq in normalized.items():
+                                if len(seq) < max_len:
+                                    seq.extend([None] * (max_len - len(seq)))
+                            frame = pd.DataFrame(normalized)
+                        else:
+                            frame = pd.DataFrame(columns=list(normalized.keys()))
+                    else:
+                        frame = pd.DataFrame(parsed)
+
+                    dconn.execute(f'DROP TABLE IF EXISTS "{safe_table}"')
+
+                    if frame.shape[1] == 0:
+                        _report(
+                            total_tables=total,
+                            processed_tables=i + 1,
+                            current_table=str(table_name),
+                            percent=int(((i + 1) / total) * 100),
+                            msg="table_no_columns",
+                        )
+                        continue
+
+                    tmp_name = f"tmp_{abs(hash((table_name, i, frame.shape[0])))}"
+                    dconn.register(tmp_name, frame)
+                    dconn.execute(f'CREATE TABLE "{safe_table}" AS SELECT * FROM {tmp_name}')
+                    dconn.unregister(tmp_name)
+
+                    _report(
+                        total_tables=total,
+                        processed_tables=i + 1,
+                        current_table=str(table_name),
+                        percent=int(((i + 1) / total) * 100),
+                        msg="table_done",
+                    )
+                except Exception as e:
+                    logger.warning("Skipping table %s after access-parser error: %s", table_name, e)
+                    _report(
+                        total_tables=total,
+                        processed_tables=i + 1,
+                        current_table=str(table_name),
+                        percent=int(((i + 1) / total) * 100),
+                        msg=f"skipped:{e}",
+                    )
+                    continue
+
+            dconn.close()
+            _report(
+                total_tables=total,
+                processed_tables=total,
+                current_table="",
+                percent=100,
+                msg="converted",
+            )
+            return True, "converted via access-parser"
+        except Exception as e:
+            try:
+                if dconn is not None:
+                    dconn.close()
+            except Exception:
+                pass
+            return False, f"access-parser error: {e}"
+
     # Try methods by preference
     if prefer_odbc:
         ok, msg = try_pyodbc()
@@ -239,7 +369,10 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         ok3, msg3 = try_mdbtools()
         if ok3:
             return True, msg3
-        return False, f"All methods failed: pyodbc: {msg}; pypyodbc: {msg2}; mdbtools: {msg3}"
+        ok4, msg4 = try_access_parser()
+        if ok4:
+            return True, msg4
+        return False, f"All methods failed: pyodbc: {msg}; pypyodbc: {msg2}; mdbtools: {msg3}; access-parser: {msg4}"
     else:
         ok, msg = try_mdbtools()
         if ok:
@@ -250,4 +383,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         ok3, msg3 = try_pypyodbc()
         if ok3:
             return True, msg3
-        return False, f"No method succeeded: mdbtools: {msg}; pyodbc: {msg2}; pypyodbc: {msg3}"
+        ok4, msg4 = try_access_parser()
+        if ok4:
+            return True, msg4
+        return False, f"No method succeeded: mdbtools: {msg}; pyodbc: {msg2}; pypyodbc: {msg3}; access-parser: {msg4}"
