@@ -26,6 +26,7 @@ const DISPLAY_PRIORITY_COLUMNS = [
 ];
 const OPEN_TABLE_CHUNK = 120;
 const OPEN_TABLE_EXPORT_CHUNK = 250;
+const DEFAULT_VISIBLE_COLUMNS = 12;
 const openTableStates = new Map();
 const TABLE_COLUMN_GROUPS = [
   {
@@ -435,14 +436,51 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
   const tokens = (options && options.tokens) || [];
   const orderedCols = orderColumnsForDisplay(tableName, rawColumns);
   const pinnedCols = pickPinnedColumns(orderedCols);
+  const pinnedSet = new Set(pinnedCols);
+  const hiddenColumns = new Set();
+  if (orderedCols.length > DEFAULT_VISIBLE_COLUMNS) {
+    orderedCols.forEach((column, index) => {
+      if (index >= DEFAULT_VISIBLE_COLUMNS && !pinnedSet.has(column)) {
+        hiddenColumns.add(column);
+      }
+    });
+  }
   const columnGroups = buildColumnGroups(orderedCols);
   const shell = document.createElement('div');
   shell.className = 'results-table-shell';
+  if (hiddenColumns.size) {
+    const toolbar = document.createElement('div');
+    toolbar.className = 'results-table-toolbar';
+    const info = document.createElement('span');
+    info.className = 'table-note';
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'btn ghost small';
+    const updateCompactUi = () => {
+      const expanded = shell.classList.contains('show-all-cols');
+      if (expanded) {
+        info.textContent = `Exibindo todas as ${orderedCols.length} colunas.`;
+        toggleBtn.textContent = 'Mostrar menos colunas';
+      } else {
+        const visibleCount = orderedCols.length - hiddenColumns.size;
+        info.textContent = `Modo compacto ativo: ${visibleCount}/${orderedCols.length} colunas visiveis.`;
+        toggleBtn.textContent = 'Mostrar todas as colunas';
+      }
+    };
+    toggleBtn.addEventListener('click', () => {
+      shell.classList.toggle('show-all-cols');
+      updateCompactUi();
+    });
+    toolbar.appendChild(info);
+    toolbar.appendChild(toggleBtn);
+    shell.appendChild(toolbar);
+    updateCompactUi();
+  }
 
   const table = document.createElement('table');
   table.className = 'results results-enhanced';
   const thead = document.createElement('thead');
-  if (columnGroups.length > 1) {
+  if (columnGroups.length > 1 && !hiddenColumns.size) {
     const groupRow = document.createElement('tr');
     if (includeScore) {
       const scoreTh = document.createElement('th');
@@ -473,6 +511,7 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
     if (column === pinnedCols[0]) classes.push('results-sticky-main');
     if (column === pinnedCols[1]) classes.push('results-sticky-secondary');
     if (isLikelyWideColumn(column)) classes.push('results-col-wide');
+    if (hiddenColumns.has(column)) classes.push('results-col-hidden');
     if (classes.length) th.className = classes.join(' ');
     th.textContent = column;
     th.title = column;
@@ -505,7 +544,11 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
         item.row && Object.prototype.hasOwnProperty.call(item.row, column)
           ? item.row[column]
           : '';
-      tr.appendChild(buildTableCell(value, tokens, wide, extraClass));
+      const td = buildTableCell(value, tokens, wide, extraClass);
+      if (hiddenColumns.has(column)) {
+        td.classList.add('results-col-hidden');
+      }
+      tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });

@@ -231,8 +231,8 @@
       background: #e5e7eb;
     }
     .progress-bar { height: 12px; background: linear-gradient(90deg, #1f4ed8, #3e7bff); border-radius: 999px; width: 0%; }
-    table.results { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-    table.results th, table.results td { border: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
+    table.results { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12.5px; }
+    table.results th, table.results td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; vertical-align: top; line-height: 1.35; }
     .result-card-header {
       display: flex;
       justify-content: space-between;
@@ -343,9 +343,24 @@
       border-radius: 12px;
       box-shadow: var(--shadow-soft);
       background: #1b212b;
+      max-height: 68vh;
+      overscroll-behavior: contain;
     }
     html[data-theme="light"] .results-table-shell {
       background: #ffffff;
+    }
+    .results-table-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.2);
+    }
+    html[data-theme="light"] .results-table-toolbar {
+      background: #f8fafc;
     }
     table.results.results-enhanced {
       min-width: max-content;
@@ -353,6 +368,12 @@
       border-collapse: separate;
       border-spacing: 0;
       margin-top: 0;
+    }
+    .results-table-shell .results-col-hidden {
+      display: none;
+    }
+    .results-table-shell.show-all-cols .results-col-hidden {
+      display: table-cell;
     }
     .results-group-header {
       background: #1a2330;
@@ -414,18 +435,18 @@
       background: #f8fafc;
     }
     .results-cell {
-      max-width: 220px;
+      max-width: 200px;
       white-space: normal;
     }
     .results-cell-wide {
-      min-width: 260px !important;
-      max-width: 420px !important;
+      min-width: 220px !important;
+      max-width: 360px !important;
     }
     .results-json {
       margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
-      font-size: 12px;
+      font-size: 11.5px;
       color: inherit;
     }
     .cell-text {
@@ -436,8 +457,15 @@
     }
     .cell-text.multiline {
       white-space: normal;
-      line-height: 1.4;
-      max-height: 5.6em;
+      line-height: 1.35;
+      max-height: 4.05em;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+    .results-table-shell.show-all-cols .cell-text.multiline {
+      max-height: 6.75em;
+      -webkit-line-clamp: 5;
     }
     .results-row-strong td {
       box-shadow: inset 0 0 0 999px rgba(43, 92, 255, 0.08);
