@@ -94,6 +94,15 @@ def _resolve_keyed_compare_columns(
         raise ValueError("key_columns vazio; e necessario informar pelo menos uma coluna-chave")
 
     key_columns_list = list(key_columns)
+    seen_keys: set[str] = set()
+    duplicated_keys: list[str] = []
+    for key_column in key_columns_list:
+        if key_column in seen_keys and key_column not in duplicated_keys:
+            duplicated_keys.append(key_column)
+        seen_keys.add(key_column)
+    if duplicated_keys:
+        raise ValueError("key_columns duplicadas: " + ", ".join(sorted(duplicated_keys)))
+
     common_columns_set = set(common_columns)
     missing_keys = [c for c in key_columns_list if c not in common_columns_set]
     if missing_keys:
@@ -105,6 +114,17 @@ def _resolve_keyed_compare_columns(
         compare_columns_list = [c for c in common_columns if c not in key_columns_list]
     else:
         compare_columns_list = list(compare_columns)
+        seen_compare: set[str] = set()
+        duplicated_compare: list[str] = []
+        for compare_column in compare_columns_list:
+            if compare_column in seen_compare and compare_column not in duplicated_compare:
+                duplicated_compare.append(compare_column)
+            seen_compare.add(compare_column)
+        if duplicated_compare:
+            raise ValueError(
+                "compare_columns duplicadas: " + ", ".join(sorted(duplicated_compare))
+            )
+
         missing_compare = [c for c in compare_columns_list if c not in common_columns_set]
         if missing_compare:
             raise ValueError(
