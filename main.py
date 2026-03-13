@@ -116,6 +116,7 @@ def configurar_logging():
 
 
 def main():
+    default_upload_dir = str((Path(__file__).parent / "documentos").resolve())
     parser = argparse.ArgumentParser(
         description="MDB2SQL - Interface Web Flask",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -138,7 +139,7 @@ Exemplos de uso:
     )
     parser.add_argument("--debug", action="store_true", help="Ativar modo debug")
     parser.add_argument(
-        "--upload-folder", help="Pasta para uploads (padrao: interface/uploads)"
+        "--upload-folder", help=f"Pasta para uploads/documentos (padrao: {default_upload_dir})"
     )
     parser.add_argument(
         "--max-content-length",
@@ -218,7 +219,7 @@ Exemplos de uso:
 
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print("Iniciando servidor Flask")
-        print(f"Pasta de uploads: {args.upload_folder or 'interface/uploads'}")
+        print(f"Pasta de uploads: {args.upload_folder or default_upload_dir}")
         print(f"Servidor: http://{args.host}:{args.port}")
         print(f"Debug: {'Ativado' if args.debug else 'Desativado'}")
         print(f"Modo threaded: {'Ativado' if args.threaded else 'Desativado'}")

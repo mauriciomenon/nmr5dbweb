@@ -246,7 +246,7 @@ brew install openjdk             # Para convert_jackcess.py (macOS)
 # Ou instale o Access Engine     # Para convert_pyodbc.py no Windows
 ```
 
-### Pipeline local de validacao (dados reais em `output/`)
+### Pipeline local de validacao (dados reais em `documentos/`)
 
 Use um comando unico para:
 - preparar artefatos canonicos (`DuckDB` e `SQLite`),
@@ -257,7 +257,7 @@ Use um comando unico para:
 ```bash
 # pipeline completo (prepare + benchmark + resumo)
 uv run python tools/run_validation_pipeline.py \
-  --input-dir output \
+  --input-dir documentos \
   --out-root artifacts/validation
 
 # pipeline rapido (sem benchmark)
@@ -273,8 +273,21 @@ Observacao operacional:
 
 ```bash
 NMR5DBWEB_ACCESS_PARSER_VERBOSE=1 \
-uv run python tools/run_validation_pipeline.py --input-dir output --out-root artifacts/validation --skip-benchmark
+uv run python tools/run_validation_pipeline.py --input-dir documentos --out-root artifacts/validation --skip-benchmark
 ```
+
+### Organizacao padrao dos bancos (documentos)
+
+Para centralizar bancos de trabalho em uma pasta visivel no root do repo, use:
+
+```bash
+uv run python tools/organize_and_convert_documents.py
+```
+
+Esse comando:
+- move `.accdb/.mdb` de `output/` e `interface/uploads/` para `documentos/`,
+- gera `.duckdb` e `.sqlite` para cada base Access,
+- mede tempos por etapa e grava relatorio em `documentos/reports/latest_conversion_report.{json,md,csv}`.
 
 ---
 

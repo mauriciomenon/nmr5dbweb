@@ -84,10 +84,11 @@ except Exception:
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-# Pasta de uploads da interface web (interface/uploads),
-# onde o endpoint /admin/upload grava os arquivos usados na pesquisa.
-UPLOAD_DIR = BASE_DIR / "uploads"
-UPLOAD_DIR.mkdir(exist_ok=True)
+# Pasta de documentos da interface web (padrao: <repo>/documentos).
+# O endpoint /admin/upload grava e lista os arquivos usados na pesquisa.
+DEFAULT_UPLOAD_DIR = PROJECT_ROOT / "documentos"
+UPLOAD_DIR = Path(os.environ.get("UPLOAD_FOLDER") or DEFAULT_UPLOAD_DIR).expanduser().resolve()
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 CONFIG_FILE = BASE_DIR / "config.json"
 ALLOWED_EXTENSIONS = {".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"}
 ACCESS_EXTENSIONS = {".mdb", ".accdb"}
@@ -135,7 +136,7 @@ RECORD_DIRS = {
     },
     "uploads_duckdb": {
         "label": "Uploads convertidos (.duckdb)",
-        "path": BASE_DIR / "uploads",
+        "path": UPLOAD_DIR,
     },
 }
 
