@@ -479,7 +479,7 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
     duck_target, sqlite_target = _derived_targets(source, docs_dir)
     st = source.stat()
     source_size = int(st.st_size)
-    source_mtime = dt.datetime.fromtimestamp(st.st_mtime, tz=dt.timezone.utc).isoformat()
+    source_mtime = dt.datetime.fromtimestamp(st.st_mtime, tz=dt.timezone.utc).astimezone().isoformat()
     source_iso = parse_iso_prefix(source.name)
     source_iso_date = source_iso.isoformat() if source_iso else ""
 
