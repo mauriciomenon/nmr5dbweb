@@ -135,6 +135,17 @@ const STATUS_POLL_MODAL_MS = 15000;
 const STATUS_POLL_IDLE_MS = 45000;
 const STATUS_POLL_NO_DB_MS = 60000;
 const LOG_LIMIT = 6;
+const SEARCH_UI_LIMITS = {
+  per_table: { min: 1, max: 200, fallback: 10, label: 'por tabela' },
+  candidate_limit: {
+    min: 1,
+    max: 20000,
+    fallback: 1000,
+    label: 'candidatos SQL',
+  },
+  total_limit: { min: 1, max: 5000, fallback: 500, label: 'total_max' },
+  tables_filter_max: 200,
+};
 let uiLogEntries = [];
 let serverOnline = true;
 
@@ -2020,9 +2031,33 @@ if (!window.__appSearchFlowBound) {
   };
 
   const buildSearchRequest = (query) => {
-    const per_table = parseInt($('per_table').value, 10) || 10;
-    const candidate_limit = parseInt($('candidate_limit').value, 10) || 1000;
-    const total_limit = parseInt($('total_limit').value, 10) || 500;
+    const parseBoundedSearchInt = (id, cfg) => {
+      const field = $(id);
+      const raw = field ? String(field.value || '').trim() : '';
+      if (!raw) {
+        if (field) field.value = String(cfg.fallback);
+        return cfg.fallback;
+      }
+      const parsed = parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) {
+        throw new Error(`Campo ${cfg.label} deve ser inteiro.`);
+      }
+      if (parsed < cfg.min || parsed > cfg.max) {
+        throw new Error(
+          `Campo ${cfg.label} deve ficar entre ${cfg.min} e ${cfg.max}.`
+        );
+      }
+      return parsed;
+    };
+    const per_table = parseBoundedSearchInt('per_table', SEARCH_UI_LIMITS.per_table);
+    const candidate_limit = parseBoundedSearchInt(
+      'candidate_limit',
+      SEARCH_UI_LIMITS.candidate_limit
+    );
+    const total_limit = parseBoundedSearchInt(
+      'total_limit',
+      SEARCH_UI_LIMITS.total_limit
+    );
     const token_mode = $('token_mode').value;
     const min_score = parseInt($('min_score').value, 10) || null;
     const tablesSel = $('tablesFilter');
@@ -2031,6 +2066,11 @@ if (!window.__appSearchFlowBound) {
       const selectedTables = Array.from(tablesSel.selectedOptions)
         .map((o) => o.value)
         .filter(Boolean);
+      if (selectedTables.length > SEARCH_UI_LIMITS.tables_filter_max) {
+        throw new Error(
+          `Selecione no maximo ${SEARCH_UI_LIMITS.tables_filter_max} tabelas no filtro.`
+        );
+      }
       if (selectedTables.length) {
         tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
       }
@@ -2062,7 +2102,18 @@ if (!window.__appSearchFlowBound) {
     const exportBtn = $('exportAllBtn');
     if (exportBtn) exportBtn.disabled = true;
     if (!canRunSearchNow()) return;
-    const request = buildSearchRequest(q);
+    let request;
+    try {
+      request = buildSearchRequest(q);
+    } catch (e) {
+      const msg =
+        e && e.message
+          ? e.message
+          : 'Parametros invalidos de busca.';
+      setSearchMeta(msg, 'warn');
+      setFlowBanner(msg, 'warn');
+      return;
+    }
     lastQuery = q;
     setSearchMeta(`Buscando: "${q}" ...`, '');
     setFlowBanner('Busca em andamento. Aguarde os resultados.', 'info');

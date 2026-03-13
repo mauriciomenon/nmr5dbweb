@@ -295,6 +295,23 @@ def test_success_frontend_smoke_search_page(ui_server, sample_data):
         )
 
 
+def test_invalid_search_rejects_out_of_range_limits(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/")
+        page.locator("#openSearchInlineMirror").click()
+        page.wait_for_selector("#searchBtn")
+        page.locator("#advancedPanel > summary").click()
+        page.locator("#q").fill("alpha")
+        page.locator("#per_table").fill("999")
+        page.locator("#searchBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('searchMeta').textContent || '').includes('Campo por tabela deve ficar entre 1 e 200.')"
+        )
+        assert "Campo por tabela deve ficar entre 1 e 200." in (
+            page.locator("#searchMeta").text_content() or ""
+        )
+
+
 def test_success_frontend_smoke_search_page_sqlite(ui_server, sample_data):
     local_search.runtime_state["db_path"] = str(sample_data["sqlite_search_db"])
     local_search.cfg["db_path"] = str(sample_data["sqlite_search_db"])
