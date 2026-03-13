@@ -56,6 +56,40 @@ KEY_NAME_HINTS = [
     "NO",
     "NB",
 ]
+GLOBAL_ALWAYS_COLUMNS = [
+    "RTUNO",
+    "PNTNO",
+    "PTNAM",
+    "PNTNAM",
+    "STTYPE",
+    "BITBYT",
+    "UNIQID",
+    "ITEMNB",
+]
+SOSTAT_ALWAYS_COLUMNS = [
+    "RTUNO",
+    "PNTNO",
+    "PTNAM",
+    "PNTNAM",
+    "STTYPE",
+    "BITBYT",
+    "UNIQID",
+    "ITEMNB",
+]
+SOANLG_ALWAYS_COLUMNS = [
+    "RTUNO",
+    "PNTNO",
+    "PTNAM",
+    "PNTNAM",
+    "BIAS",
+    "SCALE",
+    "ENGINX",
+    "HLIM5",
+    "HLIM6",
+    "LLIM5",
+    "LLIM6",
+    "ITEMNB",
+]
 
 
 @dataclass(frozen=True)
@@ -582,6 +616,36 @@ def _key_to_text(key_map: dict) -> str:
     return " | ".join(parts)
 
 
+def _normalize_col_key(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", str(name or "").upper())
+
+
+def _resolve_desired_columns(desired: Sequence[str], available: Sequence[str]) -> list[str]:
+    by_norm = {}
+    for col in available:
+        norm = _normalize_col_key(col)
+        if norm and norm not in by_norm:
+            by_norm[norm] = str(col)
+    resolved: list[str] = []
+    seen = set()
+    for desired_col in desired:
+        col = by_norm.get(_normalize_col_key(desired_col))
+        if not col or col in seen:
+            continue
+        seen.add(col)
+        resolved.append(col)
+    return resolved
+
+
+def _forced_columns_for_table(table_name: str, table_columns: Sequence[str]) -> list[str]:
+    upper_name = str(table_name or "").upper()
+    if upper_name.endswith("SOANLG"):
+        return _resolve_desired_columns(SOANLG_ALWAYS_COLUMNS, table_columns)
+    if upper_name.endswith("SOSTAT"):
+        return _resolve_desired_columns(SOSTAT_ALWAYS_COLUMNS, table_columns)
+    return _resolve_desired_columns(GLOBAL_ALWAYS_COLUMNS, table_columns)
+
+
 def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[str]) -> dict:
     table = str(compare_payload.get("table") or "")
     rows = list(compare_payload.get("rows") or [])
@@ -599,9 +663,22 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
                 changed_set.add(col)
                 changed_cols.append(col)
 
-    if not changed_cols:
+    forced_cols = _forced_columns_for_table(table, table_columns)
+    visible_cols: list[str] = []
+    seen_visible = set()
+    for col in forced_cols:
+        if col in seen_visible:
+            continue
+        seen_visible.add(col)
+        visible_cols.append(col)
+    for col in changed_cols:
+        if col in seen_visible:
+            continue
+        seen_visible.add(col)
+        visible_cols.append(col)
+    if not visible_cols:
         fallback = [c for c in table_columns if c not in (compare_payload.get("key_columns") or [])]
-        changed_cols = fallback[: min(4, len(fallback))]
+        visible_cols = fallback[: min(4, len(fallback))]
 
     records = []
     for item in rows:
@@ -612,7 +689,7 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
         old_row = {}
         new_row = {}
         changed_map = {}
-        for col in changed_cols:
+        for col in visible_cols:
             old_v = a_vals.get(col, "")
             new_v = b_vals.get(col, "")
             old_row[col] = old_v
@@ -638,7 +715,7 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
     return {
         "table": table,
         "key_columns": list(compare_payload.get("key_columns") or []),
-        "visible_columns": changed_cols,
+        "visible_columns": visible_cols,
         "rows_total": int(compare_payload.get("total_filtered_rows") or len(rows)),
         "rows_returned": len(records),
         "summary": compare_payload.get("summary") or {},

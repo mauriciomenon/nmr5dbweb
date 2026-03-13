@@ -124,3 +124,65 @@ def test_report_nao_exibe_tabela_same_no_bloco_de_alteracoes(tmp_path: Path) -> 
     md_text = outputs["md"].read_text(encoding="utf-8")
     assert "| T1 | diff |" in md_text
     assert "| T2 | same |" not in md_text
+
+
+def test_build_table_detail_compact_sostat_forca_colunas_padrao() -> None:
+    payload = {
+        "table": "RANGER_SOSTAT",
+        "key_columns": ["UNIQID"],
+        "compare_columns": ["RTUNO", "PNTNO", "PNTNAM", "STTYPE", "BITBYT", "ITEMNB"],
+        "rows": [
+            {
+                "type": "changed",
+                "key": {"UNIQID": "X1"},
+                "a": {"RTUNO": 1, "PNTNO": 2, "PNTNAM": "A", "STTYPE": "S", "BITBYT": 0, "ITEMNB": 10},
+                "b": {"RTUNO": 1, "PNTNO": 2, "PNTNAM": "A", "STTYPE": "T", "BITBYT": 0, "ITEMNB": 10},
+            }
+        ],
+    }
+    detail = build_table_detail_compact(
+        payload,
+        ["RTUNO", "PNTNO", "PNTNAM", "STTYPE", "BITBYT", "UNIQID", "ITEMNB"],
+    )
+    assert detail["visible_columns"] == [
+        "RTUNO",
+        "PNTNO",
+        "PNTNAM",
+        "STTYPE",
+        "BITBYT",
+        "UNIQID",
+        "ITEMNB",
+    ]
+
+
+def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
+    payload = {
+        "table": "RANGER_SOANLG",
+        "key_columns": ["UNIQID"],
+        "compare_columns": ["BIAS", "SCALE", "HLIM5", "LLIM5", "ITEMNB"],
+        "rows": [
+            {
+                "type": "changed",
+                "key": {"UNIQID": "X2"},
+                "a": {"BIAS": 0.0, "SCALE": 1.0, "HLIM5": 2.0, "LLIM5": 0.0, "ITEMNB": 5},
+                "b": {"BIAS": 0.1, "SCALE": 1.0, "HLIM5": 2.0, "LLIM5": 0.0, "ITEMNB": 5},
+            }
+        ],
+    }
+    detail = build_table_detail_compact(
+        payload,
+        ["RTUNO", "PNTNO", "PNTNAM", "BIAS", "SCALE", "ENGINX", "HLIM5", "HLIM6", "LLIM5", "LLIM6", "ITEMNB"],
+    )
+    assert detail["visible_columns"] == [
+        "RTUNO",
+        "PNTNO",
+        "PNTNAM",
+        "BIAS",
+        "SCALE",
+        "ENGINX",
+        "HLIM5",
+        "HLIM6",
+        "LLIM5",
+        "LLIM6",
+        "ITEMNB",
+    ]
