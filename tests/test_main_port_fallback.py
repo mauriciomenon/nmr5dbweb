@@ -71,3 +71,11 @@ def test_main_port_livre_mantem_porta(monkeypatch):
 
     assert exc.value.code == 0
     assert calls["kwargs"]["port"] == 5000
+
+
+def test_encontrar_proxima_porta_livre_pula_portas_ocupadas(monkeypatch):
+    def fake_verificar(_host, porta):
+        return int(porta) == 5002
+
+    monkeypatch.setattr(app_main, "verificar_porta_disponivel", fake_verificar)
+    assert app_main.encontrar_proxima_porta_livre("127.0.0.1", 5000, max_tentativas=5) == 5002
