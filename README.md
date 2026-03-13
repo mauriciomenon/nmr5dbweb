@@ -100,6 +100,32 @@ PYTHONPATH=. uv run python tools/organize_and_convert_documents.py \
   --source-dir documentos
 ```
 
+## Report automatizado de diferenca (POC)
+
+Com menu interativo e selecao paginada (10 por tela), sugerindo os 2 ultimos `.accdb`:
+
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py
+```
+
+Fluxo:
+1. sugere 2 arquivos Access por data no nome (`YYYY-MM-DD ...`)
+2. permite trocar A/B com lista paginada (`n/p`) e sair/voltar (`q/b`)
+3. garante derivados `.duckdb` e `.sqlite` quando faltarem
+4. compara via backend em DuckDB
+5. grava report com timestamp em:
+- `documentos/reports/*.html`
+- `documentos/reports/*.md`
+- `documentos/reports/*.txt`
+
+Modo direto sem menu:
+
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
 ## Qualidade local (obrigatorio no ciclo)
 
 ```bash
