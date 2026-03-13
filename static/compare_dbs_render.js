@@ -163,6 +163,199 @@ function buildComparePatterns(data, changedRows) {
     .slice(0, 5);
 }
 
+function buildCompareAnomalySignals(data, changedRows) {
+  const compareColumns = data.compare_columns || [];
+  const keyColumns = data.key_columns || [];
+  const stateCols = ['STACON', 'NORMST', 'SOEHIS', 'CLASS'];
+  const highImpactThreshold = 6;
+  const stateTransitions = {};
+  const keyMissing = [];
+  const highImpact = [];
+  const criticalCols = {};
+
+  changedRows.forEach((row, index) => {
+    const changedColumns = compareColumns.filter((column) =>
+      valuesDifferent((row.a || {})[column], (row.b || {})[column])
+    );
+    if (!changedColumns.length) return;
+
+    const keyText =
+      keyColumns
+        .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+        .join(', ') || `index_${index + 1}`;
+
+    if (changedColumns.length >= highImpactThreshold) {
+      highImpact.push({ key: keyText, count: changedColumns.length });
+    }
+
+    const hasKeyValue = keyColumns.some((key) => {
+      const value = (row.key || {})[key];
+      return value !== undefined && value !== null && String(value).trim() !== '';
+    });
+    if (!hasKeyValue) {
+      keyMissing.push(keyText);
+    }
+
+    for (const col of changedColumns) {
+      if (!criticalCols[col]) criticalCols[col] = 0;
+      criticalCols[col] += 1;
+    }
+
+    const oldState = pickDomainField(row, stateCols);
+    const newState = pickDomainField(
+      {
+        a: row.b || {},
+        b: row.a || {},
+      },
+      stateCols
+    );
+    if (oldState || newState) {
+      const transition = `${oldState || '-'} -> ${newState || '-'}`;
+      stateTransitions[transition] = (stateTransitions[transition] || 0) + 1;
+    }
+  });
+
+  const criticalTransition = Object.entries(stateTransitions)
+    .map(([label, count]) => [label, count])
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+  const topCriticalCols = Object.entries(criticalCols)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+
+  return {
+    highImpact: highImpact.slice(0, 6),
+    keyMissing: keyMissing.slice(0, 4),
+    criticalTransition,
+    topCriticalCols,
+  };
+}
+
+function buildCompareDomainRiskSignals(changedRows) {
+  const stateCols = ['STACON', 'NORMST', 'SOEHIS', 'CLASS'];
+  const families = {};
+  const transitions = {};
+
+  changedRows.forEach((row, index) => {
+    const changedColumns = (row && row.changed_columns) || [];
+    const compareColumns = Object.keys((row || {}).a || {}).concat(
+      Object.keys((row || {}).b || {})
+    );
+    const diffCols = changedColumns.length
+      ? changedColumns
+      : compareColumns.filter((column) =>
+          valuesDifferent((row.a || {})[column], (row.b || {})[column])
+        );
+    if (!diffCols.length) return;
+
+    const oldState = pickDomainField(
+      row,
+      stateCols
+    );
+    const newState = pickDomainField(
+      {
+        a: row.b || {},
+        b: row.a || {},
+      },
+      stateCols
+    );
+    const family =
+      pickDomainField(row, ['PNLNAM', 'SUBNAM', 'DEVNAM']) || 'familia nao identificada';
+    const signal = families[family] || {
+      count: 0,
+      score: 0,
+      sample: `registro_${index + 1}`,
+      transitions: {},
+    };
+    signal.count += 1;
+    signal.score += diffCols.length + (oldState && newState && oldState !== newState ? 3 : 0);
+    signal.sample = signal.sample || `registro_${index + 1}`;
+    const transition = oldState || newState ? `${oldState || '-'} => ${newState || '-'}` : 'sem transicao';
+    signal.transitions[transition] = (signal.transitions[transition] || 0) + 1;
+    families[family] = signal;
+
+    transitions[transition] = (transitions[transition] || 0) + 1;
+  });
+
+  const familyRisk = Object.entries(families)
+    .map(([family, info]) => ({
+      family,
+      count: info.count,
+      score: info.score,
+      sample: info.sample,
+      transitions: Object.entries(info.transitions || {}).sort((a, b) => b[1] - a[1]),
+    }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+
+  const transitionRisk = Object.entries(transitions)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  return {
+    familyRisk,
+    transitionRisk,
+  };
+}
+
+function buildCompareRiskSignals(data, changedRows) {
+  const compareColumns = data.compare_columns || [];
+  const keyColumns = data.key_columns || [];
+  const stateCols = ['STACON', 'NORMST', 'SOEHIS', 'CLASS'];
+  const riskRows = [];
+  const domainIndex = {};
+
+  changedRows.forEach((row, index) => {
+    const changedColumns = compareColumns.filter((column) =>
+      valuesDifferent((row.a || {})[column], (row.b || {})[column])
+    );
+    if (!changedColumns.length) return;
+
+    const keyText =
+      keyColumns.length
+        ? keyColumns
+            .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+            .join(', ')
+        : `index_${index + 1}`;
+
+    const oldState = pickDomainField(row, stateCols);
+    const newState = pickDomainField(
+      {
+        a: row.b || {},
+        b: row.a || {},
+      },
+      stateCols
+    );
+    const stateScore =
+      oldState && newState && oldState !== newState ? 2 : 0;
+    const changedScore = changedColumns.length;
+    const riskScore = changedScore + stateScore;
+
+    if (riskScore >= 4) {
+      riskRows.push({
+        key: keyText,
+        score: riskScore,
+        columns: changedColumns.slice(0, 5).join(', ') || 'sem coluna',
+        transition:
+          oldState && newState ? `${oldState} => ${newState}` : 'sem transicao',
+      });
+      domainIndex[keyText] = (domainIndex[keyText] || 0) + riskScore;
+    }
+  });
+
+  const topRiskRows = riskRows
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6);
+  const repeatedRiskKeys = Object.entries(domainIndex)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+
+  return {
+    topRiskRows,
+    repeatedRiskKeys,
+  };
+}
+
 function pickDomainField(row, candidates) {
   for (const candidate of candidates) {
     const valueA = (row.a || {})[candidate];
@@ -232,7 +425,13 @@ function renderCompareSummary(data, summaryData) {
   const alerts = buildCompareAlerts(data, changedRows);
   const review = buildComparePriorityReview(data, changedRows);
   const patterns = buildComparePatterns(data, changedRows);
+  const anomalySignals = buildCompareAnomalySignals(data, changedRows);
   const domainSignals = buildCompareDomainSignals(changedRows);
+  const riskSignals = buildCompareRiskSignals(data, changedRows);
+  const domainRiskSignals = buildCompareDomainRiskSignals(changedRows);
+  const totalChanged = summaryData.changed || changedRows.length;
+  const totalKeys = summaryData.totalKeys || 1;
+  const changedDensity = ((totalChanged / totalKeys) * 100).toFixed(1);
   const topKeysHtml = review.topKeys.length
     ? `<div class="report-review-list">${review.topKeys
         .map(
@@ -273,6 +472,69 @@ function renderCompareSummary(data, summaryData) {
         )
         .join('')}</div>`
     : '';
+  const anomalyHighImpactHtml = anomalySignals.highImpact.length
+    ? `<div class="result-col-diff"><strong>Mudancas com alto impacto (chaves com mais alteracoes):</strong>${anomalySignals.highImpact
+        .map(
+          (it) =>
+            `<div class="report-review-item"><strong>${it.key}</strong><span>${it.count} colunas alteradas</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const anomalyMissingKeysHtml = anomalySignals.keyMissing.length
+    ? `<div class="result-col-diff"><strong>Chaves sem identificacao primaria completa:</strong>${anomalySignals.keyMissing
+        .map((item) => `<div class="report-review-item">${item}</div>`)
+        .join('')}</div>`
+    : '';
+  const anomalyTransitionHtml = anomalySignals.criticalTransition.length
+    ? `<div class="result-col-diff"><strong>Transicoes de estado mais impactantes:</strong>${anomalySignals.criticalTransition
+        .map(
+          ([label, count]) =>
+            `<div class="report-review-item"><strong>${label}</strong><span>${count} registro(s)</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const anomalyColsHtml = anomalySignals.topCriticalCols.length
+    ? `<div class="result-col-diff"><strong>Colunas com maior concentracao de mudanca:</strong>${anomalySignals.topCriticalCols
+        .map(
+          ([col, count]) =>
+            `<div class="report-review-item"><strong>${col}</strong><span>${count} mudancas</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const anomalyRiskRowsHtml = riskSignals.topRiskRows.length
+    ? `<div class="result-col-diff"><strong>Chaves com risco operacional acima de 3:</strong>${riskSignals.topRiskRows
+        .map(
+          (item) =>
+            `<div class="report-review-item"><strong>${item.key}</strong><span>${item.score} ponto(s) · ${item.columns} · ${item.transition}</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const anomalyConcentrationHtml = riskSignals.repeatedRiskKeys.length
+    ? `<div class="result-col-diff"><strong>Concentracao repetitiva de risco:</strong>${riskSignals.repeatedRiskKeys
+        .map(
+          ([keyText, score]) =>
+            `<div class="report-review-item"><strong>${keyText}</strong><span>${score} pontos concentrados</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const domainRiskHtml = domainRiskSignals.familyRisk.length
+    ? `<div class="result-col-diff"><strong>Familias com risco operacional:</strong>${domainRiskSignals.familyRisk
+        .map((item) => {
+          const transitionText = item.transitions.length
+            ? ` · transicao principal ${item.transitions[0][0]} (${item.transitions[0][1]})`
+            : '';
+          return `<div class="report-review-item"><strong>${item.family}</strong><span>${item.score} pontos · ${item.count} chave(s)${transitionText}</span></div>`;
+        })
+        .join('')}</div>`
+    : '';
+  const domainTransitionHtml = domainRiskSignals.transitionRisk.length
+    ? `<div class="result-col-diff"><strong>Transicoes operacionais com concentracao:</strong>${domainRiskSignals.transitionRisk
+        .map(
+          ([transition, count]) =>
+            `<div class="report-review-item"><strong>${transition}</strong><span>${count} ocorrencia(s)</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -295,6 +557,15 @@ function renderCompareSummary(data, summaryData) {
         ${patternsHtml ? `<div class="result-col-diff"><strong>Padroes de alteracao:</strong>${patternsHtml}</div>` : ''}
         ${familyHtml ? `<div class="result-col-diff"><strong>Familias mais afetadas:</strong>${familyHtml}</div>` : ''}
         ${transitionsHtml ? `<div class="result-col-diff"><strong>Transicoes de estado observadas:</strong>${transitionsHtml}</div>` : ''}
+        <div class="result-col-diff"><strong>Indice de divergencia:</strong> ${changedDensity}% das chaves por status alterado</div>
+        ${anomalyHighImpactHtml}
+        ${anomalyColsHtml}
+        ${anomalyTransitionHtml}
+        ${anomalyMissingKeysHtml}
+        ${domainRiskHtml}
+        ${domainTransitionHtml}
+        ${anomalyRiskRowsHtml}
+        ${anomalyConcentrationHtml}
       </div>
     </div>
   `;
