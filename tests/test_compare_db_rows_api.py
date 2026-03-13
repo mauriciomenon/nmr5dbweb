@@ -232,6 +232,30 @@ def test_api_compare_change_types_invalid_returns_400(tmp_path):
     assert data["invalid"] == ["foo"]
 
 
+def test_api_compare_change_types_empty_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "change_types": [],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "change_types deve conter ao menos um tipo"
+
+
 def test_api_compare_changed_column_outside_compare_columns_returns_400(tmp_path):
     client = app.test_client()
 

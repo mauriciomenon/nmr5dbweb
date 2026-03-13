@@ -778,6 +778,8 @@ def parse_compare_rows_request(data):
     if change_types is not None:
         if not isinstance(change_types, list):
             raise ValueError("change_types deve ser uma lista")
+        if len(change_types) == 0:
+            raise ValueError("change_types deve conter ao menos um tipo")
         invalid_change_types = [str(t) for t in change_types if str(t) not in valid_types]
         change_types = [str(t) for t in change_types]
 
