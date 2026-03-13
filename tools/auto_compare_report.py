@@ -1085,6 +1085,18 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
             for col in cols
         ]
     )
+    all_cols = key_cols + ["tipo", "linha"] + list(cols)
+    unique_cols: list[str] = []
+    seen_cols: set[str] = set()
+    for col in all_cols:
+        col_name = str(col)
+        if col_name in seen_cols:
+            continue
+        seen_cols.add(col_name)
+        unique_cols.append(col_name)
+    option_html = "".join(
+        [f"<option value='{html.escape(str(col))}'>{html.escape(str(col))}</option>" for col in unique_cols]
+    )
     table_id = f"detail-table-{table_idx}"
     body_rows = []
     for row_idx, item in enumerate(detail.get("records") or []):
@@ -1134,8 +1146,27 @@ def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table
             + "".join(new_cells)
             + "</tr>"
         )
+    controls_html = (
+        "<div class='detail-controls'>"
+        + "<label>coluna "
+        + f"<select class='ctrl-filter-col'>{option_html}</select></label>"
+        + "<label>filtro "
+        + "<select class='ctrl-filter-mode'><option value='contains'>contem</option>"
+        + "<option value='not_contains'>nao_contem</option></select></label>"
+        + "<label>texto <input type='text' class='ctrl-filter-text' placeholder='valor'></label>"
+        + "<label>ordenar por "
+        + "<select class='ctrl-sort-col'><option value=''>sem_ordenacao</option>"
+        + option_html
+        + "</select></label>"
+        + "<label>ordem "
+        + "<select class='ctrl-sort-order'><option value='asc'>crescente</option>"
+        + "<option value='desc'>decrescente</option></select></label>"
+        + "<button type='button' class='ctrl-reset'>limpar</button>"
+        + "</div>"
+    )
     return (
-        f"<table class='detail' id='{table_id}'>"
+        controls_html
+        + f"<table class='detail' id='{table_id}'>"
         "<thead><tr>"
         + key_header_cells
         + "<th>tipo</th><th>linha</th>"
@@ -1199,6 +1230,10 @@ def render_report_html(payload: dict) -> str:
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
     .filter-row th {{ background: #ffffff; }}
     .col-filter-input {{ width: 95%; min-width: 90px; font-size: 12px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; }}
+    .detail-controls {{ display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 6px; align-items: center; }}
+    .detail-controls label {{ font-size: 12px; color: #334155; display: flex; gap: 4px; align-items: center; }}
+    .detail-controls select, .detail-controls input {{ font-size: 12px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 6px; }}
+    .detail-controls button {{ font-size: 12px; padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #f8fafc; cursor: pointer; }}
     details.meta-detail {{ margin-top: 6px; }}
   </style>
 </head>
@@ -1267,11 +1302,7 @@ def render_report_html(payload: dict) -> str:
   </div>
   <script>
   (function() {{
-    function applyFilters(table) {{
-      const inputs = Array.from(table.querySelectorAll('.col-filter-input'));
-      const active = inputs
-        .map((inp) => [inp.getAttribute('data-col') || '', (inp.value || '').trim().toLowerCase()])
-        .filter((it) => it[0] && it[1]);
+    function getPairRows(table) {{
       const rows = Array.from(table.querySelectorAll('tbody tr[data-pair]'));
       const pairMap = new Map();
       rows.forEach((tr) => {{
@@ -1279,22 +1310,101 @@ def render_report_html(payload: dict) -> str:
         if (!pairMap.has(id)) pairMap.set(id, []);
         pairMap.get(id).push(tr);
       }});
-      pairMap.forEach((pairRows) => {{
+      return Array.from(pairMap.entries())
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .map((it) => it[1]);
+    }}
+
+    function cellValues(pairRows, col) {{
+      const vals = [];
+      pairRows.forEach((row) => {{
+        const cells = Array.from(row.querySelectorAll(`td[data-col="${{col}}"]`));
+        cells.forEach((cell) => {{
+          const text = (cell.textContent || '').trim();
+          if (text) vals.push(text);
+        }});
+      }});
+      return vals;
+    }}
+
+    function pairValue(pairRows, col) {{
+      const vals = cellValues(pairRows, col);
+      if (!vals.length) return '';
+      return vals[vals.length - 1];
+    }}
+
+    function textHas(pairRows, col, term) {{
+      if (!term) return true;
+      const lowered = term.toLowerCase();
+      const vals = cellValues(pairRows, col);
+      if (!vals.length) return false;
+      return vals.some((v) => v.toLowerCase().includes(lowered));
+    }}
+
+    function parseNum(text) {{
+      const clean = String(text || '').trim().replace(',', '.');
+      if (!clean) return NaN;
+      return Number(clean);
+    }}
+
+    function comparePairValues(aRows, bRows, col, order) {{
+      const a = pairValue(aRows, col);
+      const b = pairValue(bRows, col);
+      const aNum = parseNum(a);
+      const bNum = parseNum(b);
+      let cmp = 0;
+      if (!Number.isNaN(aNum) && !Number.isNaN(bNum)) {{
+        cmp = aNum - bNum;
+      }} else {{
+        cmp = String(a).localeCompare(String(b), undefined, {{ numeric: true, sensitivity: 'base' }});
+      }}
+      return order === 'desc' ? -cmp : cmp;
+    }}
+
+    function applyFilters(table) {{
+      const inputs = Array.from(table.querySelectorAll('.col-filter-input'));
+      const active = inputs
+        .map((inp) => [inp.getAttribute('data-col') || '', (inp.value || '').trim().toLowerCase()])
+        .filter((it) => it[0] && it[1]);
+      const ctrlCol = table.parentElement.querySelector('.ctrl-filter-col');
+      const ctrlMode = table.parentElement.querySelector('.ctrl-filter-mode');
+      const ctrlText = table.parentElement.querySelector('.ctrl-filter-text');
+      const sortCol = table.parentElement.querySelector('.ctrl-sort-col');
+      const sortOrder = table.parentElement.querySelector('.ctrl-sort-order');
+      const quickCol = ctrlCol ? (ctrlCol.value || '') : '';
+      const quickMode = ctrlMode ? (ctrlMode.value || 'contains') : 'contains';
+      const quickText = ctrlText ? (ctrlText.value || '').trim().toLowerCase() : '';
+      const orderCol = sortCol ? (sortCol.value || '') : '';
+      const orderMode = sortOrder ? (sortOrder.value || 'asc') : 'asc';
+
+      let pairs = getPairRows(table);
+      pairs = pairs.filter((pairRows) => {{
         let ok = true;
         for (const item of active) {{
-          const col = item[0];
-          const term = item[1];
-          const matched = pairRows.some((row) => {{
-            const cells = Array.from(row.querySelectorAll(`td[data-col="${{col}}"]`));
-            return cells.some((cell) => (cell.textContent || '').toLowerCase().includes(term));
-          }});
-          if (!matched) {{
+          if (!textHas(pairRows, item[0], item[1])) {{
             ok = false;
             break;
           }}
         }}
+        if (!ok) return false;
+        if (!quickText || !quickCol) return true;
+        const has = textHas(pairRows, quickCol, quickText);
+        return quickMode === 'not_contains' ? !has : has;
+      }});
+
+      if (orderCol) {{
+        pairs.sort((aRows, bRows) => comparePairValues(aRows, bRows, orderCol, orderMode));
+      }}
+
+      const tbody = table.querySelector('tbody');
+      if (!tbody) return;
+      while (tbody.firstChild) {{
+        tbody.removeChild(tbody.firstChild);
+      }}
+      pairs.forEach((pairRows) => {{
         pairRows.forEach((row) => {{
-          row.style.display = ok ? '' : 'none';
+          row.style.display = '';
+          tbody.appendChild(row);
         }});
       }});
     }}
@@ -1307,6 +1417,38 @@ def render_report_html(payload: dict) -> str:
           applyFilters(table);
         }});
       }});
+      const controls = [
+        table.parentElement.querySelector('.ctrl-filter-col'),
+        table.parentElement.querySelector('.ctrl-filter-mode'),
+        table.parentElement.querySelector('.ctrl-filter-text'),
+        table.parentElement.querySelector('.ctrl-sort-col'),
+        table.parentElement.querySelector('.ctrl-sort-order'),
+      ].filter(Boolean);
+      controls.forEach((el) => {{
+        const evt = el.tagName === 'INPUT' ? 'input' : 'change';
+        el.addEventListener(evt, function() {{
+          applyFilters(table);
+        }});
+      }});
+      const resetBtn = table.parentElement.querySelector('.ctrl-reset');
+      if (resetBtn) {{
+        resetBtn.addEventListener('click', function() {{
+          inputs.forEach((input) => {{
+            input.value = '';
+          }});
+          const filterCol = table.parentElement.querySelector('.ctrl-filter-col');
+          const filterMode = table.parentElement.querySelector('.ctrl-filter-mode');
+          const filterText = table.parentElement.querySelector('.ctrl-filter-text');
+          const sortCol = table.parentElement.querySelector('.ctrl-sort-col');
+          const sortOrder = table.parentElement.querySelector('.ctrl-sort-order');
+          if (filterCol) filterCol.selectedIndex = 0;
+          if (filterMode) filterMode.value = 'contains';
+          if (filterText) filterText.value = '';
+          if (sortCol) sortCol.value = '';
+          if (sortOrder) sortOrder.value = 'asc';
+          applyFilters(table);
+        }});
+      }}
     }});
   }})();
   </script>

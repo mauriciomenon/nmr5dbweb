@@ -277,3 +277,6 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "pipeline tecnico" in html
     assert "Bancos utilizados no fluxo" in html
     assert "duckdb: base SQL principal da comparacao" in html
+    assert "nao_contem" in html
+    assert "crescente" in html
+    assert "sem_ordenacao" in html
