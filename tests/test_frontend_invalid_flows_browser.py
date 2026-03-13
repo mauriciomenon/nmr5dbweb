@@ -312,6 +312,7 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert "Familias mais afetadas" in (page.locator("#summary").text_content() or "")
         assert "Mudancas vazio/preenchido" in (page.locator("#summary").text_content() or "")
         assert "Deltas numericos relevantes" in (page.locator("#summary").text_content() or "")
+        assert "Prioridade de revisao:" in (page.locator("#summary").text_content() or "")
         assert "A (NOVO):" in (page.locator("#summary").text_content() or "")
         assert "B (ANTIGO):" in (page.locator("#summary").text_content() or "")
         assert "Volume bruto:" in (page.locator("#summary").text_content() or "")

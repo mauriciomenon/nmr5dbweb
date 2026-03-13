@@ -354,6 +354,11 @@ function buildCompareValueSignals(data, changedRows) {
   return {
     topNullTransitions,
     topNumericDrift,
+    nullTransitionsTotal: Object.values(nullTransitions).reduce(
+      (acc, value) => acc + Number(value || 0),
+      0
+    ),
+    numericDriftColumnsCount: Object.keys(numericDrift).length,
   };
 }
 
@@ -479,6 +484,51 @@ function buildCompareRiskSignals(data, changedRows) {
   return {
     topRiskRows,
     repeatedRiskKeys,
+    riskRowCount: riskRows.length,
+  };
+}
+
+function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
+  const totalKeys = Number(summaryData.totalKeys || 0);
+  const impactedKeys = Number(
+    (summaryData.onlyInDbA || 0) + (summaryData.onlyInDbB || 0) + (summaryData.changed || 0)
+  );
+  const impactedPct = totalKeys > 0 ? (impactedKeys / totalKeys) * 100 : 0;
+  const riskRowCount = Number((riskSignals && riskSignals.riskRowCount) || 0);
+  const nullTransitionsTotal = Number(
+    (valueSignals && valueSignals.nullTransitionsTotal) || 0
+  );
+  const numericDriftColumnsCount = Number(
+    (valueSignals && valueSignals.numericDriftColumnsCount) || 0
+  );
+
+  let label = 'baixa';
+  let badgeClass = 'same';
+  if (impactedPct >= 50 || riskRowCount >= 4) {
+    label = 'critica';
+    badgeClass = 'removed';
+  } else if (impactedPct >= 25 || riskRowCount >= 2 || nullTransitionsTotal >= 4) {
+    label = 'alta';
+    badgeClass = 'changed';
+  } else if (impactedPct >= 10 || numericDriftColumnsCount >= 2) {
+    label = 'media';
+    badgeClass = 'added';
+  } else if (impactedKeys === 0) {
+    label = 'estavel';
+    badgeClass = 'same';
+  }
+
+  const reasons = [];
+  reasons.push(
+    `${impactedKeys}/${totalKeys || 0} chave(s) impactadas (${impactedPct.toFixed(1)}%)`
+  );
+  if (riskRowCount > 0) reasons.push(`${riskRowCount} chave(s) com risco >= 4`);
+  if (nullTransitionsTotal > 0) reasons.push(`${nullTransitionsTotal} transicao(oes) vazio/preenchido`);
+  if (numericDriftColumnsCount > 0) reasons.push(`${numericDriftColumnsCount} coluna(s) com drift numerico`);
+  return {
+    label,
+    badgeClass,
+    reasonText: reasons.join(' · '),
   };
 }
 
@@ -558,6 +608,11 @@ function renderCompareSummary(data, summaryData) {
   const riskSignals = buildCompareRiskSignals(data, changedRows);
   const domainRiskSignals = buildCompareDomainRiskSignals(changedRows);
   const valueSignals = buildCompareValueSignals(data, changedRows);
+  const severitySignals = buildCompareSeveritySignals(
+    summaryData,
+    valueSignals,
+    riskSignals
+  );
   const totalChanged = Number(summaryData.changed || changedRows.length || 0);
   const totalKeys = Number(summaryData.totalKeys || 0);
   const changedDensity = totalKeys > 0 ? ((totalChanged / totalKeys) * 100).toFixed(1) : '0.0';
@@ -711,6 +766,7 @@ function renderCompareSummary(data, summaryData) {
         ${familyHtml ? `<div class="result-col-diff"><strong>Familias mais afetadas:</strong>${familyHtml}</div>` : ''}
         ${transitionsHtml ? `<div class="result-col-diff"><strong>Transicoes de estado observadas:</strong>${transitionsHtml}</div>` : ''}
         <div class="result-col-diff"><strong>Indice de divergencia:</strong> ${changedDensity}% das chaves por status alterado</div>
+        <div class="result-col-diff"><strong>Prioridade de revisao:</strong> <span class="badge ${severitySignals.badgeClass}">${safe(severitySignals.label)}</span> ${safe(severitySignals.reasonText)}</div>
         ${anomalyHighImpactHtml}
         ${anomalyColsHtml}
         ${anomalyTransitionHtml}
