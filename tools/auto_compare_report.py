@@ -175,7 +175,7 @@ def list_candidate_files(docs_dir: Path) -> list[FileItem]:
     items.sort(
         key=lambda it: (
             it.iso_date or dt.date(1900, 1, 1),
-            dt.datetime.fromtimestamp(it.mtime),
+            dt.datetime.fromtimestamp(it.mtime, tz=dt.timezone.utc),
             it.path.name.lower(),
         ),
         reverse=True,
@@ -497,7 +497,7 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
     sqlite_target = docs_dir / f"{stem}.sqlite"
     st = source.stat()
     source_size = int(st.st_size)
-    source_mtime = dt.datetime.fromtimestamp(st.st_mtime).isoformat()
+    source_mtime = dt.datetime.fromtimestamp(st.st_mtime, tz=dt.timezone.utc).isoformat()
     source_iso = parse_iso_prefix(source.name)
     source_iso_date = source_iso.isoformat() if source_iso else ""
 
@@ -894,7 +894,7 @@ def build_report_payload(
     overview_rows: Sequence[dict],
     table_details: Sequence[dict],
 ) -> dict:
-    now = dt.datetime.now()
+    now = dt.datetime.now(dt.timezone.utc)
     summary = summarize_overview(overview_rows)
     changed_rows = [row for row in overview_rows if str(row.get("status") or "") != "same"]
     sorted_rows = sorted(
@@ -1016,9 +1016,11 @@ def _source_line_labels(payload: dict) -> tuple[str, str]:
     iso_a = str(src_a.get("iso_date") or "").strip()
     iso_b = str(src_b.get("iso_date") or "").strip()
     if not iso_a:
-        iso_a = (parse_iso_prefix(str(src_a.get("file") or "")) or "").isoformat() if parse_iso_prefix(str(src_a.get("file") or "")) else ""
+        parsed_a = parse_iso_prefix(str(src_a.get("file") or ""))
+        iso_a = parsed_a.isoformat() if parsed_a else ""
     if not iso_b:
-        iso_b = (parse_iso_prefix(str(src_b.get("file") or "")) or "").isoformat() if parse_iso_prefix(str(src_b.get("file") or "")) else ""
+        parsed_b = parse_iso_prefix(str(src_b.get("file") or ""))
+        iso_b = parsed_b.isoformat() if parsed_b else ""
     label_a = f"db {iso_a}" if iso_a else "velho"
     label_b = f"db {iso_b}" if iso_b else "novo"
     return label_a, label_b
