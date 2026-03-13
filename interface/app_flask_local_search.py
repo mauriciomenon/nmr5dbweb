@@ -659,6 +659,116 @@ def parse_track_request_args(data):
     }
 
 
+def parse_compare_key_filter(key_filter_str, key_columns):
+    key_filter = {}
+    if not key_filter_str:
+        return key_filter
+    for part in key_filter_str.split(","):
+        p = part.strip()
+        if not p:
+            continue
+        if "=" not in p:
+            raise ValueError("key_filter deve usar o formato COL=VAL")
+        k, v = p.split("=", 1)
+        k = k.strip()
+        v = v.strip()
+        if not k:
+            raise ValueError("key_filter contem coluna vazia")
+        if not v:
+            raise ValueError(f"key_filter sem valor para a coluna {k}")
+        if k not in key_columns:
+            raise ValueError(f"key_filter usa coluna fora de key_columns: {k}")
+        if k in key_filter:
+            raise ValueError(f"key_filter repetiu a coluna {k}")
+        key_filter[k] = v
+    return key_filter
+
+
+def parse_compare_rows_request(data):
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+    table = (data.get("table") or "").strip()
+    key_columns = data.get("key_columns") or []
+    compare_columns = data.get("compare_columns")
+    row_limit = data.get("row_limit")
+    key_filter_str = (data.get("key_filter") or "").strip()
+    change_types = data.get("change_types")
+    changed_column = (data.get("changed_column") or "").strip() or None
+    page = data.get("page", 1)
+    page_size = data.get("page_size")
+
+    db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_rows")
+    if not table:
+        raise ValueError("table é obrigatório")
+    if not isinstance(key_columns, list) or not key_columns:
+        raise ValueError("key_columns deve ser uma lista não vazia")
+    if any(not isinstance(col, str) or not col.strip() for col in key_columns):
+        raise ValueError("key_columns deve conter apenas strings nao vazias")
+    key_columns = [col.strip() for col in key_columns]
+
+    if compare_columns is not None and not isinstance(compare_columns, list):
+        raise ValueError("compare_columns deve ser uma lista")
+    if compare_columns is not None:
+        if any(not isinstance(col, str) or not col.strip() for col in compare_columns):
+            raise ValueError("compare_columns deve conter apenas strings nao vazias")
+        compare_columns = [col.strip() for col in compare_columns]
+
+    if row_limit is not None:
+        try:
+            row_limit = int(row_limit)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("row_limit deve ser um inteiro") from exc
+        if row_limit < 0:
+            raise ValueError("row_limit deve ser maior ou igual a zero")
+
+    try:
+        page = int(page)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("page deve ser um inteiro") from exc
+    if page < 1:
+        raise ValueError("page deve ser maior ou igual a 1")
+
+    if page_size is not None:
+        try:
+            page_size = int(page_size)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("page_size deve ser um inteiro") from exc
+        if page_size < 1:
+            raise ValueError("page_size deve ser maior ou igual a 1")
+        if page_size > COMPARE_PAGE_SIZE_MAX:
+            raise ValueError("page_size deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX)
+    else:
+        if isinstance(row_limit, int) and row_limit > 0:
+            if row_limit > COMPARE_PAGE_SIZE_MAX:
+                raise ValueError("row_limit deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX)
+            page_size = row_limit
+        else:
+            page_size = COMPARE_PAGE_SIZE_DEFAULT
+
+    valid_types = {"added", "removed", "changed"}
+    invalid_change_types = []
+    if change_types is not None:
+        if not isinstance(change_types, list):
+            raise ValueError("change_types deve ser uma lista")
+        invalid_change_types = [str(t) for t in change_types if str(t) not in valid_types]
+        change_types = [str(t) for t in change_types]
+
+    key_filter = parse_compare_key_filter(key_filter_str, key_columns)
+    return {
+        "db1": db1,
+        "db2": db2,
+        "table": table,
+        "key_columns": key_columns,
+        "compare_columns": compare_columns,
+        "key_filter": key_filter,
+        "change_types": change_types,
+        "changed_column": changed_column,
+        "page": page,
+        "page_size": page_size,
+        "invalid_change_types": invalid_change_types,
+    }
+
+
 def sanitize_filename(value):
     if value is None:
         return ""
@@ -1622,121 +1732,30 @@ def api_compare_db_rows():
     }
     """
     data = request.get_json(silent=True) or {}
-    db1_path = (data.get("db1_path") or "").strip()
-    db2_path = (data.get("db2_path") or "").strip()
-    table = (data.get("table") or "").strip()
-    key_columns = data.get("key_columns") or []
-    compare_columns = data.get("compare_columns")
-    row_limit = data.get("row_limit")
-    key_filter_str = (data.get("key_filter") or "").strip()
-    change_types = data.get("change_types")
-    changed_column = (data.get("changed_column") or "").strip() or None
-    page = data.get("page", 1)
-    page_size = data.get("page_size")
-
     try:
-        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_rows")
+        compare_request = parse_compare_rows_request(data)
     except (ValueError, FileNotFoundError) as exc:
         return jsonify({"error": str(exc)}), 400
-    if not table:
-        return jsonify({"error": "table é obrigatório"}), 400
-    if not isinstance(key_columns, list) or not key_columns:
-        return jsonify({"error": "key_columns deve ser uma lista não vazia"}), 400
-    if any(not isinstance(col, str) or not col.strip() for col in key_columns):
-        return jsonify({"error": "key_columns deve conter apenas strings nao vazias"}), 400
-    key_columns = [col.strip() for col in key_columns]
-    if compare_columns is not None and not isinstance(compare_columns, list):
-        return jsonify({"error": "compare_columns deve ser uma lista"}), 400
-    if compare_columns is not None:
-        if any(not isinstance(col, str) or not col.strip() for col in compare_columns):
-            return jsonify({"error": "compare_columns deve conter apenas strings nao vazias"}), 400
-        compare_columns = [col.strip() for col in compare_columns]
 
-    # row_limit é opcional; quando informado deve ser inteiro >= 0
-    if row_limit is not None:
-        try:
-            row_limit = int(row_limit)
-        except (TypeError, ValueError):
-            return jsonify({"error": "row_limit deve ser um inteiro"}), 400
-        if row_limit < 0:
-            return jsonify({"error": "row_limit deve ser maior ou igual a zero"}), 400
-
-    # paginação opcional: página (>=1) e tamanho da página (>=1)
-    try:
-        page = int(page)
-    except (TypeError, ValueError):
-        return jsonify({"error": "page deve ser um inteiro"}), 400
-    if page < 1:
-        return jsonify({"error": "page deve ser maior ou igual a 1"}), 400
-
-    if page_size is not None:
-        try:
-            page_size = int(page_size)
-        except (TypeError, ValueError):
-            return jsonify({"error": "page_size deve ser um inteiro"}), 400
-        if page_size < 1:
-            return jsonify({"error": "page_size deve ser maior ou igual a 1"}), 400
-        if page_size > COMPARE_PAGE_SIZE_MAX:
-            return jsonify({
-                "error": "page_size deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX,
-            }), 400
-    else:
-        # se não informado, usamos row_limit (quando houver) ou um padrão seguro
-        if isinstance(row_limit, int) and row_limit > 0:
-            if row_limit > COMPARE_PAGE_SIZE_MAX:
-                return jsonify({
-                    "error": "row_limit deve ser no maximo %d" % COMPARE_PAGE_SIZE_MAX,
-                }), 400
-            page_size = row_limit
-        else:
-            page_size = COMPARE_PAGE_SIZE_DEFAULT
-
-    # valida opcionalmente a lista de tipos de mudança
-    valid_types = {"added", "removed", "changed"}
-    if change_types is not None:
-        if not isinstance(change_types, list):
-            return jsonify({"error": "change_types deve ser uma lista"}), 400
-        invalid_change_types = [str(t) for t in change_types if str(t) not in valid_types]
-        if invalid_change_types:
-            return jsonify({
-                "error": "change_types contem valores invalidos",
-                "invalid": invalid_change_types,
-            }), 400
-        change_types = [str(t) for t in change_types]
-
-    key_filter = {}
-    if key_filter_str:
-        for part in key_filter_str.split(","):
-            p = part.strip()
-            if not p:
-                continue
-            if "=" not in p:
-                return jsonify({"error": "key_filter deve usar o formato COL=VAL"}), 400
-            k, v = p.split("=", 1)
-            k = k.strip()
-            v = v.strip()
-            if not k:
-                return jsonify({"error": "key_filter contem coluna vazia"}), 400
-            if not v:
-                return jsonify({"error": f"key_filter sem valor para a coluna {k}"}), 400
-            if k not in key_columns:
-                return jsonify({"error": f"key_filter usa coluna fora de key_columns: {k}"}), 400
-            if k in key_filter:
-                return jsonify({"error": f"key_filter repetiu a coluna {k}"}), 400
-            key_filter[k] = v
+    invalid_change_types = compare_request["invalid_change_types"]
+    if invalid_change_types:
+        return jsonify({
+            "error": "change_types contem valores invalidos",
+            "invalid": invalid_change_types,
+        }), 400
 
     try:
         result = compare_table_duckdb_paged(
-            db1,
-            db2,
-            table,
-            key_columns,
-            compare_columns,
-            key_filter=key_filter,
-            change_types=change_types,
-            changed_column=changed_column,
-            page=page,
-            page_size=page_size,
+            compare_request["db1"],
+            compare_request["db2"],
+            compare_request["table"],
+            compare_request["key_columns"],
+            compare_request["compare_columns"],
+            key_filter=compare_request["key_filter"],
+            change_types=compare_request["change_types"],
+            changed_column=compare_request["changed_column"],
+            page=compare_request["page"],
+            page_size=compare_request["page_size"],
         )
         return jsonify(result)
     except duckdb.IOException as exc:  # erros específicos de acesso ao arquivo DuckDB
