@@ -134,6 +134,35 @@ function buildComparePriorityReview(data, changedRows) {
   };
 }
 
+function buildComparePatterns(data, changedRows) {
+  const compareColumns = data.compare_columns || [];
+  const keyColumns = data.key_columns || [];
+  const patterns = {};
+
+  for (const row of changedRows) {
+    const changedColumns = compareColumns.filter((column) =>
+      valuesDifferent((row.a || {})[column], (row.b || {})[column])
+    );
+    if (!changedColumns.length) continue;
+    const label = changedColumns.join(', ');
+    const keyText =
+      keyColumns
+        .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+        .join(', ') || 'sem chave visivel';
+    if (!patterns[label]) {
+      patterns[label] = {
+        count: 0,
+        sample: keyText,
+      };
+    }
+    patterns[label].count += 1;
+  }
+
+  return Object.entries(patterns)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 5);
+}
+
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
   const changedRows = data.rows
@@ -154,6 +183,7 @@ function renderCompareSummary(data, summaryData) {
   );
   const alerts = buildCompareAlerts(data, changedRows);
   const review = buildComparePriorityReview(data, changedRows);
+  const patterns = buildComparePatterns(data, changedRows);
   const topKeysHtml = review.topKeys.length
     ? `<div class="report-review-list">${review.topKeys
         .map(
@@ -167,6 +197,14 @@ function renderCompareSummary(data, summaryData) {
         .map(
           ([column, count]) =>
             `<div class="report-review-item"><strong>${column}</strong><span>${count} chaves alteradas</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const patternsHtml = patterns.length
+    ? `<div class="report-review-list">${patterns
+        .map(
+          ([label, meta]) =>
+            `<div class="report-review-item"><strong>${label}</strong><span>${meta.count} chave(s) · exemplo: ${meta.sample}</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -189,6 +227,7 @@ function renderCompareSummary(data, summaryData) {
         ${alerts.length ? `<div class="result-col-diff"><strong>Colunas sensiveis para revisar:</strong><br>${alerts.join('<br>')}</div>` : ''}
         ${topKeysHtml ? `<div class="result-col-diff"><strong>Chaves para revisar primeiro:</strong>${topKeysHtml}</div>` : ''}
         ${topColumnsHtml ? `<div class="result-col-diff"><strong>Colunas mais impactadas:</strong>${topColumnsHtml}</div>` : ''}
+        ${patternsHtml ? `<div class="result-col-diff"><strong>Padroes de alteracao:</strong>${patternsHtml}</div>` : ''}
       </div>
     </div>
   `;

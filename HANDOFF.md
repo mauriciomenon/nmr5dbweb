@@ -30,6 +30,12 @@ The first stabilization slice is intentionally narrow:
 
 ## Setup Status
 
+- The main search results table is no longer a raw dump:
+  - fields are reordered toward operator-relevant columns
+  - long-text fields are called out explicitly
+  - sticky score/key columns improve scanning on wide tables
+- The compare report summary now groups repeated change patterns by affected column set.
+- Browse/search backend paths now share more scoring and table-page logic without broad refactor.
 - ESLint compatibility is intentionally dual-path now:
   - `eslint.config.mjs` remains the local flat-config baseline
   - `.eslintrc.cjs` and `.eslintignore` exist to keep older analyzers such as `ESLint 8.15.0` working

@@ -813,6 +813,32 @@ def build_table_order_clause(columns, sort, order):
     return f"ORDER BY {quote_identifier(sort)} {order}"
 
 
+def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sort, order, cast_type, bind_limit):
+    where_clause, params = build_table_filter_clause(columns, col, q, cast_type)
+    order_clause = build_table_order_clause(columns, sort, order)
+
+    count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
+    if where_clause:
+        count_sql += f" {where_clause}"
+    total = conn.execute(count_sql, params).fetchone()[0]
+
+    data_sql = f"SELECT * FROM {quoted_table}"
+    data_params = list(params)
+    if where_clause:
+        data_sql += f" {where_clause}"
+    if order_clause:
+        data_sql += f" {order_clause}"
+    if limit > 0:
+        if bind_limit:
+            data_sql += " LIMIT ? OFFSET ?"
+            data_params.extend([limit, offset])
+        else:
+            data_sql += f" LIMIT {limit} OFFSET {offset}"
+
+    rows = conn.execute(data_sql, data_params).fetchall()
+    return rows, int(total)
+
+
 def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
     conn = duckdb_connect(path)
     try:
@@ -821,23 +847,19 @@ def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
             raise LookupError(f"table not found: {table}")
         quoted_table = quote_identifier(table)
         cols = get_table_columns_duckdb(path, table)
-        where_clause, params = build_table_filter_clause(cols, col, q, "duckdb")
-        order_clause = build_table_order_clause(cols, sort, order)
-
-        count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
-        if where_clause:
-            count_sql += f" {where_clause}"
-        total = conn.execute(count_sql, params).fetchone()[0]
-
-        data_sql = f"SELECT * FROM {quoted_table}"
-        if where_clause:
-            data_sql += f" {where_clause}"
-        if order_clause:
-            data_sql += f" {order_clause}"
-        if limit > 0:
-            data_sql += f" LIMIT {limit} OFFSET {offset}"
-
-        rows = conn.execute(data_sql, params).fetchall()
+        rows, total = run_table_page_query(
+            conn,
+            quoted_table,
+            cols,
+            limit,
+            offset,
+            col,
+            q,
+            sort,
+            order,
+            "duckdb",
+            bind_limit=False,
+        )
         return cols, rows, int(total)
     finally:
         conn.close()
@@ -851,24 +873,19 @@ def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
             raise LookupError(f"table not found: {table}")
         quoted_table = quote_identifier(table)
         cols = get_table_columns_sqlite(path, table)
-        where_clause, params = build_table_filter_clause(cols, col, q, "sqlite")
-        order_clause = build_table_order_clause(cols, sort, order)
-
-        count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
-        if where_clause:
-            count_sql += f" {where_clause}"
-        total = conn.execute(count_sql, params).fetchone()[0]
-
-        data_sql = f"SELECT * FROM {quoted_table}"
-        if where_clause:
-            data_sql += f" {where_clause}"
-        if order_clause:
-            data_sql += f" {order_clause}"
-        if limit > 0:
-            data_sql += " LIMIT ? OFFSET ?"
-            params = [*params, limit, offset]
-
-        rows = conn.execute(data_sql, params).fetchall()
+        rows, total = run_table_page_query(
+            conn,
+            quoted_table,
+            cols,
+            limit,
+            offset,
+            col,
+            q,
+            sort,
+            order,
+            "sqlite",
+            bind_limit=True,
+        )
         return cols, rows, int(total)
     finally:
         conn.close()
@@ -905,6 +922,32 @@ def build_search_response(q, q_norm, candidate_count, returned_count, results, s
         "candidate_count": candidate_count,
         "returned_count": returned_count,
         "results": order_grouped_results(results, score_by_table),
+    }
+
+
+def score_search_content(q_norm, tokens, content_norm, min_score):
+    score = fuzz.token_set_ratio(q_norm, content_norm)
+    if min_score is not None and score < min_score:
+        return None
+    coverage = 0
+    has_all = 0
+    if tokens:
+        for token in tokens:
+            if token and token in content_norm:
+                coverage += 1
+        if coverage == len(tokens):
+            has_all = 1
+    return {
+        "score": int(score),
+        "coverage": coverage,
+        "has_all": has_all,
+    }
+
+
+def build_score_by_table(results):
+    return {
+        table_name: max((item["score"] for item in items), default=0)
+        for table_name, items in results.items()
     }
 
 
@@ -959,10 +1002,10 @@ def fallback_search_sqlite(
                     row_json[column] = value
                     row_text_parts.append(normalize_text(serialize_value(value)))
                 row_text = " ".join(part for part in row_text_parts if part)
-                score = fuzz.token_set_ratio(q_norm, row_text)
-                if min_score is not None and score < min_score:
+                scored = score_search_content(q_norm, tokens, row_text, min_score)
+                if scored is None:
                     continue
-                table_results.append({"score": int(score), "row": row_json})
+                table_results.append({"score": scored["score"], "row": row_json})
                 candidate_count += 1
                 if candidate_count >= candidate_limit:
                     break
@@ -973,10 +1016,7 @@ def fallback_search_sqlite(
                 if returned_count >= total_limit or candidate_count >= candidate_limit:
                     break
 
-        score_by_table = {
-            table_name: max([item["score"] for item in items]) if items else 0
-            for table_name, items in results.items()
-        }
+        score_by_table = build_score_by_table(results)
         return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
     except Exception as exc:
         return {"error": str(exc)}
@@ -1544,29 +1584,13 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
         table_name, pk_col, pk_value, row_offset, content_norm, row_json = r
         # Score principal: similaridade fuzzy entre a query normalizada e o
         # conteúdo normalizado da linha inteira.
-        score = fuzz.token_set_ratio(q_norm, content_norm)
-        if min_score is not None and score < min_score:
+        scored = score_search_content(q_norm, tokens, content_norm, min_score)
+        if scored is None:
             continue
-        # Cobertura/força de match por tokens: quantos tokens da query estão
-        # presentes em content_norm e se TODOS estão presentes. Isso ajuda a
-        # priorizar, por exemplo, linhas que contenham "svp" quando a consulta
-        # é "aux_unidad svp".
-        coverage = 0
-        has_all = 0
-        if tokens:
-            try:
-                for tok in tokens:
-                    if tok and tok in content_norm:
-                        coverage += 1
-                if coverage == len(tokens):
-                    has_all = 1
-            except Exception:
-                coverage = 0
-                has_all = 0
         candidates.append({
-            "score": score,
-            "coverage": coverage,
-            "has_all": has_all,
+            "score": scored["score"],
+            "coverage": scored["coverage"],
+            "has_all": scored["has_all"],
             "table": table_name,
             "pk_col": pk_col,
             "pk_value": pk_value,
@@ -1626,7 +1650,7 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
 def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, total_limit=500, token_mode="any", min_score=None, max_tables=500, max_rows_per_table=2000):
     if pyodbc is None:
         return {"error": "pyodbc not installed; fallback unavailable"}
-    q_norm = q.lower()
+    q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
     results = {}
     candidate_count = 0
@@ -1723,12 +1747,12 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
             table_results = []
             for r in rows:
                 try:
-                    row_vals = [("" if v is None else str(v)) for v in r]
-                    row_text = " ".join(row_vals).lower()
+                    row_vals = [serialize_value(v) for v in r]
+                    row_text = normalize_text(" ".join(row_vals))
                 except Exception:
-                    row_text = str(r).lower()
-                score = fuzz.token_set_ratio(q_norm, row_text)
-                if min_score is not None and score < min_score:
+                    row_text = normalize_text(str(r))
+                scored = score_search_content(q_norm, tokens, row_text, min_score)
+                if scored is None:
                     continue
                 pk_col = None
                 pk_val = None
@@ -1748,7 +1772,7 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                         row_json[cname] = r[i]
                 except Exception:
                     row_json = {"row": str(r)}
-                table_results.append({"score": int(score), "pk_col": pk_col, "pk_value": pk_val, "row": row_json})
+                table_results.append({"score": scored["score"], "pk_col": pk_col, "pk_value": pk_val, "row": row_json})
                 candidate_count += 1
                 if candidate_count >= candidate_limit:
                     break
@@ -1758,10 +1782,7 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                 returned_count += len(results[t])
                 if returned_count >= total_limit:
                     break
-        score_by_table = {
-            table_name: max([item["score"] for item in items]) if items else 0
-            for table_name, items in results.items()
-        }
+        score_by_table = build_score_by_table(results)
         return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
     except Exception as e:
         return {"error": str(e)}

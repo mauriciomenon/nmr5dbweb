@@ -1,3 +1,30 @@
+const DISPLAY_PRIORITY_COLUMNS = [
+  'INHPRO',
+  'ITEMNB',
+  'RTUNO',
+  'PNTNO',
+  'PNTNAM',
+  'SUBNAM',
+  'BITBYT',
+  'UNIQID',
+  'PNLNAM',
+  'PNLNDX',
+  'MEASID',
+  'PHISID',
+  'STACON',
+  'PRIORT',
+  'PSEUDO',
+  'SOETYP',
+  'SOEHIS',
+  'NORMST',
+  'OVROPT',
+  'OID',
+  'CLASS',
+  'DEVNAM',
+  'LPTYPE',
+  'PDESCR',
+];
+
 function escapeHtml(s) {
   return (s + '')
     .replace(/&/g, '&amp;')
@@ -26,6 +53,209 @@ function highlightText(text, tokens) {
   }
 }
 
+function normalizeColumnKey(name) {
+  return String(name || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function isLikelyWideColumn(name) {
+  const key = normalizeColumnKey(name);
+  return (
+    key.includes('DESC') ||
+    key.includes('TEXT') ||
+    key.includes('NOTE') ||
+    key.includes('MSG') ||
+    key.includes('COMM') ||
+    key.includes('NAM')
+  );
+}
+
+function getColumnPriorityScore(name, index) {
+  const key = normalizeColumnKey(name);
+  let score = 1000 - index;
+  const knownIndex = DISPLAY_PRIORITY_COLUMNS.indexOf(key);
+  if (knownIndex >= 0) score += 8000 - knownIndex * 20;
+  if (
+    key.endsWith('ID') ||
+    key.endsWith('NO') ||
+    key.endsWith('NB') ||
+    key.includes('KEY')
+  ) {
+    score += 400;
+  }
+  if (key.includes('NAM') || key.includes('DESC') || key.includes('TEXT')) {
+    score += 300;
+  }
+  if (key.includes('STAT') || key.includes('TYPE') || key.includes('FLAG')) {
+    score += 160;
+  }
+  return score;
+}
+
+function orderColumnsForDisplay(tableName, columns) {
+  return [...(columns || [])].sort((a, b) => {
+    const scoreA = getColumnPriorityScore(
+      a,
+      (columns || []).indexOf(a),
+      tableName
+    );
+    const scoreB = getColumnPriorityScore(
+      b,
+      (columns || []).indexOf(b),
+      tableName
+    );
+    if (scoreA !== scoreB) return scoreB - scoreA;
+    return (columns || []).indexOf(a) - (columns || []).indexOf(b);
+  });
+}
+
+function pickPinnedColumns(columns) {
+  const ordered = columns || [];
+  return ordered.slice(0, Math.min(2, ordered.length));
+}
+
+function serializeCellValue(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (e) {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function buildTableOverview(tableName, orderedCols, shownCount, totalCount) {
+  const overview = document.createElement('div');
+  overview.className = 'result-table-meta';
+  const leadingColumns = orderedCols.slice(0, 5);
+  const wideColumns = orderedCols.filter((name) => isLikelyWideColumn(name));
+  overview.innerHTML = `
+    <div class="table-chip-row">
+      <span class="table-chip"><strong>Tabela:</strong> ${escapeHtml(tableName)}</span>
+      <span class="table-chip"><strong>Linhas exibidas:</strong> ${shownCount}</span>
+      <span class="table-chip"><strong>Total no recorte:</strong> ${totalCount}</span>
+    </div>
+    ${
+      leadingColumns.length
+        ? `<div class="table-note"><strong>Campos na frente:</strong> ${leadingColumns.map((name) => escapeHtml(name)).join(', ')}</div>`
+        : ''
+    }
+    ${
+      wideColumns.length
+        ? `<div class="table-note"><strong>Campos longos para revisar:</strong> ${wideColumns
+            .slice(0, 4)
+            .map((name) => escapeHtml(name))
+            .join(', ')}</div>`
+        : ''
+    }
+  `;
+  return overview;
+}
+
+function buildTableCell(value, tokens, wide, extraClass) {
+  const td = document.createElement('td');
+  td.className = `results-cell${wide ? ' results-cell-wide' : ''}${extraClass ? ' ' + extraClass : ''}`;
+  const text = serializeCellValue(value);
+  td.title = text;
+  if (typeof value === 'object' && value !== null) {
+    const pre = document.createElement('pre');
+    pre.className = 'results-json';
+    pre.textContent = text;
+    td.appendChild(pre);
+    return td;
+  }
+  const isMultiline = text.includes('\n') || text.length > 120;
+  const content = document.createElement(isMultiline ? 'div' : 'span');
+  content.className = `cell-text${isMultiline ? ' multiline' : ''}`;
+  content.innerHTML = highlightText(escapeHtml(text), tokens).replace(
+    /\n/g,
+    '<br>'
+  );
+  td.appendChild(content);
+  return td;
+}
+
+function buildResultsTable(tableName, rowObjs, rawColumns, options) {
+  const includeScore = !!(options && options.includeScore);
+  const tokens = (options && options.tokens) || [];
+  const orderedCols = orderColumnsForDisplay(tableName, rawColumns);
+  const pinnedCols = pickPinnedColumns(orderedCols);
+  const shell = document.createElement('div');
+  shell.className = 'results-table-shell';
+
+  const table = document.createElement('table');
+  table.className = 'results results-enhanced';
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  if (includeScore) {
+    const scoreTh = document.createElement('th');
+    scoreTh.className = 'results-score-col';
+    scoreTh.textContent = 'pontuacao';
+    headRow.appendChild(scoreTh);
+  }
+  orderedCols.forEach((column) => {
+    const th = document.createElement('th');
+    const classes = [];
+    if (column === pinnedCols[0]) classes.push('results-sticky-main');
+    if (column === pinnedCols[1]) classes.push('results-sticky-secondary');
+    if (isLikelyWideColumn(column)) classes.push('results-col-wide');
+    if (classes.length) th.className = classes.join(' ');
+    th.textContent = column;
+    th.title = column;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rowObjs.forEach((item) => {
+    const tr = document.createElement('tr');
+    if (includeScore && Number(item.score || 0) >= 95) {
+      tr.className = 'results-row-strong';
+    }
+    if (includeScore) {
+      const scoreTd = document.createElement('td');
+      scoreTd.className = 'results-score-col';
+      scoreTd.textContent = item.score == null ? '' : String(item.score);
+      tr.appendChild(scoreTd);
+    }
+    orderedCols.forEach((column) => {
+      const extraClass =
+        column === pinnedCols[0]
+          ? 'results-sticky-main'
+          : column === pinnedCols[1]
+            ? 'results-sticky-secondary'
+            : '';
+      const wide = isLikelyWideColumn(column);
+      const value =
+        item.row && Object.prototype.hasOwnProperty.call(item.row, column)
+          ? item.row[column]
+          : '';
+      tr.appendChild(buildTableCell(value, tokens, wide, extraClass));
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  shell.appendChild(table);
+  return { shell, orderedCols };
+}
+
+function collectRowObjects(rows) {
+  const colsSet = new Set();
+  const rowObjs = [];
+  rows.forEach((it) => {
+    const row = it.row || (it.row_json ? JSON.parse(it.row_json) : {});
+    rowObjs.push({ score: it.score, row });
+    if (row && typeof row === 'object') {
+      Object.keys(row).forEach((column) => colsSet.add(column));
+    }
+  });
+  return { cols: Array.from(colsSet).slice(0, 200), rowObjs };
+}
+
 function renderResults(q, results, per_table) {
   const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
   const root = $('resultsArea');
@@ -47,17 +277,16 @@ function renderResults(q, results, per_table) {
   if (exportBtn) exportBtn.disabled = false;
   keys.forEach((tbl) => {
     const block = document.createElement('div');
-    block.className = 'card';
+    block.className = 'card result-card';
     const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
+    header.className = 'result-card-header';
     const tagId = tableTagId(tbl);
     header.innerHTML = `
       <div>
-        <span id="${tagId}" style="display:none;background:#eef7ff;color:var(--primary);padding:4px 8px;border-radius:999px;margin-right:8px;font-size:12px">PRIORITARIO</span>
+        <span id="${tagId}" class="priority-tag">PRIORITARIO</span>
         <strong>${escapeHtml(tbl)}</strong> <span class="muted">(${results[tbl].length})</span>
       </div>
-      <div>
+      <div class="result-card-actions">
         <button class="btn ghost" onclick="openTable(event,'${encodeURIComponent(
           tbl
         )}')">Abrir</button>
@@ -66,53 +295,35 @@ function renderResults(q, results, per_table) {
         )}')">Export CSV</button>
       </div>`;
     block.appendChild(header);
-    const rows = results[tbl];
-    const colsSet = new Set();
-    const rowObjs = [];
-    rows.forEach((it) => {
-      const r = it.row || (it.row_json ? JSON.parse(it.row_json) : {});
-      rowObjs.push({ score: it.score, row: r });
-      if (r && typeof r === 'object')
-        Object.keys(r).forEach((c) => colsSet.add(c));
-    });
-    const cols = Array.from(colsSet).slice(0, 200);
+
+    const { cols, rowObjs } = collectRowObjects(results[tbl]);
     if (!cols.length) {
       const pre = document.createElement('pre');
       pre.textContent = JSON.stringify(rowObjs, null, 2);
       block.appendChild(pre);
-    } else {
-      const table = document.createElement('table');
-      table.className = 'results';
-      const thead = document.createElement('thead');
-      thead.innerHTML =
-        '<tr><th style="width:90px">pontuacao</th>' +
-        cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('') +
-        '</tr>';
-      table.appendChild(thead);
-      const tbody = document.createElement('tbody');
-      rowObjs.slice(0, per_table).forEach((r) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-          `<td>${r.score == null ? '' : r.score}</td>` +
-          cols
-            .map((c) => {
-              let v =
-                r.row && Object.prototype.hasOwnProperty.call(r.row, c)
-                  ? r.row[c]
-                  : '';
-              if (v === null || v === undefined) v = '';
-              if (typeof v === 'object') {
-                return `<td><pre style="font-size:12px">${escapeHtml(
-                  JSON.stringify(v, null, 2)
-                )}</pre></td>`;
-              }
-              return `<td>${highlightText(escapeHtml(String(v)), tokens)}</td>`;
-            })
-            .join('');
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      block.appendChild(table);
+      root.appendChild(block);
+      return;
+    }
+
+    const shownRows = rowObjs.slice(0, per_table);
+    const tableView = buildResultsTable(tbl, shownRows, cols, {
+      includeScore: true,
+      tokens,
+    });
+    block.appendChild(
+      buildTableOverview(
+        tbl,
+        tableView.orderedCols,
+        shownRows.length,
+        rowObjs.length
+      )
+    );
+    block.appendChild(tableView.shell);
+    if (rowObjs.length > shownRows.length) {
+      const note = document.createElement('div');
+      note.className = 'table-note';
+      note.textContent = `Exibindo ${shownRows.length} de ${rowObjs.length} linha(s) deste recorte. Use "Abrir" para navegar a tabela.`;
+      block.appendChild(note);
     }
     root.appendChild(block);
   });
@@ -142,7 +353,9 @@ async function openTable(ev, tableEnc) {
     const area = $('resultsArea');
     area.innerHTML = `<div class="card"><h3>Tabela: ${escapeHtml(
       table
-    )} <span class="muted">linhas: ${data.total}</span></h3></div>`;
+    )} <span class="muted">linhas: ${data.total}</span> <span class="muted">engine: ${escapeHtml(
+      data.db_engine || ''
+    )}</span></h3></div>`;
     if (!data.rows || !data.rows.length) {
       const empty = document.createElement('div');
       empty.className = 'card small';
@@ -152,24 +365,26 @@ async function openTable(ev, tableEnc) {
     }
     const hdr = document.createElement('div');
     hdr.className = 'card';
-    const tableEl = document.createElement('table');
-    tableEl.className = 'results';
-    const thead = document.createElement('thead');
-    thead.innerHTML =
-      '<tr>' +
-      (data.columns || []).map((c) => `<th>${escapeHtml(c)}</th>`).join('') +
-      '</tr>';
-    tableEl.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    data.rows.forEach((row) => {
-      const tr = document.createElement('tr');
-      row.forEach((cell) => {
-        tr.innerHTML += `<td>${escapeHtml(cell === null ? '' : String(cell))}</td>`;
+    const rowObjs = (data.rows || []).map((row) => {
+      const mapped = {};
+      (data.columns || []).forEach((column, index) => {
+        mapped[column] = row[index];
       });
-      tbody.appendChild(tr);
+      return { row: mapped };
     });
-    tableEl.appendChild(tbody);
-    hdr.appendChild(tableEl);
+    const tableView = buildResultsTable(table, rowObjs, data.columns || [], {
+      includeScore: false,
+      tokens: [],
+    });
+    hdr.appendChild(
+      buildTableOverview(
+        table,
+        tableView.orderedCols,
+        rowObjs.length,
+        data.total || rowObjs.length
+      )
+    );
+    hdr.appendChild(tableView.shell);
     const pager = document.createElement('div');
     pager.className = 'controls-footer';
     pager.innerHTML =

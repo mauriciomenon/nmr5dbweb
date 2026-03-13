@@ -233,6 +233,150 @@
     .progress-bar { height: 12px; background: linear-gradient(90deg, #1f4ed8, #3e7bff); border-radius: 999px; width: 0%; }
     table.results { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
     table.results th, table.results td { border: 1px solid var(--border); padding: 8px; text-align: left; vertical-align: top; }
+    .result-card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .result-card-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .priority-tag {
+      display: none;
+      background: #eef7ff;
+      color: var(--primary);
+      padding: 4px 8px;
+      border-radius: 999px;
+      margin-right: 8px;
+      font-size: 12px;
+    }
+    .result-table-meta {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      margin-bottom: 12px;
+    }
+    .table-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .table-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #1f2630;
+      font-size: 12px;
+      color: var(--ink);
+    }
+    html[data-theme="light"] .table-chip {
+      background: #f9fafb;
+    }
+    .table-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .results-table-shell {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow-soft);
+      background: #1b212b;
+    }
+    html[data-theme="light"] .results-table-shell {
+      background: #ffffff;
+    }
+    table.results.results-enhanced {
+      min-width: max-content;
+      width: max-content;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 0;
+    }
+    table.results.results-enhanced th {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: #18202a;
+    }
+    html[data-theme="light"] table.results.results-enhanced th {
+      background: #eef2f7;
+    }
+    table.results.results-enhanced td,
+    table.results.results-enhanced th {
+      min-width: 120px;
+    }
+    .results-score-col {
+      position: sticky;
+      left: 0;
+      z-index: 4;
+      min-width: 92px !important;
+      max-width: 92px !important;
+      background: #162033;
+      font-weight: 700;
+    }
+    html[data-theme="light"] .results-score-col {
+      background: #dbe7ff;
+    }
+    .results-sticky-main {
+      position: sticky;
+      left: 92px;
+      z-index: 2;
+      min-width: 180px !important;
+      max-width: 180px !important;
+      background: #1b2430;
+    }
+    .results-sticky-secondary {
+      position: sticky;
+      left: 272px;
+      z-index: 2;
+      min-width: 180px !important;
+      max-width: 180px !important;
+      background: #202938;
+    }
+    html[data-theme="light"] .results-sticky-main {
+      background: #eef2f7;
+    }
+    html[data-theme="light"] .results-sticky-secondary {
+      background: #f8fafc;
+    }
+    .results-cell {
+      max-width: 220px;
+      white-space: normal;
+    }
+    .results-cell-wide {
+      min-width: 260px !important;
+      max-width: 420px !important;
+    }
+    .results-json {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      color: inherit;
+    }
+    .cell-text {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cell-text.multiline {
+      white-space: normal;
+      line-height: 1.4;
+      max-height: 5.6em;
+    }
+    .results-row-strong td {
+      box-shadow: inset 0 0 0 999px rgba(43, 92, 255, 0.08);
+    }
     mark { background: rgba(62, 123, 255, 0.35); padding: 0 2px; border-radius: 3px; color: #e9efff; }
     .flow-panel { display: none; background: #1f2630; border: 1px solid var(--border); padding: 10px 12px; border-radius: 10px; margin-bottom: 10px; }
     html[data-theme="light"] .flow-panel { background: #f9fafb; }
@@ -279,6 +423,11 @@
     @media (max-width: 980px) {
       .container { flex-direction: column; padding: 16px; }
       aside { width: 100%; height: auto; }
+      .results-sticky-main,
+      .results-sticky-secondary {
+        position: static;
+        left: auto;
+      }
     }
     @media (prefers-reduced-motion: reduce) {
       .card, .btn { animation: none; transition: none; }

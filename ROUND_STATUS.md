@@ -1,5 +1,46 @@
 # Round Status
 
+## Current Slice: Search Usability With Better Table Reading
+
+### Goal
+
+1. Make the main search result table useful with real operator data
+2. Improve diff reading toward anomaly review, not just row dumps
+3. Reduce backend duplication in browse/search without broad refactor
+
+### Applied
+
+1. Rebuilt `static/app_results.js` around a more usable data-table renderer.
+2. Search results now surface:
+   - fields brought to the front
+   - long-text fields called out
+   - sticky score/key columns
+   - safer truncation for long values
+3. Full table view (`Abrir`) now uses the same renderer instead of a second raw table path.
+4. `static/compare_dbs_render.js` now also highlights:
+   - change patterns grouped by affected columns
+5. `interface/app_flask_local_search.py` now shares:
+   - table-page query execution
+   - search scoring logic
+   - score-by-table calculation
+   across DuckDB, SQLite, and Access paths more consistently.
+
+### What Was Proved
+
+- The main search screen is now much more readable for wide real-world tables.
+- The compare screen now gives a better first-pass review of repeated anomalies.
+- Backend browse/search logic repeats less without changing the fast compare path.
+
+### Validation After Changes
+
+- `pnpm exec eslint static`: passed
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+- `node --check static/app_results.js`: passed
+- `node --check static/compare_dbs_render.js`: passed
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `ruff`, `ty`: passed
+- focused `pytest`: `62 passed`
+
 ## Current Slice: ESLint Legacy Compatibility And Better Diff Reading
 
 ### Goal
