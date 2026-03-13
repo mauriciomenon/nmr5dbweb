@@ -121,19 +121,28 @@ function setupIndexBindings() {
   if (autoIndexToggleEl) {
     autoIndexToggleEl.addEventListener('change', async () => {
       const enabled = autoIndexToggleEl.checked;
-      const res = await fetch('/admin/set_auto_index', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      });
-      const j = await res.json();
       const msg = $('autoIndexMsg');
-      if (j && j.ok) {
-        if (msg) {
-          msg.textContent =
-            'Auto indexacao: ' + (j.auto_index_after_convert ? 'on' : 'off');
+      try {
+        const j = await apiJSON('/admin/set_auto_index', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ enabled }),
+        });
+        if (j && j.ok) {
+          if (msg) {
+            msg.textContent =
+              'Auto indexacao: ' + (j.auto_index_after_convert ? 'on' : 'off');
+          }
+          return;
         }
-      } else if (msg) {
+        if (msg) {
+          msg.textContent = 'Erro ao atualizar auto indexacao';
+        }
+      } catch (e) {
+        if (msg) msg.textContent = 'Erro ao atualizar auto indexacao';
+        logUi('ERROR', 'auto indexacao falhou');
+      }
+      if (msg && !msg.textContent) {
         msg.textContent = 'Erro ao atualizar auto indexacao';
       }
     });

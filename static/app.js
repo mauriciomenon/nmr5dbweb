@@ -168,15 +168,13 @@ function logUi(level, msg) {
   else if (level === 'WARN') console.warn(line);
   else console.log(line);
   if (level === 'ERROR' || level === 'WARN') {
-    try {
-      fetch('/client/log', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ level: level, msg: msg }),
-      });
-    } catch (e) {
-      /* ignored */
-    }
+    fetch('/client/log', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ level: level, msg: msg }),
+    }).catch(() => {
+      /* ignored log transport failure */
+    });
   }
 }
 
@@ -281,7 +279,9 @@ function scheduleModalClose(nextModalId) {
     clearTimeout(conversionCompletionTimer);
     conversionCompletionTimer = null;
   }
+  const sourceModalId = activeModalId;
   conversionCompletionTimer = setTimeout(() => {
+    if (activeModalId !== sourceModalId) return;
     closeModal();
     openNextModalAndFocus(nextModalId);
   }, 1600);
@@ -292,7 +292,9 @@ function scheduleIndexModalClose(nextModalId) {
     clearTimeout(indexCompletionTimer);
     indexCompletionTimer = null;
   }
+  const sourceModalId = activeModalId;
   indexCompletionTimer = setTimeout(() => {
+    if (activeModalId !== sourceModalId) return;
     closeModal();
     openNextModalAndFocus(nextModalId);
   }, 1600);
@@ -769,18 +771,16 @@ function openModalById(modalId) {
   }
   const display = getComputedStyle(modal).display;
   logUi('INFO', 'modal open id=' + modalId + ' display=' + display);
-  try {
-    fetch('/client/log', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        level: 'info',
-        msg: 'modal open id=' + modalId + ' display=' + display,
-      }),
-    });
-  } catch (e) {
-    /* ignored */
-  }
+  fetch('/client/log', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      level: 'info',
+      msg: 'modal open id=' + modalId + ' display=' + display,
+    }),
+  }).catch(() => {
+    /* ignored log transport failure */
+  });
   setTimeout(() => {
     if (activeModalId !== modalId) return;
     const m = $(modalId);

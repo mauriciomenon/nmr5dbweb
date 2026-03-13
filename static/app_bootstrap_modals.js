@@ -1,6 +1,6 @@
-function openSearchWorkspace() {
+async function openSearchWorkspace() {
   openModalById('searchModal');
-  refreshStatus();
+  await refreshStatus();
   const q = $('q');
   if (q && !q.disabled) {
     q.focus();
@@ -61,22 +61,22 @@ function setupModalBindings() {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
     await openStatusModal();
   });
-  bindClick('openSearchInline', (ev) => {
+  bindClick('openSearchInline', async (ev) => {
     ev.preventDefault();
-    openSearchWorkspace();
+    await openSearchWorkspace();
   });
   bindClick('stepIndex', (ev) => {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
     openModalById('indexModal');
     refreshStatus();
   });
-  bindClick('stepSearch', (ev) => {
+  bindClick('stepSearch', async (ev) => {
     if (ev && ev.target && ev.target.tagName === 'BUTTON') return;
-    openSearchWorkspace();
+    await openSearchWorkspace();
   });
-  bindClick('dbSearchBtn', (ev) => {
+  bindClick('dbSearchBtn', async (ev) => {
     ev.preventDefault();
-    openSearchWorkspace();
+    await openSearchWorkspace();
   });
   bindClick('openStatus', async () => {
     await openStatusModal();
