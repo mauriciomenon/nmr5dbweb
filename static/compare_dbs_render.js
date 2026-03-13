@@ -966,10 +966,13 @@ function buildRowSummary(data, row, isRangerSostat) {
 function appendFieldLine(target, column, valueA, valueB, changed) {
   const line = document.createElement('div');
   line.className = 'diff-field-line';
+  const safeColumn = escapeHtmlText(column);
+  const safeA = escapeHtmlText(shortValue(valueA));
+  const safeB = escapeHtmlText(shortValue(valueB));
   if (changed) {
-    line.innerHTML = `<strong>${column}:</strong> ${shortValue(valueA)} -> ${shortValue(valueB)}`;
+    line.innerHTML = `<strong>${safeColumn}:</strong> ${safeA} -> ${safeB}`;
   } else {
-    line.innerHTML = `<span style="opacity:0.7;"><strong>${column}:</strong> ${shortValue(valueA)} (sem diferenca)</span>`;
+    line.innerHTML = `<span style="opacity:0.7;"><strong>${safeColumn}:</strong> ${safeA} (sem diferenca)</span>`;
   }
   target.appendChild(line);
 }
@@ -1006,7 +1009,7 @@ function appendSectionFields(
     const sideValue = sectionType === 'added' ? row.b[column] : row.a[column];
     const line = document.createElement('div');
     line.className = 'diff-field-line';
-    line.innerHTML = `<strong>${column}:</strong> ${shortValue(sideValue)}`;
+    line.innerHTML = `<strong>${escapeHtmlText(column)}:</strong> ${escapeHtmlText(shortValue(sideValue))}`;
     targetAll.appendChild(line);
     if (importantDiv && importantCols && importantCols.has(column)) {
       const importantLine = document.createElement('div');

@@ -37,6 +37,7 @@ async function restoreFromSavedState() {
     db2Input.value
   ) {
     try {
+      const selectedBefore = (saved && saved.tableSelect) || (tableSelect ? tableSelect.value : '');
       const headData = await postJson('/api/compare_db_tables', {
         db1_path: db1Input.value,
         db2_path: db2Input.value,
@@ -44,11 +45,19 @@ async function restoreFromSavedState() {
       compareDbState.tablesMeta = headData.tables || [];
       if (compareDbState.tablesMeta.length) {
         tableSelect.innerHTML = '';
+        let restoredSelection = false;
         for (const t of compareDbState.tablesMeta) {
           const opt = document.createElement('option');
           opt.value = t.name;
           opt.textContent = t.name;
+          if (selectedBefore && t.name === selectedBefore) {
+            opt.selected = true;
+            restoredSelection = true;
+          }
           tableSelect.appendChild(opt);
+        }
+        if (!restoredSelection && tableSelect.options.length) {
+          tableSelect.selectedIndex = 0;
         }
       }
     } catch (e) {
@@ -100,6 +109,7 @@ async function handleFileUpload(side) {
   const pathInput = document.getElementById(
     side === 'A' ? 'db1Path' : 'db2Path'
   );
+  const previousPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
   const btn = document.getElementById(
     side === 'A' ? 'btnUploadA' : 'btnUploadB'
   );
@@ -147,6 +157,11 @@ async function handleFileUpload(side) {
     } else {
       nameSpan.textContent = file.name + ' (enviado)';
       setUploadStatus(`Upload do Banco ${side} concluido.`);
+    }
+    const nextPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
+    if (nextPath && nextPath !== previousPath) {
+      compareDbState.lastComparePayload = null;
+      compareDbState.lastCompareMeta = null;
     }
 
     const otherPathInput = document.getElementById(

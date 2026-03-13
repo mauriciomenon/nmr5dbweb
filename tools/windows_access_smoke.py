@@ -85,6 +85,11 @@ def main() -> int:
         fd, tmp_name = tempfile.mkstemp(prefix="accdb_smoke_", suffix=".duckdb")
         os.close(fd)
         out = Path(tmp_name)
+    if out == src:
+        result["details"] = "output_equals_input_not_allowed"
+        result["output"] = str(out)
+        print(json.dumps(result, ensure_ascii=True))
+        return 8
     if out.exists():
         out.unlink()
     result["output"] = str(out)
@@ -109,4 +114,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -677,10 +677,10 @@ def test_api_compare_pagination_uses_full_diff_set(monkeypatch, tmp_path):
     assert data_page_2["rows"][0]["key"]["id"] == 2
 
 
-def test_api_compare_page_invalid_returns_400():
+def test_api_compare_page_invalid_returns_400(tmp_path):
     client = app.test_client()
-    db1 = Path("/tmp/db1.duckdb")
-    db2 = Path("/tmp/db2.duckdb")
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
     db1.touch()
     db2.touch()
 
