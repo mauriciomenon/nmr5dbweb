@@ -9,6 +9,7 @@ Ultima modificacao: 2025-12-29T14:30:00
 import os
 import sys
 import argparse
+import errno
 import socket
 import subprocess
 from pathlib import Path
@@ -77,6 +78,16 @@ def encontrar_proxima_porta_livre(host, porta_inicial, max_tentativas=30):
         if verificar_porta_disponivel(host, porta):
             return porta
     return None
+
+
+def is_bind_address_in_use_error(exc: OSError) -> bool:
+    """Detecta erro especifico de bind por porta em uso."""
+    if getattr(exc, "errno", None) == errno.EADDRINUSE:
+        return True
+    if getattr(exc, "winerror", None) == 10048:  # WSAEADDRINUSE
+        return True
+    msg = str(exc).lower()
+    return ("address already in use" in msg) or ("porta" in msg and "uso" in msg)
 
 
 def validar_configuracao(args):
@@ -250,8 +261,10 @@ Exemplos de uso:
     except OSError as e:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print(f"Erro de sistema operacional: {e}")
-        if "Address already in use" in str(e):
+        if is_bind_address_in_use_error(e):
             print("A porta ja esta em uso por outro processo")
+        else:
+            print("Falha de bind nao relacionada a porta ocupada")
         sys.exit(1)
     except Exception as e:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")

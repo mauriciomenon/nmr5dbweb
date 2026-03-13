@@ -1,5 +1,6 @@
 import sys
 import types
+import errno
 
 import pytest
 
@@ -79,3 +80,51 @@ def test_encontrar_proxima_porta_livre_pula_portas_ocupadas(monkeypatch):
 
     monkeypatch.setattr(app_main, "verificar_porta_disponivel", fake_verificar)
     assert app_main.encontrar_proxima_porta_livre("127.0.0.1", 5000, max_tentativas=5) == 5002
+
+
+def test_main_bind_error_porta_em_uso(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    monkeypatch.setattr(app_main, "validar_configuracao", lambda _args: [])
+    monkeypatch.setattr(app_main, "verificar_porta_disponivel", lambda _host, _port: True)
+    monkeypatch.setattr(app_main, "configurar_logging", lambda: None)
+
+    class FakeApp:
+        config = {}
+
+        def run(self, **_kwargs):
+            raise OSError(errno.EADDRINUSE, "Address already in use")
+
+    fake_module = types.ModuleType("interface.app_flask_local_search")
+    fake_module.app = FakeApp()
+    monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
+
+    with pytest.raises(SystemExit) as exc:
+        app_main.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr().out
+    assert "porta ja esta em uso" in captured
+
+
+def test_main_bind_error_generico(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    monkeypatch.setattr(app_main, "validar_configuracao", lambda _args: [])
+    monkeypatch.setattr(app_main, "verificar_porta_disponivel", lambda _host, _port: True)
+    monkeypatch.setattr(app_main, "configurar_logging", lambda: None)
+
+    class FakeApp:
+        config = {}
+
+        def run(self, **_kwargs):
+            raise OSError(errno.EACCES, "Permission denied")
+
+    fake_module = types.ModuleType("interface.app_flask_local_search")
+    fake_module.app = FakeApp()
+    monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
+
+    with pytest.raises(SystemExit) as exc:
+        app_main.main()
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr().out
+    assert "nao relacionada a porta ocupada" in captured

@@ -390,8 +390,10 @@ function buildRowPreviewBand(rowObjs, orderedCols) {
     const card = document.createElement('div');
     card.className = 'row-preview-card';
     const fields = pickRowHeadlineFields(item.row || {}, orderedCols);
+    const safeScore =
+      item.score == null ? '' : escapeHtml(serializeCellValue(item.score));
     card.innerHTML = `
-      <div class="row-preview-title">Linha ${index + 1}${item.score != null ? ` · score ${item.score}` : ''}</div>
+      <div class="row-preview-title">Linha ${index + 1}${item.score != null ? ` · score ${safeScore}` : ''}</div>
       ${
         fields.length
           ? fields

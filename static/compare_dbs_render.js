@@ -941,7 +941,9 @@ function buildCompareSections(data, rows) {
 function buildRowSummary(data, row, isRangerSostat) {
   const keyParts = [];
   for (const key of data.key_columns || []) {
-    keyParts.push(`${key}=${JSON.stringify(row.key[key])}`);
+    keyParts.push(
+      `${escapeHtmlText(key)}=${escapeHtmlText(JSON.stringify(row.key[key]))}`
+    );
   }
 
   const extraParts = [];
@@ -955,7 +957,9 @@ function buildRowSummary(data, row, isRangerSostat) {
     for (const field of primaryFields) {
       const value = pickSide(field);
       if (typeof value !== 'undefined') {
-        extraParts.push(`${field}=${shortValue(value, 40)}`);
+        extraParts.push(
+          `${escapeHtmlText(field)}=${escapeHtmlText(shortValue(value, 40))}`
+        );
       }
     }
   }
@@ -1171,7 +1175,9 @@ function renderCompareSection(
     const summaryData = buildRowSummary(data, row, isRangerSostat);
     const typeConfig = COMPARE_UI_DIFF_TYPES[row.type] || COMPARE_UI_DIFF_TYPES.changed;
     const visualType = typeConfig.badgeClass || row.type;
-    const typeLabel = `${typeConfig.uiLabel} (${typeConfig.directionLabel})`;
+    const typeLabel = escapeHtmlText(
+      `${typeConfig.uiLabel} (${typeConfig.directionLabel})`
+    );
     rowSummary.innerHTML = `
       <span class="badge ${visualType}" style="margin-right:6px;">${typeLabel}</span>
       <span style="font-size:12px;">${summaryData.keyParts.join(', ')}${isRangerSostat && summaryData.extraParts.length ? ' · ' + summaryData.extraParts.join(' · ') : ''}</span>

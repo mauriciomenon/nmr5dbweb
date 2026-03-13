@@ -127,6 +127,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             total = len(tables)
             _ensure_clean_duckdb(duckdb_path)
             dconn = duckdb.connect(duckdb_path)
+            materialized_tables = 0
+            skipped_tables = []
 
             for i, t in enumerate(tables):
                 safe_table = str(t).replace('"', '""')
@@ -136,6 +138,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     sql = f"SELECT * FROM [{t}]"
                     # drop if exists to avoid errors
                     dconn.execute(f'DROP TABLE IF EXISTS "{safe_table}"')
+                    table_materialized = False
                     try:
                         it = pd.read_sql_query(sql, conn, chunksize=chunk_size)
                         first = True
@@ -147,6 +150,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                             if first:
                                 dconn.execute(f'CREATE TABLE "{safe_table}" AS SELECT * FROM {tmp_name}')
                                 first = False
+                                table_materialized = True
                             else:
                                 dconn.execute(f'INSERT INTO "{safe_table}" SELECT * FROM {tmp_name}')
                             dconn.unregister(tmp_name)
@@ -162,16 +166,33 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                             dconn.register(tmp_name, df)
                             dconn.execute(f'CREATE TABLE "{safe_table}" AS SELECT * FROM {tmp_name}')
                             dconn.unregister(tmp_name)
+                            table_materialized = True
+                    if table_materialized:
+                        materialized_tables += 1
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg="table_done")
                 except Exception as e:
                     logger.warning("Skipping table %s after errors: %s", t, e)
+                    skipped_tables.append((str(t), str(e)))
                     # continue with next table
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
 
             dconn.close()
             conn.close()
+            if skipped_tables and not _access_parser_allow_skips():
+                sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
+                return (
+                    False,
+                    "strict mode: "
+                    f"skipped {len(skipped_tables)}/{total} table(s). "
+                    "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
+                    f"samples: {sample}",
+                )
+            if materialized_tables == 0:
+                return False, "strict mode: no tables materialized via pyodbc"
             _report(total_tables=total, processed_tables=total, current_table="", percent=100, msg="converted")
+            if skipped_tables:
+                return True, f"converted via pyodbc (skipped={len(skipped_tables)})"
             return True, "converted via pyodbc"
         except Exception as e:
             try:
@@ -195,6 +216,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             total = len(tables)
             _ensure_clean_duckdb(duckdb_path)
             dconn = duckdb.connect(duckdb_path)
+            materialized_tables = 0
+            skipped_tables = []
             for i, t in enumerate(tables):
                 safe_table = str(t).replace('"', '""')
                 _report(total_tables=total, processed_tables=i, current_table=str(t), percent=int((i/total)*100), msg="starting_table")
@@ -202,6 +225,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     dconn.execute(f'DROP TABLE IF EXISTS "{safe_table}"')
                     it = pd.read_sql_query(f"SELECT * FROM [{t}]", conn, chunksize=chunk_size)
                     first = True
+                    table_materialized = False
                     for j, df_chunk in enumerate(it):
                         if df_chunk is None or df_chunk.shape[0] == 0:
                             continue
@@ -210,17 +234,34 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                         if first:
                             dconn.execute(f'CREATE TABLE "{safe_table}" AS SELECT * FROM {tmp_name}')
                             first = False
+                            table_materialized = True
                         else:
                             dconn.execute(f'INSERT INTO "{safe_table}" SELECT * FROM {tmp_name}')
                         dconn.unregister(tmp_name)
                         _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i + (j+1)/1)/total)*100), msg="in_table_chunk")
+                    if table_materialized:
+                        materialized_tables += 1
                 except Exception as e:
                     logger.warning("Skipping %s: %s", t, e)
+                    skipped_tables.append((str(t), str(e)))
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
             dconn.close()
             conn.close()
+            if skipped_tables and not _access_parser_allow_skips():
+                sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
+                return (
+                    False,
+                    "strict mode: "
+                    f"skipped {len(skipped_tables)}/{total} table(s). "
+                    "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
+                    f"samples: {sample}",
+                )
+            if materialized_tables == 0:
+                return False, "strict mode: no tables materialized via pypyodbc"
             _report(total_tables=total, processed_tables=total, current_table="", percent=100, msg="converted")
+            if skipped_tables:
+                return True, f"converted via pypyodbc (skipped={len(skipped_tables)})"
             return True, "converted via pypyodbc"
         except Exception as e:
             return False, f"pypyodbc error: {e}"
@@ -234,9 +275,13 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         except Exception as e:
             return False, f"mdb-tables failed: {e}"
         total = len(tbls)
+        if total == 0:
+            return False, "No user tables found via mdbtools."
         _ensure_clean_duckdb(duckdb_path)
         dconn = duckdb.connect(duckdb_path)
         tmpdir = tempfile.mkdtemp(prefix="mdbtools_")
+        materialized_tables = 0
+        skipped_tables = []
         try:
             for i, t in enumerate(tbls):
                 csv_path = os.path.join(tmpdir, f"{t}.csv")
@@ -248,13 +293,28 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     safe_table = str(t).replace('"', '""')
                     dconn.execute(f'DROP TABLE IF EXISTS "{safe_table}"')
                     dconn.execute(f"CREATE TABLE \"{safe_table}\" AS SELECT * FROM read_csv_auto('{csv_path_unix}')")
+                    materialized_tables += 1
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg="table_done")
                 except Exception as e:
                     logger.warning("Failed to export/import table %s: %s", t, e)
+                    skipped_tables.append((str(t), str(e)))
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
             dconn.close()
+            if skipped_tables and not _access_parser_allow_skips():
+                sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
+                return (
+                    False,
+                    "strict mode: "
+                    f"skipped {len(skipped_tables)}/{total} table(s). "
+                    "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
+                    f"samples: {sample}",
+                )
+            if materialized_tables == 0:
+                return False, "strict mode: no tables materialized via mdbtools"
             _report(total_tables=total, processed_tables=total, current_table="", percent=100, msg="converted")
+            if skipped_tables:
+                return True, f"converted via mdbtools (skipped={len(skipped_tables)})"
             return True, "converted via mdbtools"
         except Exception as e:
             try:

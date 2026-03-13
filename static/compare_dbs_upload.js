@@ -172,7 +172,7 @@ async function handleFileUpload(side) {
       setUploadStatus(`Upload do Banco ${side} concluido.`);
     }
     const nextPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
-    if (nextPath && nextPath !== previousPath) {
+    if (nextPath !== previousPath) {
       compareDbState.lastComparePayload = null;
       compareDbState.lastCompareMeta = null;
     }
