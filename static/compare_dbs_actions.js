@@ -473,6 +473,37 @@ function buildCompareReportSummary(meta, allRows) {
     .sort((a, b) => b.sum_abs_delta - a.sum_abs_delta)
     .slice(0, 8);
 
+  const priorityAnomalies = [];
+  topChangedColumns.forEach((item) => {
+    priorityAnomalies.push({
+      score: Number(item.count || 0) * 4,
+      label: `coluna impactada: ${item.column}`,
+      detail: `${item.count} chave(s) alteradas`,
+    });
+  });
+  topNullTransitions.forEach((item) => {
+    priorityAnomalies.push({
+      score: Number(item.count || 0) * 3,
+      label: `transicao nulo/preenchido: ${item.label}`,
+      detail: `${item.count} ocorrencia(s)`,
+    });
+  });
+  topNumericDrift.forEach((item) => {
+    priorityAnomalies.push({
+      score: Number(item.sum_abs_delta || 0),
+      label: `drift numerico: ${item.column}`,
+      detail: `soma abs ${item.sum_abs_delta} · pico ${item.max_signed_delta}`,
+    });
+  });
+  const topPriorityAnomalies = priorityAnomalies
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .map((item) => ({
+      score: Number(item.score.toFixed(4)),
+      label: item.label,
+      detail: item.detail,
+    }));
+
   let priority = 'baixa';
   if (impactedPct >= 50 || byType.changed >= 10) {
     priority = 'critica';
@@ -493,6 +524,7 @@ function buildCompareReportSummary(meta, allRows) {
     top_changed_columns: topChangedColumns,
     top_null_transitions: topNullTransitions,
     top_numeric_drift: topNumericDrift,
+    top_priority_anomalies: topPriorityAnomalies,
   };
 }
 
@@ -516,6 +548,31 @@ function buildCompareReportPayload(meta, allRows, basePayload) {
   };
 }
 
+async function collectCompareExportData(progressPrefix) {
+  if (!compareDbState.lastComparePayload) {
+    setCompareStatus(
+      'Nenhuma comparacao para exportar. Execute a comparacao primeiro.',
+      'warn'
+    );
+    return null;
+  }
+  const basePayload = { ...compareDbState.lastComparePayload };
+  const { meta, allRows } = await fetchAllComparisonRows(
+    basePayload,
+    ({ page, totalPages }) => {
+      setCompareStatus(
+        `${progressPrefix} (pagina ${page} de ${totalPages || '?'})...`,
+        'info'
+      );
+    }
+  );
+  if (!meta) {
+    setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
+    return null;
+  }
+  return { basePayload, meta, allRows };
+}
+
 async function exportComparison() {
   const exportBtn = document.getElementById('btnExportComparison');
   const restoreBtn = setButtonBusy(
@@ -523,29 +580,12 @@ async function exportComparison() {
     'Exportando...',
     exportBtn ? exportBtn.textContent : 'Exportar CSV'
   );
-  if (!compareDbState.lastComparePayload) {
-    setCompareStatus(
-      'Nenhuma comparacao para exportar. Execute a comparacao primeiro.',
-      'warn'
-    );
-    restoreBtn();
-    return;
-  }
   try {
-    const basePayload = { ...compareDbState.lastComparePayload };
-    const { meta, allRows } = await fetchAllComparisonRows(
-      basePayload,
-      ({ page, totalPages }) => {
-        setCompareStatus(
-          `Preparando exportacao CSV (pagina ${page} de ${totalPages || '?'})...`,
-          'info'
-        );
-      }
+    const exportData = await collectCompareExportData(
+      'Preparando exportacao CSV'
     );
-    if (!meta) {
-      setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
-      return;
-    }
+    if (!exportData) return;
+    const { meta, allRows } = exportData;
     const lines = buildCompareCsvLines(meta, allRows);
     const tableName = normalizeExportTableName(meta);
     triggerBlobDownload(
@@ -578,29 +618,12 @@ async function exportComparisonReport() {
     'Exportando relatorio...',
     exportBtn ? exportBtn.textContent : 'Exportar relatorio JSON'
   );
-  if (!compareDbState.lastComparePayload) {
-    setCompareStatus(
-      'Nenhuma comparacao para exportar. Execute a comparacao primeiro.',
-      'warn'
-    );
-    restoreBtn();
-    return;
-  }
   try {
-    const basePayload = { ...compareDbState.lastComparePayload };
-    const { meta, allRows } = await fetchAllComparisonRows(
-      basePayload,
-      ({ page, totalPages }) => {
-        setCompareStatus(
-          `Preparando relatorio JSON (pagina ${page} de ${totalPages || '?'})...`,
-          'info'
-        );
-      }
+    const exportData = await collectCompareExportData(
+      'Preparando relatorio JSON'
     );
-    if (!meta) {
-      setCompareStatus('Nenhum dado disponivel para exportacao.', 'warn');
-      return;
-    }
+    if (!exportData) return;
+    const { basePayload, meta, allRows } = exportData;
     const report = buildCompareReportPayload(meta, allRows, basePayload);
     const tableName = normalizeExportTableName(meta);
     triggerBlobDownload(

@@ -368,6 +368,8 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
             "critica",
         }
         assert payload["summary"]["by_type"]["changed"] >= 1
+        assert isinstance(payload["summary"]["top_priority_anomalies"], list)
+        assert payload["summary"]["top_priority_anomalies"]
 
 
 def test_success_frontend_smoke_track_page(ui_server, sample_data):
