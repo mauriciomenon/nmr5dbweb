@@ -171,8 +171,11 @@ Exemplos de uso:
     )
 
     args = parser.parse_args()
-    if not args.upload_folder:
-        args.upload_folder = default_upload_dir
+    if args.upload_folder:
+        resolved_upload_folder = args.upload_folder
+    else:
+        resolved_upload_folder = os.environ.get("UPLOAD_FOLDER") or default_upload_dir
+    args.upload_folder = resolved_upload_folder
 
     # Gerar timestamp unico para esta execucao
     timestamp_exec = datetime.now().isoformat()

@@ -130,3 +130,31 @@ def test_main_bind_error_generico(monkeypatch, capsys):
     assert exc.value.code == 1
     captured = capsys.readouterr().out
     assert "Falha de sistema operacional durante inicializacao" in captured
+
+
+def test_main_preserva_upload_folder_do_env_quando_sem_flag(monkeypatch):
+    calls = {}
+
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    monkeypatch.setenv("UPLOAD_FOLDER", "/tmp/upload-env")
+    monkeypatch.setattr(app_main, "validar_configuracao", lambda _args: [])
+    monkeypatch.setattr(app_main, "verificar_porta_disponivel", lambda _host, _port: True)
+    monkeypatch.setattr(app_main, "configurar_logging", lambda: None)
+
+    class FakeApp:
+        config = {}
+
+        def run(self, **kwargs):
+            calls["kwargs"] = kwargs
+            raise KeyboardInterrupt
+
+    fake_module = types.ModuleType("interface.app_flask_local_search")
+    fake_module.app = FakeApp()
+    monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
+
+    with pytest.raises(SystemExit) as exc:
+        app_main.main()
+
+    assert exc.value.code == 0
+    assert app_main.os.environ["UPLOAD_FOLDER"] == "/tmp/upload-env"
+    assert calls["kwargs"]["port"] == 5000
