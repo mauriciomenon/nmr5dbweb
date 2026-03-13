@@ -108,6 +108,11 @@ Com menu interativo e selecao paginada (10 por tela), sugerindo os 2 ultimos `.a
 PYTHONPATH=. uv run python tools/auto_compare_report.py
 ```
 
+Modo rapido com default dos 2 ultimos `.accdb`:
+1. rode o comando acima sem `--db1` e sem `--db2`
+2. quando aparecer `Usar sugestao? [S/n]:`, pressione `Enter`
+3. o script segue direto com os 2 ultimos e gera HTML/MD/TXT em `documentos/reports/`
+
 Fluxo:
 1. sugere 2 arquivos Access por data no nome (`YYYY-MM-DD ...`)
 2. permite trocar A/B com lista paginada (`n/p`) e sair/voltar (`q/b`)

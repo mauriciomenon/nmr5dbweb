@@ -57,7 +57,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
   - `utils.normalize_text` e `utils.serialize_value` (normalização/serialização).
   - Opcional `access_convert.convert_access_to_duckdb` para conversão.
 
-- O backend simples legado foi retirado do caminho principal do produto e mantido apenas em backup local (`bkp_limpeza/`) para consulta, sem fazer parte da operação suportada.
+- O backend simples legado foi retirado do caminho principal do produto; para consulta de historico, use o log de commits e o historico git do repositorio.
 
 ## Quando precisam estar juntos?
 

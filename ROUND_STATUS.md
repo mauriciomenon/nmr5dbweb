@@ -1407,7 +1407,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - Browser regression is now materially more useful because it covers a success path instead of only validation failures.
 - The next backend target should stay inside `interface/app_flask_local_search.py`, but now around reducing concentration of responsibilities, not around startup safety.
 
-## Current Slice
+## Current Slice: Admin Settings And Record Browsing Consolidation
 
 ### Scope Completed
 
@@ -1451,7 +1451,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `55 passed`
 
-## Current Slice
+## Current Slice: Search Table Browsing And Runtime Boundary Consolidation
 
 ### Scope Completed
 
@@ -1483,7 +1483,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 
 ### Real Data Proof
 
-- Used the real file [2025-11-05 DB4.accdb](/Users/menon/git/nmr5dbweb/output/2025-11-05%20DB4.accdb) for a local proof of use.
+- Used the real file `output/2025-11-05 DB4.accdb` for a local proof of use.
 - Confirmed:
   - `detect_db_engine(...)` returns `access`
   - `/api/tables` rejects it cleanly for browse with `Engine nao suportada para esta operacao: access`
@@ -1502,7 +1502,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `./.venv/bin/ty check interface/app_flask_local_search.py tests/test_app_flask_local_search_api.py`: passed
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `57 passed`
 
-## Current Slice
+## Current Slice: Table Search Implementation And Tracking Dispatch Consolidation
 
 ### Scope Completed
 
@@ -1541,7 +1541,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 
 ### Real Data Proof
 
-- Reused the real Access sample [2025-11-05 DB4.accdb](/Users/menon/git/nmr5dbweb/output/2025-11-05%20DB4.accdb) during local proof.
+- Reused the real Access sample `output/2025-11-05 DB4.accdb` during local proof.
 - Confirmed again that:
   - the file is detected as `access`
   - browse endpoints reject it safely instead of misrouting it as DuckDB/SQLite
@@ -1561,7 +1561,7 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `pnpm exec eslint static`: passed
 - `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
 
-## Current Slice
+## Current Slice: ESLint Migration And JS Reliability Fixes
 
 ### Scope Completed
 

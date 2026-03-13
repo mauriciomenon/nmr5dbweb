@@ -14,6 +14,26 @@ Este diretório contém utilitários para:
 
 ## Scripts
 
+### `auto_compare_report.py`
+- **O que faz**: compara 2 bancos e gera report em `HTML`, `MD` e `TXT` com foco em leitura operacional.
+- **Engines**: aceita fonte Access (`.mdb/.accdb`), DuckDB e SQLite; prepara derivados quando necessario.
+- **Saidas**:
+  - `documentos/reports/db_compare_<timestamp>_... .html`
+  - `documentos/reports/db_compare_<timestamp>_... .md`
+  - `documentos/reports/db_compare_<timestamp>_... .txt`
+  - atalhos `latest_db_compare_report.*`
+- **Modo default (2 ultimos Access)**:
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py
+```
+  - no prompt `Usar sugestao? [S/n]:`, pressione `Enter` para seguir direto com o default dos 2 ultimos `.accdb`.
+- **Modo direto (sem menu)**:
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
 ### `analyze_single_table_by_column.py`
 - **O que faz**: para uma tabela de um arquivo de banco, calcula por coluna: nulos, distintos, top valores (CSV) e gráfico de barras (PNG).
 - **Engines**: DuckDB (`.duckdb/.db`), SQLite (`.sqlite/.db/.sqlite3`), Access (`.mdb/.accdb` via `pyodbc`).
