@@ -22,6 +22,7 @@ import sqlite3
 import threading
 import importlib.util
 import math
+import hashlib
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
@@ -405,6 +406,26 @@ def build_admin_status():
             status["indexing"] = True
     with convert_lock:
         status["conversion"] = dict(convert_status)
+    runtime_validation = status.get("conversion", {}).get("validation") or {}
+    runtime_validation_report = status.get("conversion", {}).get(
+        "validation_report", ""
+    )
+    if runtime_validation:
+        status["conversion_validation"] = dict(runtime_validation)
+        status["conversion_validation_report"] = str(runtime_validation_report or "")
+        status["conversion_validation_source"] = "runtime"
+    else:
+        latest_validation = load_latest_conversion_validation_report()
+        if latest_validation:
+            status["conversion_validation"] = latest_validation
+            status["conversion_validation_report"] = str(
+                get_latest_conversion_validation_path()
+            )
+            status["conversion_validation_source"] = "latest_report"
+        else:
+            status["conversion_validation"] = {}
+            status["conversion_validation_report"] = ""
+            status["conversion_validation_source"] = "none"
     status["conversion_backend_last"] = parse_conversion_backend_from_msg(
         status.get("conversion", {}).get("msg")
     )
@@ -1163,11 +1184,37 @@ def _build_sample_offsets(total_rows, max_points=9):
 
 
 def _build_validation_report_path(stamp):
-    reports_dir = UPLOAD_DIR / "reports"
+    reports_dir = PROJECT_ROOT / "documentos" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     report_file = reports_dir / f"conversion_validation_{stamp}.json"
     latest_file = reports_dir / "latest_conversion_validation.json"
     return report_file, latest_file
+
+
+def get_latest_conversion_validation_path():
+    return PROJECT_ROOT / "documentos" / "reports" / "latest_conversion_validation.json"
+
+
+def load_latest_conversion_validation_report():
+    latest_file = get_latest_conversion_validation_path()
+    try:
+        if not latest_file.exists():
+            return {}
+        payload = json.loads(latest_file.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        return {}
+    return {}
+
+
+def _hash_sample_rows(rows):
+    digest = hashlib.sha256()
+    for row in rows:
+        payload = json.dumps(row, ensure_ascii=True, sort_keys=True)
+        digest.update(payload.encode("utf-8"))
+        digest.update(b"\n")
+    return digest.hexdigest()
 
 
 def validate_conversion_output(source_path, duckdb_path, sqlite_path):
@@ -1177,7 +1224,14 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
         "duckdb_path": str(duckdb_path),
         "sqlite_path": str(sqlite_path),
         "status": "failed",
+        "checks": {
+            "duckdb_generated": False,
+            "sqlite_generated": False,
+            "duckdb_openable": False,
+            "sqlite_openable": False,
+        },
         "issues": [],
+        "tables": [],
         "summary": {
             "duckdb_tables": 0,
             "sqlite_tables": 0,
@@ -1191,17 +1245,21 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
     if not duckdb_path.exists():
         report["issues"].append("duckdb_output_missing")
         return False, report
+    report["checks"]["duckdb_generated"] = True
 
     ok_sqlite, sqlite_msg = _duckdb_to_sqlite_file(duckdb_path, sqlite_path)
     if not ok_sqlite:
         report["issues"].append(sqlite_msg)
         return False, report
+    report["checks"]["sqlite_generated"] = True
 
     dconn = None
     sconn = None
     try:
         dconn = duckdb.connect(str(duckdb_path), read_only=True)
+        report["checks"]["duckdb_openable"] = True
         sconn = sqlite3.connect(str(sqlite_path))
+        report["checks"]["sqlite_openable"] = True
         duck_tables = _list_duckdb_tables_for_validation(dconn)
         sqlite_tables = _list_sqlite_tables_for_validation(sconn)
         duck_set = set(duck_tables)
@@ -1226,11 +1284,25 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
         sample_checked = 0
         sample_mismatches = 0
         for table in common_tables:
+            table_report = {
+                "table": table,
+                "columns_match": True,
+                "row_count_duckdb": 0,
+                "row_count_sqlite": 0,
+                "row_count_match": True,
+                "sample_offsets": [],
+                "sample_hash_duckdb": "",
+                "sample_hash_sqlite": "",
+                "sample_match": True,
+                "sample_mismatch_offset": None,
+            }
             duck_columns = get_table_columns_duckdb_conn(dconn, table)
             sqlite_columns = get_table_columns_sqlite_conn(sconn, table)
             if duck_columns != sqlite_columns:
                 table_issues += 1
+                table_report["columns_match"] = False
                 report["issues"].append(f"column_mismatch:{table}")
+                report["tables"].append(table_report)
                 continue
             duck_count = int(
                 dconn.execute(
@@ -1242,13 +1314,22 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
                     f"SELECT COUNT(*) FROM {quote_identifier(table)}"
                 ).fetchone()[0]
             )
+            table_report["row_count_duckdb"] = duck_count
+            table_report["row_count_sqlite"] = sqlite_count
             if duck_count != sqlite_count:
                 table_issues += 1
+                table_report["row_count_match"] = False
                 report["issues"].append(
                     f"row_count_mismatch:{table}:{duck_count}!={sqlite_count}"
                 )
+                report["tables"].append(table_report)
                 continue
-            for offset in _build_sample_offsets(duck_count):
+            sample_offsets = _build_sample_offsets(duck_count)
+            table_report["sample_offsets"] = list(sample_offsets)
+            duck_samples = []
+            sqlite_samples = []
+            mismatch_offset = None
+            for offset in sample_offsets:
                 sample_checked += 1
                 duck_row = dconn.execute(
                     f"SELECT * FROM {quote_identifier(table)} LIMIT 1 OFFSET ?",
@@ -1260,11 +1341,25 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
                 ).fetchone()
                 norm_duck = [_normalize_sample_value(v) for v in (duck_row or [])]
                 norm_sqlite = [_normalize_sample_value(v) for v in (sqlite_row or [])]
-                if norm_duck != norm_sqlite:
-                    sample_mismatches += 1
-                    if sample_mismatches <= 20:
-                        report["issues"].append(f"sample_mismatch:{table}:offset={offset}")
-                    break
+                duck_samples.append(norm_duck)
+                sqlite_samples.append(norm_sqlite)
+                if mismatch_offset is None and norm_duck != norm_sqlite:
+                    mismatch_offset = offset
+            table_report["sample_hash_duckdb"] = _hash_sample_rows(duck_samples)
+            table_report["sample_hash_sqlite"] = _hash_sample_rows(sqlite_samples)
+            if (
+                mismatch_offset is None
+                and table_report["sample_hash_duckdb"] != table_report["sample_hash_sqlite"]
+            ):
+                mismatch_offset = sample_offsets[0] if sample_offsets else 0
+            if mismatch_offset is not None:
+                sample_mismatches += 1
+                table_issues += 1
+                table_report["sample_match"] = False
+                table_report["sample_mismatch_offset"] = int(mismatch_offset)
+                if sample_mismatches <= 20:
+                    report["issues"].append(f"sample_mismatch:{table}:offset={mismatch_offset}")
+            report["tables"].append(table_report)
 
         report["summary"]["table_issues"] = table_issues
         report["summary"]["sample_checked"] = sample_checked

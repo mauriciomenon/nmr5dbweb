@@ -1,5 +1,6 @@
 from io import BytesIO
 import sqlite3
+import json
 
 import duckdb
 
@@ -1352,7 +1353,76 @@ def test_validate_conversion_output_sucesso_em_base_minima(tmp_path):
     assert report["summary"]["sqlite_tables"] == 1
     assert report["summary"]["table_issues"] == 0
     assert report["summary"]["sample_mismatches"] == 0
+    assert report["checks"]["duckdb_generated"] is True
+    assert report["checks"]["sqlite_generated"] is True
+    assert report["checks"]["duckdb_openable"] is True
+    assert report["checks"]["sqlite_openable"] is True
+    assert isinstance(report["tables"], list)
+    assert len(report["tables"]) == 1
+    table_report = report["tables"][0]
+    assert table_report["table"] == "T1"
+    assert table_report["row_count_duckdb"] == 3
+    assert table_report["row_count_sqlite"] == 3
+    assert table_report["row_count_match"] is True
+    assert isinstance(table_report["sample_offsets"], list)
+    assert len(table_report["sample_hash_duckdb"]) == 64
+    assert len(table_report["sample_hash_sqlite"]) == 64
+    assert table_report["sample_match"] is True
     assert sqlite_path.exists()
+
+
+def test_admin_status_expoe_validacao_mais_recente_sem_runtime(tmp_path, monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "startup_warnings", [])
+    monkeypatch.setitem(local_search.runtime_state, "db_path", "")
+    monkeypatch.setitem(local_search.cfg, "db_path", "")
+    monkeypatch.setattr(
+        local_search,
+        "convert_status",
+        {
+            "running": False,
+            "ok": None,
+            "msg": "",
+            "input": "",
+            "output": "",
+            "total_tables": 0,
+            "processed_tables": 0,
+            "current_table": "",
+            "percent": 0,
+            "validation": {},
+            "validation_report": "",
+        },
+    )
+    latest_report = tmp_path / "latest_conversion_validation.json"
+    latest_report.write_text(
+        json.dumps(
+            {
+                "status": "ok",
+                "summary": {"duckdb_tables": 2, "sqlite_tables": 2},
+                "tables": [
+                    {
+                        "table": "T1",
+                        "row_count_duckdb": 10,
+                        "row_count_sqlite": 10,
+                        "sample_hash_duckdb": "a" * 64,
+                        "sample_hash_sqlite": "a" * 64,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        local_search, "get_latest_conversion_validation_path", lambda: latest_report
+    )
+
+    resp = client.get("/admin/status")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["conversion_validation_source"] == "latest_report"
+    assert payload["conversion_validation"]["status"] == "ok"
+    assert payload["conversion_validation_report"] == str(latest_report)
 
 
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):
