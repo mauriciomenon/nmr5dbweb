@@ -124,6 +124,7 @@ def sample_data(tmp_path, monkeypatch, ui_server):
                 (1, "alpha", 10.0, "OK", ""),
                 (2, "beta-new", 55.5, "ALARM", None),
                 (3, "gamma-new", None, "OFF", "nota-nova"),
+                (5, "epsilon-new", 1.0, "ON", "fresh"),
             ],
         ),
         (
@@ -152,6 +153,15 @@ def sample_data(tmp_path, monkeypatch, ui_server):
     sqlite_conn.commit()
     sqlite_conn.close()
 
+    track_nested_dir = track_dir / "nested"
+    track_nested_dir.mkdir()
+    nested_db = track_nested_dir / "nested.sqlite3"
+    nested_conn = sqlite3.connect(nested_db)
+    nested_conn.execute("CREATE TABLE RANGER_SOSTAT (RTUNO INTEGER, PNTNO INTEGER, PNTNAM TEXT)")
+    nested_conn.execute("INSERT INTO RANGER_SOSTAT VALUES (2, 2305, 'nested row')")
+    nested_conn.commit()
+    nested_conn.close()
+
     upload_dir = local_search.UPLOAD_DIR
     uploaded_primary = upload_dir / "search.duckdb"
     uploaded_secondary = upload_dir / "search_extra.duckdb"
@@ -169,6 +179,7 @@ def sample_data(tmp_path, monkeypatch, ui_server):
         "db_a": db_a,
         "db_b": db_b,
         "track_dir": track_dir,
+        "track_nested_dir": track_nested_dir,
     }
 
 
@@ -612,7 +623,9 @@ def test_success_frontend_admin_upload_select_priority_and_index(ui_server, samp
     upload_db = tmp_path / "admin_uploaded.duckdb"
     conn = duckdb.connect(str(upload_db))
     conn.execute("CREATE TABLE admin_items (id INTEGER, txt VARCHAR)")
+    conn.execute("CREATE TABLE admin_events (id INTEGER, txt VARCHAR)")
     conn.execute("INSERT INTO admin_items VALUES (1, 'a')")
+    conn.execute("INSERT INTO admin_events VALUES (1, 'b')")
     conn.close()
 
     with with_browser() as (_browser, _browser_context, page):
@@ -630,8 +643,20 @@ def test_success_frontend_admin_upload_select_priority_and_index(ui_server, samp
 
         page.locator("#refreshTablesBtn").click()
         page.wait_for_function(
-            "() => document.querySelectorAll('#priorityList li').length >= 1"
+            "() => document.querySelectorAll('#priorityList li').length >= 2"
         )
+        items = page.locator("#priorityList li")
+        first_before = (items.nth(0).locator(".priority-name").text_content() or "").strip()
+        second_before = (items.nth(1).locator(".priority-name").text_content() or "").strip()
+        assert items.nth(0).get_attribute("draggable") == "true"
+        items.nth(0).locator("button:has-text('Descer')").click()
+        page.wait_for_function(
+            f"() => ((document.querySelector('#priorityList li .priority-name') || {{}}).textContent || '').trim() === {json.dumps(second_before)}"
+        )
+        first_after = (page.locator("#priorityList li").nth(0).locator(".priority-name").text_content() or "").strip()
+        assert first_after == second_before
+        assert first_after != first_before
+
         page.locator("#savePriorityBtn").click()
         page.wait_for_function(
             "() => (document.getElementById('priorityMsg').textContent || '').length > 0"
@@ -651,7 +676,7 @@ def test_success_frontend_track_browse_modal_flow(ui_server, sample_data):
         page.wait_for_selector("#browseDirBtn")
         page.evaluate(
             "(path) => localStorage.setItem('track_last_dir', path)",
-            str(sample_data["track_dir"]),
+            str(sample_data["track_nested_dir"]),
         )
 
         page.locator("#browseDirBtn").click()
@@ -659,7 +684,11 @@ def test_success_frontend_track_browse_modal_flow(ui_server, sample_data):
             "() => document.getElementById('dirModal').classList.contains('visible')"
         )
         page.wait_for_function(
-            "() => (document.getElementById('dirModalPath').textContent || '').length > 0"
+            f"() => (document.getElementById('dirModalPath').textContent || '').includes({json.dumps(str(sample_data['track_nested_dir']))})"
+        )
+        page.locator("#dirUpBtn").click()
+        page.wait_for_function(
+            f"() => (document.getElementById('dirModalPath').textContent || '').includes({json.dumps(str(sample_data['track_dir']))})"
         )
         page.locator("#dirSelectBtn").click()
         page.wait_for_function(
@@ -711,3 +740,52 @@ def test_success_frontend_compare_options_and_overview(ui_server, sample_data):
         if view_buttons.count() > 1:
             view_buttons.nth(1).click()
             assert view_buttons.nth(1).count() == 1
+
+
+def test_success_frontend_compare_export_by_change_type(ui_server, sample_data, tmp_path):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        page.locator("#db1Path").fill(str(sample_data["db_a"]))
+        page.locator("#db2Path").fill(str(sample_data["db_b"]))
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => Array.from(document.querySelectorAll('#tableSelect option')).some(o => o.value === 'items')"
+        )
+        page.locator("#keyColumns").fill("id")
+        page.locator("#rowLimitEnabled").set_checked(False)
+
+        modes = [
+            ("changed", True, False, False, "changed", "beta-new"),
+            ("added", False, True, False, "removed", "epsilon-new"),
+            ("removed", False, False, True, "added", "delta-old"),
+        ]
+        for mode, changed_on, added_on, removed_on, expected_type, expected_token in modes:
+            page.evaluate(
+                """(state) => {
+                    const set = (id, val) => {
+                      const el = document.getElementById(id);
+                      if (!el) return;
+                      el.checked = !!val;
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                    };
+                    set('filterChanged', state.changed);
+                    set('filterAdded', state.added);
+                    set('filterRemoved', state.removed);
+                }""",
+                {"changed": changed_on, "added": added_on, "removed": removed_on},
+            )
+            page.evaluate("() => window.runCompare()")
+            page.wait_for_function(
+                "() => (document.getElementById('statusCompare').textContent || '').includes('Comparacao concluida.')"
+            )
+            with page.expect_download() as download_info:
+                page.locator("#btnExportComparison").click()
+            download = download_info.value
+            export_path = tmp_path / f"{mode}_{download.suggested_filename}"
+            download.save_as(str(export_path))
+            assert export_path.exists()
+            csv_text = export_path.read_text(encoding="utf-8").lower()
+            assert "type" in csv_text
+            assert expected_type in csv_text
+            assert expected_token in csv_text
