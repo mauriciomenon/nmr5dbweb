@@ -1176,6 +1176,11 @@ def test_api_compare_db_overview_sucesso(tmp_path):
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload["overview"]
+    assert payload["summary"]["total_tables"] == 1
+    assert payload["summary"]["diff_tables"] == 1
+    assert payload["summary"]["same_tables"] == 0
+    assert payload["summary"]["error_tables"] == 0
+    assert payload["summary"]["no_key_tables"] == 0
     row = payload["overview"][0]
     assert row["table"] == "items"
     assert row["status"] == "diff"
@@ -1198,6 +1203,55 @@ def test_api_compare_db_overview_rejeita_tables_invalido(tmp_path):
 
     assert resp.status_code == 400
     assert "tables deve ser uma lista" in resp.get_json()["error"]
+
+
+def test_api_compare_db_overview_rejeita_tables_com_item_nao_string(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "a.duckdb"
+    db2 = tmp_path / "b.duckdb"
+    duckdb.connect(str(db1)).close()
+    duckdb.connect(str(db2)).close()
+
+    resp = client.post(
+        "/api/compare_db_overview",
+        json={"db1_path": str(db1), "db2_path": str(db2), "tables": ["items", 123]},
+    )
+
+    assert resp.status_code == 400
+    assert "tables deve conter apenas strings" in resp.get_json()["error"]
+
+
+def test_api_compare_db_overview_deduplica_lista_de_tabelas(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "a.duckdb"
+    db2 = tmp_path / "b.duckdb"
+
+    conn1 = duckdb.connect(str(db1))
+    conn2 = duckdb.connect(str(db2))
+    try:
+        conn1.execute("CREATE TABLE items(id INTEGER, valor TEXT)")
+        conn2.execute("CREATE TABLE items(id INTEGER, valor TEXT)")
+        conn1.execute("INSERT INTO items VALUES (1, 'x')")
+        conn2.execute("INSERT INTO items VALUES (1, 'x')")
+    finally:
+        conn1.close()
+        conn2.close()
+
+    resp = client.post(
+        "/api/compare_db_overview",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "tables": ["items", "items", "  items  ", ""],
+        },
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert len(payload["overview"]) == 1
+    assert payload["summary"]["total_tables"] == 1
+    assert payload["summary"]["same_tables"] == 1
+    assert payload["summary"]["diff_tables"] == 0
 
 
 def test_api_compare_db_rows_rejeita_engine_nao_duckdb(tmp_path):

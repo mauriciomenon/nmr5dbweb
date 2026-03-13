@@ -807,6 +807,56 @@ def parse_compare_rows_request(data):
     }
 
 
+def parse_compare_db_pair_request(data, route_name, *, allowed_engines=None):
+    db1_path = (data.get("db1_path") or "").strip()
+    db2_path = (data.get("db2_path") or "").strip()
+    return validate_compare_db_inputs(
+        db1_path,
+        db2_path,
+        route_name,
+        allowed_engines=allowed_engines,
+    )
+
+
+def parse_compare_overview_tables(raw_tables):
+    if raw_tables is None:
+        return None
+    if not isinstance(raw_tables, list):
+        raise ValueError("tables deve ser uma lista")
+    tables = []
+    seen = set()
+    for item in raw_tables:
+        if not isinstance(item, str):
+            raise ValueError("tables deve conter apenas strings")
+        table = item.strip()
+        if not table or table in seen:
+            continue
+        seen.add(table)
+        tables.append(table)
+    return tables
+
+
+def build_compare_overview_summary(overview_rows):
+    summary = {
+        "total_tables": len(overview_rows),
+        "same_tables": 0,
+        "diff_tables": 0,
+        "no_key_tables": 0,
+        "error_tables": 0,
+    }
+    for row in overview_rows:
+        status = str(row.get("status") or "").strip().lower()
+        if status == "same":
+            summary["same_tables"] += 1
+        elif status == "diff":
+            summary["diff_tables"] += 1
+        elif status == "no_key":
+            summary["no_key_tables"] += 1
+        else:
+            summary["error_tables"] += 1
+    return summary
+
+
 def compare_bad_request(exc):
     return jsonify({"error": str(exc)}), 400
 
@@ -1933,11 +1983,8 @@ def api_compare_db_tables():
     }
     """
     data = request.get_json(silent=True) or {}
-    db1_path = (data.get("db1_path") or "").strip()
-    db2_path = (data.get("db2_path") or "").strip()
-
     try:
-        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_tables")
+        db1, db2 = parse_compare_db_pair_request(data, "compare_db_tables")
         tables = list_common_tables(db1, db2)
         detailed = []
         for t in tables:
@@ -1962,13 +2009,11 @@ def api_compare_db_table_content():
     }
     """
     data = request.get_json(silent=True) or {}
-    db1_path = (data.get("db1_path") or "").strip()
-    db2_path = (data.get("db2_path") or "").strip()
     table = (data.get("table") or "").strip()
     if not table:
         return jsonify({"error": "table é obrigatório"}), 400
     try:
-        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_table_content")
+        db1, db2 = parse_compare_db_pair_request(data, "compare_db_table_content")
         result = compare_table_content_duckdb(db1, db2, table)
         return jsonify(result)
     except (ValueError, FileNotFoundError) as exc:
@@ -1981,19 +2026,14 @@ def api_compare_db_table_content():
 def api_compare_db_overview():
     """Retorna overview de diferenca por tabela para dois bancos DuckDB."""
     data = request.get_json(silent=True) or {}
-    db1_path = (data.get("db1_path") or "").strip()
-    db2_path = (data.get("db2_path") or "").strip()
-    raw_tables = data.get("tables")
-    tables = None
-    if raw_tables is not None:
-        if not isinstance(raw_tables, list):
-            return jsonify({"error": "tables deve ser uma lista"}), 400
-        tables = [str(item).strip() for item in raw_tables if str(item).strip()]
-
     try:
-        db1, db2 = validate_compare_db_inputs(db1_path, db2_path, "compare_db_overview")
+        tables = parse_compare_overview_tables(data.get("tables"))
+        db1, db2 = parse_compare_db_pair_request(data, "compare_db_overview")
         overview = compare_tables_overview_duckdb(db1, db2, tables=tables)
-        return jsonify({"overview": overview})
+        return jsonify({
+            "overview": overview,
+            "summary": build_compare_overview_summary(overview),
+        })
     except (ValueError, FileNotFoundError) as exc:
         return compare_bad_request(exc)
     except Exception as exc:  # noqa: BLE001
