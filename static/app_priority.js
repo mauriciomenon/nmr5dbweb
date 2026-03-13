@@ -117,6 +117,8 @@ function onTableCheckboxChange(chk) {
 function enableDragAndDrop(listEl) {
   let dragSrc = null;
   Array.from(listEl.children).forEach((li) => {
+    if (li.dataset.dndBound === '1') return;
+    li.dataset.dndBound = '1';
     li.addEventListener('dragstart', (e) => {
       dragSrc = li;
       li.classList.add('dragging');
@@ -154,19 +156,35 @@ function prioMoveDown(btn) {
 
 function prioRemove(btn) {
   const li = btn.closest('li');
+  if (!li || !li.parentNode) return;
   const name = li.dataset.table;
   li.parentNode.removeChild(li);
+  if (!name) return;
   const leftChk = Array.from(
     document.querySelectorAll('#allTablesList input[type=checkbox]')
   ).find((c) => c.getAttribute('data-name') === encodeURIComponent(name));
-  if (leftChk) leftChk.checked = false;
+  if (leftChk) {
+    leftChk.checked = false;
+    return;
+  }
+  const allEl = $('allTablesList');
+  if (!allEl) return;
+  const liOpt = document.createElement('li');
+  liOpt.dataset.table = name;
+  liOpt.innerHTML = `<label style="display:flex;align-items:center;gap:8px;width:100%"><input type="checkbox" data-name="${encodeURIComponent(
+    name
+  )}" onchange="onTableCheckboxChange(this)"> <span style="flex:1">${escapeHtml(
+    name
+  )}</span></label>`;
+  allEl.appendChild(liOpt);
 }
 
 async function savePriority() {
   const listEl = $('priorityListModal');
-  const tables = Array.from(listEl.querySelectorAll('li')).map(
-    (li) => li.dataset.table
-  );
+  if (!listEl) return;
+  const tables = Array.from(listEl.querySelectorAll('li'))
+    .map((li) => li.dataset.table)
+    .filter((name) => typeof name === 'string' && name.length > 0);
   setPriorityStatus('Salvando prioridades...', '');
   setModalBanner(
     'priorityModalBanner',
