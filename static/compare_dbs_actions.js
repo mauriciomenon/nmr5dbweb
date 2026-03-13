@@ -189,6 +189,42 @@ function collectCompareRequest(page = 1) {
   };
 }
 
+function getErrorText(err) {
+  if (err && err.message) return err.message;
+  return String(err || 'erro desconhecido');
+}
+
+async function executeCompareRequest(payload, options) {
+  const compareTimeout = setCompareBusy(
+    options.busyStatus,
+    options.busyFlow,
+    options.busyStep,
+    options.busySlow
+  );
+  try {
+    const data = await postJson('/api/compare_db_rows', payload);
+    renderResult(data);
+    updateLastCompareMeta(data, options.pageForMeta || payload.page || 1);
+    saveCompareState();
+    setCompareStatus(options.successStatus, 'info');
+    setFlowHint(options.successFlow, 'info');
+    setStepState('stepCompare', 'Concluido', 'done');
+    if (options.openStepOnSuccess) {
+      setStepOpen(3);
+    }
+    return true;
+  } catch (err) {
+    console.error(err);
+    const errorText = getErrorText(err);
+    setCompareStatus(options.errorStatusPrefix + ': ' + errorText, 'error');
+    setFlowHint(options.errorFlowPrefix + ': ' + errorText, 'error');
+    setStepState('stepCompare', options.errorStepText, 'warn');
+    return false;
+  } finally {
+    clearCompareBusy(compareTimeout);
+  }
+}
+
 async function runCompare() {
   const summaryEl = document.getElementById('summary');
   const resultsEl = document.getElementById('results');
@@ -236,40 +272,22 @@ async function runCompare() {
   compareDbState.lastCompareMeta = null;
   saveCompareState();
 
-  const compareTimeout = setCompareBusy(
-    'Comparando tabela completa entre A e B (pode levar alguns segundos)...',
-    'Comparando tabela completa entre A e B. Aguarde, dependendo do tamanho pode levar alguns segundos ou minutos.',
-    'Comparando...',
-    'A comparacao esta levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso pode ser esperado. Se travar, tente restringir por chave K.'
-  );
-
-  try {
-    const data = await postJson('/api/compare_db_rows', compareRequest.payload);
-    renderResult(data);
-    updateLastCompareMeta(data, 1);
-    saveCompareState();
-    setCompareStatus('Comparacao concluida.', 'info');
-    setFlowHint(
+  await executeCompareRequest(compareRequest.payload, {
+    busyStatus: 'Comparando tabela completa entre A e B (pode levar alguns segundos)...',
+    busyFlow:
+      'Comparando tabela completa entre A e B. Aguarde, dependendo do tamanho pode levar alguns segundos ou minutos.',
+    busyStep: 'Comparando...',
+    busySlow:
+      'A comparacao esta levando mais de 60 segundos. Se o banco ou a tabela forem muito grandes, isso pode ser esperado. Se travar, tente restringir por chave K.',
+    successStatus: 'Comparacao concluida.',
+    successFlow:
       'Comparacao concluida. Revise o resumo e os detalhes de diferencas abaixo.',
-      'info'
-    );
-    setStepState('stepCompare', 'Concluido', 'done');
-    setStepOpen(3);
-  } catch (err) {
-    console.error(err);
-    setCompareStatus(
-      'Erro ao comparar: ' + (err && err.message ? err.message : String(err)),
-      'error'
-    );
-    setFlowHint(
-      'Erro ao comparar bancos: ' +
-        (err && err.message ? err.message : String(err)),
-      'error'
-    );
-    setStepState('stepCompare', 'Erro ao comparar', 'warn');
-  } finally {
-    clearCompareBusy(compareTimeout);
-  }
+    errorStatusPrefix: 'Erro ao comparar',
+    errorFlowPrefix: 'Erro ao comparar bancos',
+    errorStepText: 'Erro ao comparar',
+    openStepOnSuccess: true,
+    pageForMeta: 1,
+  });
 }
 
 async function changePage(newPage) {
@@ -278,40 +296,20 @@ async function changePage(newPage) {
   compareDbState.lastComparePayload = payload;
   saveCompareState();
 
-  const compareTimeout = setCompareBusy(
-    `Carregando pagina ${newPage}...`,
-    `Carregando pagina ${newPage} dos resultados de comparacao...`,
-    `Carregando pagina ${newPage}...`,
-    'A troca de pagina esta levando mais de 60 segundos. Se a tabela for grande, isso pode ser esperado.'
-  );
-
-  try {
-    const data = await postJson('/api/compare_db_rows', payload);
-    renderResult(data);
-    updateLastCompareMeta(data, newPage);
-    saveCompareState();
-    setCompareStatus('Comparacao concluida.', 'info');
-    setFlowHint(
-      'Resultados atualizados. Continue revisando as diferencas.',
-      'info'
-    );
-    setStepState('stepCompare', 'Concluido', 'done');
-  } catch (err) {
-    console.error(err);
-    setCompareStatus(
-      'Erro ao carregar pagina: ' +
-        (err && err.message ? err.message : String(err)),
-      'error'
-    );
-    setFlowHint(
-      'Erro ao buscar pagina de resultados: ' +
-        (err && err.message ? err.message : String(err)),
-      'error'
-    );
-    setStepState('stepCompare', 'Erro ao carregar pagina', 'warn');
-  } finally {
-    clearCompareBusy(compareTimeout);
-  }
+  await executeCompareRequest(payload, {
+    busyStatus: `Carregando pagina ${newPage}...`,
+    busyFlow: `Carregando pagina ${newPage} dos resultados de comparacao...`,
+    busyStep: `Carregando pagina ${newPage}...`,
+    busySlow:
+      'A troca de pagina esta levando mais de 60 segundos. Se a tabela for grande, isso pode ser esperado.',
+    successStatus: 'Comparacao concluida.',
+    successFlow: 'Resultados atualizados. Continue revisando as diferencas.',
+    errorStatusPrefix: 'Erro ao carregar pagina',
+    errorFlowPrefix: 'Erro ao buscar pagina de resultados',
+    errorStepText: 'Erro ao carregar pagina',
+    openStepOnSuccess: false,
+    pageForMeta: newPage,
+  });
 }
 
 async function fetchAllComparisonRows(basePayload, onProgress) {

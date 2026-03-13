@@ -532,6 +532,53 @@ function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
   };
 }
 
+function buildPriorityAnomalyItems(
+  anomalySignals,
+  riskSignals,
+  valueSignals,
+  domainRiskSignals
+) {
+  const items = [];
+
+  (anomalySignals.highImpact || []).forEach((item) => {
+    items.push({
+      score: Number(item.count || 0) * 4,
+      label: `Chave com alto impacto: ${item.key}`,
+      detail: `${item.count} colunas alteradas`,
+    });
+  });
+
+  (riskSignals.topRiskRows || []).forEach((item) => {
+    items.push({
+      score: Number(item.score || 0) * 3,
+      label: `Risco operacional: ${item.key}`,
+      detail: `${item.score} pontos · ${item.columns || 'sem colunas'}`,
+    });
+  });
+
+  (valueSignals.topNumericDrift || []).forEach((item) => {
+    items.push({
+      score: Number(item.sumAbsDelta || 0),
+      label: `Drift numerico: ${item.column}`,
+      detail: `soma abs ${Number(item.sumAbsDelta || 0).toFixed(2)} · pico ${Number(item.maxSignedDelta || 0).toFixed(2)}`,
+    });
+  });
+
+  (domainRiskSignals.transitionRisk || []).forEach((item) => {
+    const label = item[0];
+    const count = Number(item[1] || 0);
+    items.push({
+      score: count * 2,
+      label: `Transicao concentrada: ${label}`,
+      detail: `${count} ocorrencia(s)`,
+    });
+  });
+
+  return items
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
+}
+
 function pickDomainField(row, candidates) {
   for (const candidate of candidates) {
     const valueA = (row.a || {})[candidate];
@@ -612,6 +659,12 @@ function renderCompareSummary(data, summaryData) {
     summaryData,
     valueSignals,
     riskSignals
+  );
+  const priorityAnomalies = buildPriorityAnomalyItems(
+    anomalySignals,
+    riskSignals,
+    valueSignals,
+    domainRiskSignals
   );
   const totalChanged = Number(summaryData.changed || changedRows.length || 0);
   const totalKeys = Number(summaryData.totalKeys || 0);
@@ -740,6 +793,14 @@ function renderCompareSummary(data, summaryData) {
         )
         .join('')}</div>`
     : '';
+  const priorityAnomaliesHtml = priorityAnomalies.length
+    ? `<div class="result-col-diff"><strong>Anomalias prioritarias (ordenadas por impacto):</strong>${priorityAnomalies
+        .map(
+          (item) =>
+            `<div class="report-review-item"><strong>${safe(item.label)}</strong><span>${safe(item.detail)} · score ${safe(item.score.toFixed(2))}</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -767,6 +828,7 @@ function renderCompareSummary(data, summaryData) {
         ${transitionsHtml ? `<div class="result-col-diff"><strong>Transicoes de estado observadas:</strong>${transitionsHtml}</div>` : ''}
         <div class="result-col-diff"><strong>Indice de divergencia:</strong> ${changedDensity}% das chaves por status alterado</div>
         <div class="result-col-diff"><strong>Prioridade de revisao:</strong> <span class="badge ${severitySignals.badgeClass}">${safe(severitySignals.label)}</span> ${safe(severitySignals.reasonText)}</div>
+        ${priorityAnomaliesHtml}
         ${anomalyHighImpactHtml}
         ${anomalyColsHtml}
         ${anomalyTransitionHtml}
