@@ -265,6 +265,7 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
         ],
     }
     html = render_report_html(payload)
+    assert "Comparacao banco A.accdb com banco B.accdb" in html
     assert "value-added" in html
     assert "value-removed" in html
     assert "background: #fee2e2" not in html
@@ -274,3 +275,5 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "<strong>" not in html
     assert "font-weight: 700" not in html
     assert "pipeline tecnico" in html
+    assert "Bancos utilizados no fluxo" in html
+    assert "duckdb: base SQL principal da comparacao" in html

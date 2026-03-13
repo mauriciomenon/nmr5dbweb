@@ -1020,6 +1020,48 @@ def _source_line_labels(payload: dict) -> tuple[str, str]:
     return label_a, label_b
 
 
+def _report_title(payload: dict) -> str:
+    src_a = payload.get("source_a") or {}
+    src_b = payload.get("source_b") or {}
+    name_a = str(src_a.get("file") or "A")
+    name_b = str(src_b.get("file") or "B")
+    return f"Comparacao banco {name_a} com banco {name_b}"
+
+
+def _source_steps(payload: dict) -> list[str]:
+    src_a = payload.get("source_a") or {}
+    src_b = payload.get("source_b") or {}
+    return [str(step) for step in (list(src_a.get("steps") or []) + list(src_b.get("steps") or []))]
+
+
+def _used_engine_lines(payload: dict) -> list[str]:
+    src_a = payload.get("source_a") or {}
+    src_b = payload.get("source_b") or {}
+    engines = {str(src_a.get("engine") or "").lower(), str(src_b.get("engine") or "").lower()}
+    steps = _source_steps(payload)
+    lines: list[str] = []
+
+    if "access" in engines:
+        lines.append(
+            "db (access mdb/accdb): entrada de dados da comparacao e etapa de conversao inicial."
+        )
+    if "duckdb" in engines:
+        lines.append(
+            "duckdb: origem direta quando informado e base SQL principal da comparacao (overview/detalhe)."
+        )
+    else:
+        lines.append("duckdb: base SQL principal da comparacao (overview/detalhe).")
+
+    sqlite_used = "sqlite" in engines or any(
+        ("duckdb_to_sqlite" in step) or ("sqlite_to_duckdb" in step) for step in steps
+    )
+    if sqlite_used:
+        lines.append(
+            "sqlite: formato de interoperabilidade e etapa de conversao/materializacao quando necessario."
+        )
+    return lines
+
+
 def _html_table_detail(detail: dict, line_a_label: str, line_b_label: str, table_idx: int) -> str:
     key_cols = list(detail.get("key_columns") or [])
     if not key_cols:
@@ -1116,6 +1158,9 @@ def render_report_html(payload: dict) -> str:
     rows = payload["rows"]
     details = payload.get("table_details") or []
     line_a_label, line_b_label = _source_line_labels(payload)
+    report_title = _report_title(payload)
+    used_engines = _used_engine_lines(payload)
+    used_engines_html = "".join([f"<li>{html.escape(item)}</li>" for item in used_engines])
     details_blocks = []
     for idx, detail in enumerate(details):
         details_blocks.append(
@@ -1160,7 +1205,7 @@ def render_report_html(payload: dict) -> str:
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>Comparacao automatizada de bancos</h1>
+      <h1>{html.escape(report_title)}</h1>
       <div class="meta">Gerado em: {html.escape(payload["generated_at"])}</div>
     </div>
     <div class="card">
@@ -1183,6 +1228,12 @@ def render_report_html(payload: dict) -> str:
           <details class="meta meta-detail"><summary>pipeline tecnico</summary>{html.escape(" | ".join(b["steps"]))}</details>
         </div>
       </div>
+    </div>
+    <div class="card">
+      <h2>Bancos utilizados no fluxo</h2>
+      <ul>
+        {used_engines_html}
+      </ul>
     </div>
     <div class="card">
       <h2>Resumo</h2>
@@ -1268,6 +1319,8 @@ def render_report_md(payload: dict) -> str:
     s = payload["summary"]
     details = payload.get("table_details") or []
     line_a_label, line_b_label = _source_line_labels(payload)
+    report_title = _report_title(payload)
+    used_engines = _used_engine_lines(payload)
     src_a_uri = _file_uri(payload["source_a"]["path"])
     src_b_uri = _file_uri(payload["source_b"]["path"])
     duck_a_uri = _file_uri(payload["source_a"]["duckdb"])
@@ -1305,7 +1358,7 @@ def render_report_md(payload: dict) -> str:
         else payload["source_b"]["sqlite"]
     )
     lines = [
-        "# Comparacao automatizada de bancos",
+        f"# {report_title}",
         "",
         f"- gerado_em: {payload['generated_at']}",
         f"- fonte_a: {fonte_a_path} ({payload['source_a']['engine']})",
@@ -1319,6 +1372,13 @@ def render_report_md(payload: dict) -> str:
         f"- sqlite_a: {sqlite_a_path}",
         f"- sqlite_b: {sqlite_b_path}",
         "",
+        "## Bancos utilizados no fluxo",
+        "",
+    ]
+    lines.extend([f"- {item}" for item in used_engines])
+    lines.extend(
+        [
+            "",
         "## Resumo",
         "",
         f"- tabelas_comuns: {s['total_tables']}",
@@ -1331,7 +1391,8 @@ def render_report_md(payload: dict) -> str:
         "",
         "| tabela | status | rows_a | rows_b | diff_count | error |",
         "|---|---:|---:|---:|---:|---|",
-    ]
+        ]
+    )
     for row in payload["rows"]:
         status_label = _status_label(str(row.get("status") or ""))
         lines.append(
@@ -1391,8 +1452,10 @@ def render_report_txt(payload: dict) -> str:
     s = payload["summary"]
     details = payload.get("table_details") or []
     line_a_label, line_b_label = _source_line_labels(payload)
+    report_title = _report_title(payload)
+    used_engines = _used_engine_lines(payload)
     out = [
-        "COMPARACAO AUTOMATIZADA DE BANCOS",
+        report_title,
         f"Gerado em: {payload['generated_at']}",
         "",
         f"A: {payload['source_a']['path']} ({payload['source_a']['engine']})",
@@ -1404,6 +1467,12 @@ def render_report_txt(payload: dict) -> str:
         f"   duckdb: {payload['source_b']['duckdb']}",
         f"   sqlite: {payload['source_b']['sqlite']}",
         "",
+        "BANCOS UTILIZADOS NO FLUXO",
+    ]
+    out.extend([f"  - {item}" for item in used_engines])
+    out.extend(
+        [
+            "",
         "RESUMO",
         f"  tabelas_comuns: {s['total_tables']}",
         f"  same_tables: {s['same_tables']}",
@@ -1412,7 +1481,8 @@ def render_report_txt(payload: dict) -> str:
         f"  error_tables: {s['error_tables']}",
         "",
         "TABELAS COM ALTERACAO",
-    ]
+        ]
+    )
     for row in payload["rows"]:
         status_label = _status_label(str(row.get("status") or ""))
         out.append(
