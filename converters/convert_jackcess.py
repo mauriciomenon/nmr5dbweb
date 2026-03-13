@@ -3,31 +3,19 @@
 import argparse
 import duckdb
 import subprocess
-import re
 import sys
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, List
 
-
-def extract_date_from_filename(filename: str) -> Optional[str]:
-    patterns = [
-        r"(\d{2})[_-](\d{2})[_-](\d{4})",
-        r"(\d{4})[_-](\d{2})[_-](\d{2})",
-        r"(\d{2})(\d{2})(\d{4})",
-        r"(\d{4})(\d{2})(\d{2})",
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, filename)
-        if match:
-            groups = match.groups()
-            if len(groups[0]) == 4:
-                return f"{groups[0]}-{groups[1]}-{groups[2]}"
-            else:
-                return f"{groups[2]}-{groups[1]}-{groups[0]}"
-
-    return None
+try:
+    from converters.common import (
+        extract_date_from_filename,
+        list_access_files,
+        validate_cli_input,
+    )
+except ModuleNotFoundError:
+    from common import extract_date_from_filename, list_access_files, validate_cli_input
 
 
 def get_jackcess_classpath():
@@ -248,9 +236,7 @@ def import_to_duckdb(
 
 
 def batch_import(input_dir: Path, duckdb_file: Path):
-    mdb_files = sorted(
-        list(input_dir.glob("*.mdb")) + list(input_dir.glob("*.accdb"))
-    )
+    mdb_files = list_access_files(input_dir)
 
     if not mdb_files:
         print(f"No MDB/ACCDB files found in {input_dir}")
@@ -288,23 +274,16 @@ def main():
 
     args = parser.parse_args()
 
-    if not args.input:
+    input_error = validate_cli_input(args.input, args.batch)
+    if input_error == "missing_input":
         parser.print_help()
         sys.exit(1)
-
-    if not args.input.exists():
-        print(f"Error: {args.input} not found")
+    if input_error:
+        print(input_error)
         sys.exit(1)
-
     if args.batch:
-        if not args.input.is_dir():
-            print("Error: --batch requires --input to be a directory")
-            sys.exit(1)
         batch_import(args.input, args.output)
     else:
-        if not args.input.is_file():
-            print("Error: --input must be a MDB/ACCDB file")
-            sys.exit(1)
         import_to_duckdb(args.input, args.output)
 
 
