@@ -26,7 +26,7 @@ class _AccessParserNoiseFilter(logging.Filter):
             message = record.getMessage()
         except Exception:
             return True
-        if "has no data" in str(message):
+        if is_access_parser_no_data_message(message):
             return False
         return True
 
@@ -68,7 +68,34 @@ def list_access_tables_from_parser(parser) -> List[str]:
                 tables = [str(name) for name in parsed_tables.keys()]
     except Exception:
         tables = []
-    return [name for name in tables if name and not str(name).startswith("MSys")]
+    seen = set()
+    out = []
+    for name in tables:
+        text = str(name or "").strip()
+        if not text:
+            continue
+        if text.startswith("MSys"):
+            continue
+        if text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return out
+
+
+def is_access_parser_no_data_message(message: Any) -> bool:
+    text = str(message or "").strip().lower()
+    if not text:
+        return False
+    patterns = (
+        "has no data",
+        "no data",
+        "sem dados",
+        "tabela vazia",
+        "table empty",
+        "no rows",
+    )
+    return any(token in text for token in patterns)
 
 
 def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
@@ -101,6 +128,32 @@ def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
             return []
         if isinstance(parsed[0], dict):
             return [dict(row) for row in parsed]
+        normalized_rows: List[Dict[str, Any]] = []
+        for row in parsed:
+            if isinstance(row, dict):
+                normalized_rows.append(dict(row))
+                continue
+            if hasattr(row, "_asdict"):
+                try:
+                    normalized_rows.append(dict(row._asdict()))
+                    continue
+                except Exception:
+                    pass
+            if isinstance(row, (list, tuple)):
+                normalized_rows.append(
+                    {f"col_{idx}": value for idx, value in enumerate(row)}
+                )
+                continue
+            if hasattr(row, "__dict__"):
+                try:
+                    raw = dict(vars(row))
+                    if raw:
+                        normalized_rows.append(raw)
+                        continue
+                except Exception:
+                    pass
+            normalized_rows.append({"value": row})
+        return normalized_rows
     if hasattr(parsed, "to_dict"):
         try:
             data = parsed.to_dict(orient="records")

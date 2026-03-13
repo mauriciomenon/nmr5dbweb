@@ -3,6 +3,7 @@
 # Now supports progress_callback(progress_dict) to report progress during conversion.
 #
 import os
+import json
 import subprocess
 import tempfile
 import shutil
@@ -11,6 +12,7 @@ import pandas as pd
 import logging
 from interface.access_parser_utils import (
     ensure_access_parser_logging,
+    is_access_parser_no_data_message,
     list_access_tables_from_parser,
     load_access_parser_module,
     normalize_access_parser_rows,
@@ -27,15 +29,33 @@ def _access_parser_allow_skips() -> bool:
 
 
 def _is_access_parser_no_data_error(message: str) -> bool:
-    text = str(message or "").strip().lower()
-    if not text:
-        return False
-    return (
-        "has no data" in text
-        or "no data" in text
-        or "tabela vazia" in text
-        or "table empty" in text
-    )
+    return is_access_parser_no_data_message(message)
+
+
+def _sanitize_parser_value(value):
+    if isinstance(value, (dict, list, tuple, set)):
+        try:
+            return json.dumps(value, ensure_ascii=True, sort_keys=True)
+        except Exception:
+            return str(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        try:
+            return bytes(value).hex()
+        except Exception:
+            return str(value)
+    return value
+
+
+def _sanitize_parser_rows(rows):
+    safe_rows = []
+    for row in rows:
+        if not isinstance(row, dict):
+            safe_rows.append({"value": _sanitize_parser_value(row)})
+            continue
+        safe_rows.append(
+            {str(col): _sanitize_parser_value(val) for col, val in row.items()}
+        )
+    return safe_rows
 
 
 def _ensure_clean_duckdb(path):
@@ -288,7 +308,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     parsed = db.parse_table(table_name)
                     rows = normalize_access_parser_rows(parsed)
                     if rows:
-                        frame = pd.DataFrame(rows)
+                        frame = pd.DataFrame(_sanitize_parser_rows(rows))
                     elif isinstance(parsed, dict) and parsed:
                         frame = pd.DataFrame(columns=[str(col) for col in parsed.keys()])
                     else:

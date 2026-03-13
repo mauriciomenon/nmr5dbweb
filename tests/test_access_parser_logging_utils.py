@@ -1,7 +1,10 @@
 import io
 import logging
 
-from interface.access_parser_utils import ensure_access_parser_logging
+from interface.access_parser_utils import (
+    ensure_access_parser_logging,
+    is_access_parser_no_data_message,
+)
 
 
 def _capture_access_parser_output(message_one, message_two, configure_filter=True):
@@ -47,3 +50,12 @@ def test_access_parser_noise_visible_in_verbose_mode(monkeypatch):
     )
     assert "has no data" in output
     assert "warning kept" in output
+
+
+def test_is_access_parser_no_data_message_variants():
+    assert is_access_parser_no_data_message("Table X has no data")
+    assert is_access_parser_no_data_message("TABLE X NO DATA")
+    assert is_access_parser_no_data_message("tabela vazia")
+    assert is_access_parser_no_data_message("sem dados")
+    assert is_access_parser_no_data_message("No rows returned")
+    assert not is_access_parser_no_data_message("table loaded successfully")

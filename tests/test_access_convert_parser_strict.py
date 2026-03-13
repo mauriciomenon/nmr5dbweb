@@ -89,3 +89,30 @@ def test_access_parser_no_data_errors_are_not_counted_as_skips(tmp_path, monkeyp
     assert ok is True
     assert "converted via access-parser" in msg
     assert "skipped" not in msg
+
+
+def test_access_parser_complex_values_are_sanitized(tmp_path, monkeypatch):
+    monkeypatch.delenv("NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS", raising=False)
+
+    def parse_impl(_table_name):
+        return {
+            "id": [1],
+            "meta": [{"a": 1, "b": [2, 3]}],
+            "raw": [b"\x01\x02"],
+        }
+
+    monkeypatch.setattr(conv, "load_access_parser_module", lambda: (_build_fake_module(parse_impl), None))
+
+    out = tmp_path / "complex_values.duckdb"
+    ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=False)
+
+    assert ok is True
+    assert "converted via access-parser" in msg
+    conn = duckdb.connect(str(out), read_only=True)
+    try:
+        row = conn.execute('SELECT meta, raw FROM "t_ok"').fetchone()
+    finally:
+        conn.close()
+    assert isinstance(row[0], str)
+    assert '"a": 1' in row[0]
+    assert row[1] == "0102"
