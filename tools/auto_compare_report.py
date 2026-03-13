@@ -22,6 +22,7 @@ import html
 import os
 import re
 import sqlite3
+from decimal import Decimal
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -90,6 +91,7 @@ SOANLG_ALWAYS_COLUMNS = [
     "LLIM6",
     "ITEMNB",
 ]
+INTEGER_DISPLAY_COLUMNS = {"RTUNO", "PNTNO"}
 
 
 @dataclass(frozen=True)
@@ -646,6 +648,41 @@ def _forced_columns_for_table(table_name: str, table_columns: Sequence[str]) -> 
     return _resolve_desired_columns(GLOBAL_ALWAYS_COLUMNS, table_columns)
 
 
+def _format_numeric_as_int_text(value) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        return str(value)
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return str(int(value))
+        normalized = format(value.normalize(), "f")
+        return normalized.rstrip("0").rstrip(".") if "." in normalized else normalized
+    text = str(value).strip()
+    if not text:
+        return ""
+    if re.match(r"^-?\d+\.0+$", text):
+        return str(int(float(text)))
+    if re.match(r"^-?\d+\.$", text):
+        return text[:-1]
+    return text
+
+
+def _format_display_value(column: str, value):
+    norm_col = _normalize_col_key(column)
+    if norm_col in INTEGER_DISPLAY_COLUMNS:
+        return _format_numeric_as_int_text(value)
+    if value is None:
+        return ""
+    return value
+
+
 def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[str]) -> dict:
     table = str(compare_payload.get("table") or "")
     rows = list(compare_payload.get("rows") or [])
@@ -692,8 +729,8 @@ def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[st
         for col in visible_cols:
             old_v = a_vals.get(col, "")
             new_v = b_vals.get(col, "")
-            old_row[col] = old_v
-            new_row[col] = new_v
+            old_row[col] = _format_display_value(col, old_v)
+            new_row[col] = _format_display_value(col, new_v)
             if row_type == "changed":
                 changed_map[col] = old_v != new_v
             elif row_type == "added":

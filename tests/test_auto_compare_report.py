@@ -165,8 +165,24 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
             {
                 "type": "changed",
                 "key": {"UNIQID": "X2"},
-                "a": {"BIAS": 0.0, "SCALE": 1.0, "HLIM5": 2.0, "LLIM5": 0.0, "ITEMNB": 5},
-                "b": {"BIAS": 0.1, "SCALE": 1.0, "HLIM5": 2.0, "LLIM5": 0.0, "ITEMNB": 5},
+                "a": {
+                    "RTUNO": "105.",
+                    "PNTNO": "172.",
+                    "BIAS": 0.0,
+                    "SCALE": 1.0,
+                    "HLIM5": 2.0,
+                    "LLIM5": 0.0,
+                    "ITEMNB": 5,
+                },
+                "b": {
+                    "RTUNO": "105.",
+                    "PNTNO": "172.",
+                    "BIAS": 0.1,
+                    "SCALE": 1.0,
+                    "HLIM5": 2.0,
+                    "LLIM5": 0.0,
+                    "ITEMNB": 5,
+                },
             }
         ],
     }
@@ -187,6 +203,9 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
         "LLIM6",
         "ITEMNB",
     ]
+    row_new = detail["records"][0]["new"]
+    assert row_new["RTUNO"] == "105"
+    assert row_new["PNTNO"] == "172"
 
 
 def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> None:
