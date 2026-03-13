@@ -703,3 +703,50 @@ def test_api_compare_db_table_content_rejeita_arquivo_ausente(tmp_path):
 
     assert resp.status_code == 400
     assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]
+
+
+def test_api_compare_db_rows_rejeita_engine_nao_duckdb(tmp_path):
+    client = app.test_client()
+    db_sqlite = tmp_path / "a.sqlite3"
+    db_duck = tmp_path / "b.duckdb"
+
+    conn_sqlite = sqlite3.connect(db_sqlite)
+    conn_sqlite.execute("CREATE TABLE T(id INTEGER, valor TEXT)")
+    conn_sqlite.execute("INSERT INTO T VALUES (1, 'a')")
+    conn_sqlite.commit()
+    conn_sqlite.close()
+
+    conn_duck = duckdb.connect(str(db_duck))
+    conn_duck.execute("CREATE TABLE T(id INTEGER, valor TEXT)")
+    conn_duck.execute("INSERT INTO T VALUES (1, 'a')")
+    conn_duck.close()
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db_sqlite),
+            "db2_path": str(db_duck),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "engine nao suportada" in resp.get_json()["error"]
+
+
+def test_api_compare_db_tables_rejeita_quando_path_nao_e_arquivo(tmp_path):
+    client = app.test_client()
+    db1_dir = tmp_path / "not_a_file"
+    db1_dir.mkdir()
+    db2 = tmp_path / "db2.duckdb"
+    duckdb.connect(str(db2)).close()
+
+    resp = client.post(
+        "/api/compare_db_tables",
+        json={"db1_path": str(db1_dir), "db2_path": str(db2)},
+    )
+
+    assert resp.status_code == 400
+    assert "esperado arquivo" in resp.get_json()["error"]

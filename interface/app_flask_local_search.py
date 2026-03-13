@@ -490,22 +490,51 @@ def list_child_directories(base_path):
     return {"entries": entries, "parent": parent, "path": str(path)}
 
 
-def validate_compare_db_inputs(db1_path, db2_path, route_name):
+def validate_compare_db_inputs(db1_path, db2_path, route_name, *, allowed_engines=None):
     if not db1_path or not db2_path:
-        raise ValueError("db1_path e db2_path são obrigatórios")
+        raise ValueError("db1_path e db2_path sao obrigatorios")
 
-    db1 = Path(db1_path)
-    db2 = Path(db2_path)
+    if allowed_engines is None:
+        allowed_engines = {"duckdb"}
+    allowed_engines = {str(engine).strip().lower() for engine in allowed_engines if str(engine).strip()}
+
+    raw_paths = {
+        "db1_path": Path(db1_path).expanduser().resolve(strict=False),
+        "db2_path": Path(db2_path).expanduser().resolve(strict=False),
+    }
     missing = []
-    if not db1.exists():
-        missing.append(str(db1))
-    if not db2.exists():
-        missing.append(str(db2))
+    not_files = []
+    unsupported = []
+    for field, path in raw_paths.items():
+        if not path.exists():
+            missing.append(str(path))
+            continue
+        if not path.is_file():
+            not_files.append(f"{field}={path}")
+            continue
+        engine = detect_db_engine(path)
+        if allowed_engines and engine not in allowed_engines:
+            engine_name = engine or "desconhecido"
+            unsupported.append(f"{field}={path} ({engine_name})")
+
     if missing:
         message = "arquivo(s) não encontrado(s): " + ", ".join(missing)
         app.logger.warning("%s: %s", route_name, message)
         raise FileNotFoundError(message)
-    return db1, db2
+    if not_files:
+        message = "caminho invalido (esperado arquivo): " + ", ".join(not_files)
+        app.logger.warning("%s: %s", route_name, message)
+        raise ValueError(message)
+    if unsupported:
+        allowed = ", ".join(sorted(allowed_engines))
+        message = (
+            "engine nao suportada para comparacao direta; converta para DuckDB antes de comparar. "
+            f"Permitido(s): {allowed}. Recebido(s): {', '.join(unsupported)}"
+        )
+        app.logger.warning("%s: %s", route_name, message)
+        raise ValueError(message)
+
+    return raw_paths["db1_path"], raw_paths["db2_path"]
 
 
 def get_current_db_context_response(*, require_selected=False, require_exists=False, allowed_engines=None):
