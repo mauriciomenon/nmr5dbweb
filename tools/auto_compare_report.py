@@ -85,9 +85,7 @@ SOANLG_ALWAYS_COLUMNS = [
     "BIAS",
     "SCALE",
     "ENGINX",
-    "HLIM5",
     "HLIM6",
-    "LLIM5",
     "LLIM6",
     "ITEMNB",
 ]

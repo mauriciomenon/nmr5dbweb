@@ -198,9 +198,7 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
         "BIAS",
         "SCALE",
         "ENGINX",
-        "HLIM5",
         "HLIM6",
-        "LLIM5",
         "LLIM6",
         "ITEMNB",
     ]
@@ -210,6 +208,28 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
     assert row_new["PNTNO"] == "172"
     assert row_old["BIAS"] == "0"
     assert row_new["BIAS"] == "0.1"
+
+
+def test_build_table_detail_compact_soanlg_mantem_hlim5_llim5_quando_mudam() -> None:
+    payload = {
+        "table": "RANGER_SOANLG",
+        "key_columns": ["UNIQID"],
+        "compare_columns": ["BIAS", "SCALE", "HLIM5", "LLIM5", "ITEMNB"],
+        "rows": [
+            {
+                "type": "changed",
+                "key": {"UNIQID": "X3"},
+                "a": {"RTUNO": 101, "PNTNO": 202, "BIAS": 0.0, "SCALE": 1.0, "HLIM5": 1.5, "LLIM5": 0.0, "ITEMNB": 7},
+                "b": {"RTUNO": 101, "PNTNO": 202, "BIAS": 0.0, "SCALE": 1.0, "HLIM5": 2.5, "LLIM5": -1.0, "ITEMNB": 7},
+            }
+        ],
+    }
+    detail = build_table_detail_compact(
+        payload,
+        ["RTUNO", "PNTNO", "PNTNAM", "BIAS", "SCALE", "ENGINX", "HLIM5", "HLIM6", "LLIM5", "LLIM6", "ITEMNB"],
+    )
+    assert "HLIM5" in detail["visible_columns"]
+    assert "LLIM5" in detail["visible_columns"]
 
 
 def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> None:
