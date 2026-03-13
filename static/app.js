@@ -1080,6 +1080,17 @@ function getFileStatusText(file) {
   return flags.join(', ');
 }
 
+function buildFileRenderData(file, currentName) {
+  const name = file && file.name ? file.name : '';
+  const isSelected = currentName && currentName === String(name).toLowerCase();
+  return {
+    name,
+    isSelected,
+    metaText: escapeHtml(getFileMetaText(file)),
+    statusText: escapeHtml(getFileStatusText(file)),
+  };
+}
+
 function renderFilesMain() {
   const list = getSortedUploads(lastUploads);
   const currentName = shortName(currentDb || '').toLowerCase();
@@ -1093,11 +1104,9 @@ function renderFilesMain() {
   }
   el.innerHTML = list
     .map((f) => {
-      const name = f && f.name ? f.name : '';
-      const isSelected =
-        currentName && currentName === String(name).toLowerCase();
-      const metaText = escapeHtml(getFileMetaText(f));
-      const statusText = escapeHtml(getFileStatusText(f));
+      const row = buildFileRenderData(f, currentName);
+      const name = row.name;
+      const isSelected = row.isSelected;
       const typeLabel = escapeHtml(getFlowFromName(name) || 'outro');
       const badge = '<span class="file-badge">' + typeLabel + '</span>';
       const selectedBadge = isSelected
@@ -1106,8 +1115,8 @@ function renderFilesMain() {
       return `<div class="file-row${isSelected ? ' selected' : ''}">
       <div>
         <div class="file-name"><span class="file-name-text">${escapeHtml(name)}</span> ${badge} ${selectedBadge}</div>
-        <div class="file-meta">${metaText}</div>
-        <div class="file-status">${statusText}</div>
+        <div class="file-meta">${row.metaText}</div>
+        <div class="file-status">${row.statusText}</div>
       </div>
       <div class="file-actions">
         <a href="/uploads/${encodeURIComponent(name)}" download class="btn ghost small" title="Salvar arquivo">Salvar</a>
@@ -1131,11 +1140,9 @@ function renderFilesSelect() {
   }
   el.innerHTML = list
     .map((f) => {
-      const name = f && f.name ? f.name : '';
-      const isSelected =
-        currentName && currentName === String(name).toLowerCase();
-      const metaText = escapeHtml(getFileMetaText(f));
-      const statusText = escapeHtml(getFileStatusText(f));
+      const row = buildFileRenderData(f, currentName);
+      const name = row.name;
+      const isSelected = row.isSelected;
       const selectLabel = isSelected ? 'Selecionado' : 'Selecionar';
       const selectClass = isSelected
         ? 'btn select-btn selected'
@@ -1149,8 +1156,8 @@ function renderFilesSelect() {
       return `<div class="upload-row${isSelected ? ' selected' : ''}" ${rowClick}>
       <div>
         <div style="font-weight:600">${escapeHtml(name)} ${isSelected ? '<span class="selected-badge">Selecionado</span>' : ''}</div>
-        <div class="file-meta">${metaText}</div>
-        <div class="file-status">${statusText}</div>
+        <div class="file-meta">${row.metaText}</div>
+        <div class="file-status">${row.statusText}</div>
       </div>
       <div class="file-actions">
         <button class="${selectClass}" ${selectAction} title="Selecionar este DB">${selectLabel}</button>

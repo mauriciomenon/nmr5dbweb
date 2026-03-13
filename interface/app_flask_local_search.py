@@ -1810,6 +1810,30 @@ def run_access_parser_fallback(
     )
 
 
+def build_access_search_common_args(
+    q,
+    per_table,
+    candidate_limit,
+    total_limit,
+    token_mode,
+    min_score,
+    requested_tables,
+    max_tables,
+    max_rows_per_table,
+):
+    return {
+        "q": q,
+        "per_table": per_table,
+        "candidate_limit": candidate_limit,
+        "total_limit": total_limit,
+        "token_mode": token_mode,
+        "min_score": min_score,
+        "requested_tables": requested_tables,
+        "max_tables": max_tables,
+        "max_rows_per_table": max_rows_per_table,
+    }
+
+
 def select_access_search_columns(columns):
     text_columns = [
         column_name
@@ -2664,19 +2688,23 @@ def fallback_search_access(
     max_rows_per_table=2000,
 ):
     requested_tables = normalize_requested_tables(tables)
+    parser_args = build_access_search_common_args(
+        q,
+        per_table,
+        candidate_limit,
+        total_limit,
+        token_mode,
+        min_score,
+        requested_tables,
+        max_tables,
+        max_rows_per_table,
+    )
+
+    def _run_parser_fallback():
+        return run_access_parser_fallback(access_path, **parser_args)
+
     if pyodbc is None:
-        return run_access_parser_fallback(
-            access_path,
-            q,
-            per_table=per_table,
-            candidate_limit=candidate_limit,
-            total_limit=total_limit,
-            token_mode=token_mode,
-            min_score=min_score,
-            requested_tables=requested_tables,
-            max_tables=max_tables,
-            max_rows_per_table=max_rows_per_table,
-        )
+        return _run_parser_fallback()
     q_norm = normalize_text(q)
     tokens = [t for t in q_norm.split() if t]
     results = {}
@@ -2688,18 +2716,7 @@ def fallback_search_access(
             conn = connect_access_odbc(access_path, timeout=30)
         except RuntimeError as exc:
             last_err = str(exc).replace("ODBC connect failed: ", "", 1)
-            parser_payload = run_access_parser_fallback(
-                access_path,
-                q,
-                per_table=per_table,
-                candidate_limit=candidate_limit,
-                total_limit=total_limit,
-                token_mode=token_mode,
-                min_score=min_score,
-                requested_tables=requested_tables,
-                max_tables=max_tables,
-                max_rows_per_table=max_rows_per_table,
-            )
+            parser_payload = _run_parser_fallback()
             if isinstance(parser_payload, dict) and not parser_payload.get("error"):
                 return parser_payload
             parser_err = ""
@@ -2819,53 +2836,71 @@ def fallback_search_access(
                 pass
 
 
+def dispatch_search_by_engine(db_engine, db_path, search_args):
+    q = search_args["q"]
+    per_table = search_args["per_table"]
+    candidate_limit = search_args["candidate_limit"]
+    total_limit = search_args["total_limit"]
+    token_mode = search_args["token_mode"]
+    min_score = search_args["min_score"]
+    tables = search_args["tables"]
+
+    if db_engine == "duckdb":
+        return api_search_duckdb(
+            db_path,
+            q,
+            per_table,
+            candidate_limit,
+            total_limit,
+            token_mode,
+            min_score,
+            tables=tables,
+        )
+    if db_engine == "sqlite":
+        return fallback_search_sqlite(
+            db_path,
+            q,
+            per_table=per_table,
+            candidate_limit=candidate_limit,
+            total_limit=total_limit,
+            token_mode=token_mode,
+            min_score=min_score,
+            tables=tables,
+        )
+    if db_engine == "access":
+        return fallback_search_access(
+            db_path,
+            q,
+            per_table=per_table,
+            candidate_limit=candidate_limit,
+            total_limit=total_limit,
+            token_mode=token_mode,
+            min_score=min_score,
+            tables=tables,
+        )
+    return None
+
+
 def run_search_for_context(ctx, search_args):
     def _as_search_error(payload, status_code=500):
         if isinstance(payload, dict) and payload.get("error"):
             return {"error": str(payload.get("error"))}, status_code
         return None
 
-    if ctx["db_engine"] == "duckdb":
-        payload = api_search_duckdb(
-            ctx["db_path"],
-            search_args["q"],
-            search_args["per_table"],
-            search_args["candidate_limit"],
-            search_args["total_limit"],
-            search_args["token_mode"],
-            search_args["min_score"],
-            tables=search_args["tables"],
-        )
+    def _finish_standard_backend(payload, backend_name):
         err = _as_search_error(payload, 500)
         if err is not None:
             return err
-        return attach_search_backend(payload, "duckdb_fulltext"), None
-    if ctx["db_engine"] == "sqlite":
-        payload = fallback_search_sqlite(
-            ctx["db_path"],
-            search_args["q"],
-            per_table=search_args["per_table"],
-            candidate_limit=search_args["candidate_limit"],
-            total_limit=search_args["total_limit"],
-            token_mode=search_args["token_mode"],
-            min_score=search_args["min_score"],
-            tables=search_args["tables"],
-        )
-        err = _as_search_error(payload, 500)
-        if err is not None:
-            return err
-        return attach_search_backend(payload, "sqlite_scan"), None
-    if ctx["db_engine"] == "access":
-        payload = fallback_search_access(
-            ctx["db_path"],
-            search_args["q"],
-            per_table=search_args["per_table"],
-            candidate_limit=search_args["candidate_limit"],
-            total_limit=search_args["total_limit"],
-            token_mode=search_args["token_mode"],
-            min_score=search_args["min_score"],
-            tables=search_args["tables"],
-        )
+        return attach_search_backend(payload, backend_name), None
+
+    db_engine = ctx["db_engine"]
+    payload = dispatch_search_by_engine(db_engine, ctx["db_path"], search_args)
+
+    if db_engine == "duckdb":
+        return _finish_standard_backend(payload, "duckdb_fulltext")
+    if db_engine == "sqlite":
+        return _finish_standard_backend(payload, "sqlite_scan")
+    if db_engine == "access":
         if isinstance(payload, dict) and payload.get("error"):
             error_text = str(payload.get("error") or "")
             lowered = error_text.lower()
