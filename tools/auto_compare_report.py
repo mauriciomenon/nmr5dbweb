@@ -673,13 +673,41 @@ def _format_numeric_as_int_text(value) -> str:
     return text
 
 
+def _format_generic_numeric_text(value):
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "1" if value else "0"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value.is_integer():
+            return str(int(value))
+        text = format(value, ".15g")
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return str(int(value))
+        text = format(value.normalize(), "f")
+        return text.rstrip("0").rstrip(".") if "." in text else text
+    text = str(value).strip()
+    if not text:
+        return ""
+    if re.match(r"^-?\d+\.0+$", text):
+        return str(int(float(text)))
+    if re.match(r"^-?\d+\.$", text):
+        return text[:-1]
+    if re.match(r"^-?\d+\.\d+$", text):
+        stripped = text.rstrip("0").rstrip(".")
+        return stripped if stripped else "0"
+    return text
+
+
 def _format_display_value(column: str, value):
     norm_col = _normalize_col_key(column)
     if norm_col in INTEGER_DISPLAY_COLUMNS:
         return _format_numeric_as_int_text(value)
-    if value is None:
-        return ""
-    return value
+    return _format_generic_numeric_text(value)
 
 
 def build_table_detail_compact(compare_payload: dict, table_columns: Sequence[str]) -> dict:
@@ -1076,8 +1104,8 @@ def render_report_html(payload: dict) -> str:
     body {{ font-family: "Segoe UI", Tahoma, Arial, sans-serif; margin: 24px; color: #1f2937; background: #ffffff; }}
     .wrap {{ max-width: 1200px; margin: 0 auto; }}
     .card {{ background: #fff; border: 1px solid #dbe3ef; border-radius: 12px; padding: 16px; margin-bottom: 16px; }}
-    h1 {{ margin: 0 0 10px; font-size: 24px; }}
-    h2 {{ margin: 0 0 8px; font-size: 18px; }}
+    h1 {{ margin: 0 0 10px; font-size: 24px; font-weight: 500; }}
+    h2 {{ margin: 0 0 8px; font-size: 18px; font-weight: 500; }}
     .meta {{ color: #4b5563; font-size: 13px; }}
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 12px; }}
     .kpi {{ display: flex; gap: 12px; flex-wrap: wrap; }}
@@ -1086,9 +1114,9 @@ def render_report_html(payload: dict) -> str:
     th, td {{ border: 1px solid #dbe3ef; padding: 8px; text-align: left; vertical-align: top; }}
     th {{ background: #eff6ff; position: sticky; top: 0; }}
     table.detail th {{ position: static; }}
-    .value-added {{ color: #0b7a0b; font-weight: 700; }}
-    .value-removed {{ color: #c00000; font-weight: 700; }}
-    .value-changed {{ color: #7a1f1f; font-weight: 700; }}
+    .value-added {{ color: #0b7a0b; font-weight: 400; }}
+    .value-removed {{ color: #c00000; font-weight: 400; }}
+    .value-changed {{ color: #7a1f1f; font-weight: 400; }}
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
     .filter-row th {{ background: #ffffff; }}
     .col-filter-input {{ width: 95%; min-width: 90px; font-size: 12px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; }}
@@ -1104,7 +1132,7 @@ def render_report_html(payload: dict) -> str:
       <h2>Fontes</h2>
       <div class="grid">
         <div>
-          <strong>A:</strong> {html.escape(a["file"])} ({html.escape(a["engine"])})<br/>
+          A: {html.escape(a["file"])} ({html.escape(a["engine"])})<br/>
           <span class="meta">{html.escape(a["path"])}</span><br/>
           <span class="meta">size: {html.escape(str(a["size_bytes"]))} bytes | mtime: {html.escape(a["mtime"])}</span><br/>
           <span class="meta">duckdb: {html.escape(a["duckdb"])}</span><br/>
@@ -1112,7 +1140,7 @@ def render_report_html(payload: dict) -> str:
           <span class="meta">steps: {html.escape(" | ".join(a["steps"]))}</span>
         </div>
         <div>
-          <strong>B:</strong> {html.escape(b["file"])} ({html.escape(b["engine"])})<br/>
+          B: {html.escape(b["file"])} ({html.escape(b["engine"])})<br/>
           <span class="meta">{html.escape(b["path"])}</span><br/>
           <span class="meta">size: {html.escape(str(b["size_bytes"]))} bytes | mtime: {html.escape(b["mtime"])}</span><br/>
           <span class="meta">duckdb: {html.escape(b["duckdb"])}</span><br/>

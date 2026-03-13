@@ -205,8 +205,11 @@ def test_build_table_detail_compact_soanlg_forca_colunas_padrao() -> None:
         "ITEMNB",
     ]
     row_new = detail["records"][0]["new"]
+    row_old = detail["records"][0]["old"]
     assert row_new["RTUNO"] == "105"
     assert row_new["PNTNO"] == "172"
+    assert row_old["BIAS"] == "0"
+    assert row_new["BIAS"] == "0.1"
 
 
 def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> None:
@@ -268,3 +271,5 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "col-filter-input" in html
     assert "db 2026-03-13" in html
     assert "<th>UNIQID</th>" in html
+    assert "<strong>" not in html
+    assert "font-weight: 700" not in html
