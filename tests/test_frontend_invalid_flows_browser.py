@@ -1,12 +1,20 @@
 import threading
 from contextlib import contextmanager
+import json
 
 import pytest
-import duckdb
 import sqlite3
 from playwright.sync_api import sync_playwright
 from playwright._impl._errors import Error as PlaywrightError
 from werkzeug.serving import make_server
+
+try:
+    import duckdb
+except ImportError:  # pragma: no cover
+    duckdb = None
+
+if duckdb is None:
+    pytest.skip("duckdb ausente, testes de UI com backend duckdb ignorados", allow_module_level=True)
 
 import interface.app_flask_local_search as local_search
 
@@ -64,6 +72,12 @@ def ui_server(tmp_path, monkeypatch):
 def sample_data(tmp_path, monkeypatch):
     search_db = tmp_path / "search.duckdb"
     conn = duckdb.connect(str(search_db))
+    conn.execute("CREATE TABLE signals (id INTEGER, name VARCHAR, note VARCHAR)")
+    rows = []
+    for i in range(1, 181):
+        name = "alpha" if i == 1 else f"item-{i:03d}"
+        rows.append((i, name, f"item de teste {i}"))
+    conn.executemany("INSERT INTO signals VALUES (?, ?, ?)", rows)
     conn.execute(
         "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
     )
@@ -71,6 +85,14 @@ def sample_data(tmp_path, monkeypatch):
         "INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)",
         ["signals", "id", "1", 0, "alpha aux_unidad svp", '{"id": 1, "name": "alpha"}'],
     )
+    conn.execute("INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)", [
+        "signals",
+        "id",
+        "2",
+        1,
+        "beta aux_unidad",
+        json.dumps({"id": 2, "name": "item-002"}),
+    ])
     conn.close()
 
     sqlite_search_db = tmp_path / "search.sqlite3"
@@ -200,6 +222,43 @@ def test_success_frontend_smoke_search_page_sqlite(ui_server, sample_data):
             "() => (document.getElementById('searchMeta').textContent || '').includes('Resultados: 1')"
         )
         assert "alpha sqlite" in (page.locator("#resultsArea").text_content() or "")
+
+
+def test_success_frontend_smoke_open_table_and_export(ui_server, sample_data, tmp_path):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/")
+        page.locator("#openSearchInlineMirror").click()
+        page.wait_for_selector("#searchBtn")
+        page.locator("#q").fill("alpha")
+        page.locator("#searchBtn").click()
+        page.wait_for_function(
+            "() => (document.getElementById('resultsArea').textContent || '').includes('signals')"
+        )
+
+        page.locator("#resultsArea button:has-text('Abrir')").first.click()
+        page.wait_for_function(
+            "() => (document.querySelector('#resultsArea h3') || {}).textContent && (document.querySelector('#resultsArea h3').textContent || '').includes('Tabela: signals')"
+        )
+        assert "linhas:" in (page.locator("#resultsArea").text_content() or "")
+        load_more = page.locator("#resultsArea button:has-text('Carregar mais')")
+        if load_more.is_visible():
+            load_more.click()
+            page.wait_for_function(
+                "() => (document.getElementById('resultsArea').textContent || '').includes('Todos os registros carregados')"
+            )
+
+        with page.expect_download() as download_info:
+            page.locator("#resultsArea button:has-text('Export CSV')").first.click()
+        download = download_info.value
+        export_path = tmp_path / "signals_export.csv"
+        download.save_as(str(export_path))
+        assert export_path.exists()
+        content = export_path.read_text(encoding="utf-8")
+        lines = [line for line in content.splitlines() if line]
+        assert len(lines) >= 181
+        assert lines[0].startswith('"id",') or lines[0].startswith('"id"')
+        assert "alpha" in content
+        assert "item-180" in content
 
 
 def test_success_frontend_smoke_compare_page(ui_server, sample_data):

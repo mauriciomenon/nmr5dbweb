@@ -24,6 +24,27 @@ const DISPLAY_PRIORITY_COLUMNS = [
   'LPTYPE',
   'PDESCR',
 ];
+const OPEN_TABLE_CHUNK = 120;
+const OPEN_TABLE_EXPORT_CHUNK = 250;
+const openTableStates = new Map();
+const TABLE_COLUMN_GROUPS = [
+  {
+    name: 'IDENTIFICACAO',
+    keys: ['INH', 'ITEM', 'PNL', 'PNT', 'RTU', 'SUB', 'UNIQ', 'NAME', 'NOME', 'COD'],
+  },
+  {
+    name: 'STATUS',
+    keys: ['STAT', 'STACON', 'NORMST', 'SOEHIS', 'PRIORT', 'CLASS'],
+  },
+  {
+    name: 'TIPO_E_HIERARQUIA',
+    keys: ['PSEUDO', 'SOETYP', 'ACRONM', 'MEASID', 'PHISID', 'BITBYT'],
+  },
+  {
+    name: 'LOCAL',
+    keys: ['HWADR', 'HW', 'SITE', 'AREA', 'REGIAO', 'REGION'],
+  },
+];
 
 function escapeHtml(s) {
   return (s + '')
@@ -59,6 +80,31 @@ function normalizeColumnKey(name) {
     .replace(/[^A-Z0-9]/g, '');
 }
 
+function normalizeForMap(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim();
+}
+
+function buildGroupLegendChip(name, columns) {
+  const chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'group-chip';
+  chip.textContent = `${name} (${columns.length})`;
+  chip.title = columns.join(', ');
+  return chip;
+}
+
+function buildColumnGroupLegend(columnGroups) {
+  if (!columnGroups || !columnGroups.length) return null;
+  const shell = document.createElement('div');
+  shell.className = 'results-group-legend';
+  columnGroups.forEach((group) => {
+    const chip = buildGroupLegendChip(group.name, group.columns || []);
+    shell.appendChild(chip);
+  });
+  return shell;
+}
+
 function isLikelyWideColumn(name) {
   const key = normalizeColumnKey(name);
   return (
@@ -69,6 +115,160 @@ function isLikelyWideColumn(name) {
     key.includes('COMM') ||
     key.includes('NAM')
   );
+}
+
+function normalizeTableRowPayload(payload, fallbackColumns = null) {
+  if (!payload || typeof payload !== 'object') return {};
+  if (payload.row && typeof payload.row === 'object' && !Array.isArray(payload.row)) {
+    return payload.row;
+  }
+  if (typeof payload.row_json === 'string') {
+    try {
+      const parsed = JSON.parse(payload.row_json);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      return {};
+    }
+  }
+  if (
+    payload.row_json &&
+    typeof payload.row_json === 'object' &&
+    !Array.isArray(payload.row_json)
+  ) {
+    return payload.row_json;
+  }
+  if (Array.isArray(payload) && Array.isArray(fallbackColumns)) {
+    const mapped = {};
+    fallbackColumns.forEach((column, index) => {
+      mapped[column] = payload[index];
+    });
+    return mapped;
+  }
+  if (!Array.isArray(payload) && !payload.row && !payload.row_json) {
+    return payload;
+  }
+  return {};
+}
+
+function buildColumnGroups(columns) {
+  const groups = new Map(
+    TABLE_COLUMN_GROUPS.map((group) => [group.name, { name: group.name, columns: [] }])
+  );
+  const unknownColumns = [];
+
+  const orderedColumns = columns || [];
+  orderedColumns.forEach((column) => {
+    const key = normalizeColumnKey(column);
+    const normalized = String(column || '').toUpperCase();
+    let assignedName = null;
+    for (const groupDef of TABLE_COLUMN_GROUPS) {
+      if (groupDef.keys.some((needle) => key.includes(needle) || normalized.includes(needle))) {
+        assignedName = groupDef.name;
+        break;
+      }
+    }
+    if (assignedName) {
+      groups.get(assignedName).columns.push(column);
+      return;
+    }
+    unknownColumns.push(column);
+  });
+
+  const grouped = [];
+  TABLE_COLUMN_GROUPS.forEach((groupDef) => {
+    const group = groups.get(groupDef.name);
+    if (group.columns.length) {
+      grouped.push(group);
+    }
+  });
+  if (unknownColumns.length) {
+    grouped.push({ name: 'OUTROS', columns: unknownColumns });
+  }
+  return grouped;
+}
+
+function escapeCsvValue(v) {
+  return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+}
+
+function makeCsvText(columns, rows, mapRow) {
+  const cols = Array.isArray(columns) ? columns : Array.from(columns || []);
+  const lines = [cols.map(escapeCsvValue).join(',')];
+  rows.forEach((row) => {
+    const mapped = mapRow ? mapRow(row) : row;
+    lines.push(cols.map((c) => escapeCsvValue((mapped || {})[c])).join(','));
+  });
+  return lines.join('\n');
+}
+
+function downloadCsv(filename, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function fetchAllTableRowsForExport(table) {
+  const initialState = getOpenTableState(table);
+  const columnsSet = new Set();
+  const rows = [];
+  let offset = 0;
+  let expectedTotal =
+    Number.isFinite(initialState.total) && initialState.total > 0
+      ? initialState.total
+      : null;
+
+  (initialState.columns || []).forEach((column) => columnsSet.add(column));
+  if (Array.isArray(initialState.rows) && initialState.rows.length) {
+    initialState.rows.forEach((row) => rows.push(row));
+    offset = initialState.rows.length;
+  }
+
+  if (expectedTotal !== null && rows.length >= expectedTotal) {
+    return { columns: Array.from(columnsSet), rows: rows.slice(0) };
+  }
+
+  const maxPages = 500;
+  for (let page = 0; page < maxPages; page += 1) {
+    const data = await apiJSON(
+      `/api/table?name=${encodeURIComponent(table)}&limit=${OPEN_TABLE_EXPORT_CHUNK}&offset=${offset}`
+    );
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const cols = data.columns || [];
+    (cols || []).forEach((column) => columnsSet.add(column));
+
+    const rawRows = data.rows || [];
+    const rowObjs = rawRows.map((row) => normalizeTableRowPayload(row, cols));
+    rowObjs.forEach((rowObj) => {
+      if (rowObj && typeof rowObj === 'object') {
+        Object.keys(rowObj).forEach((column) => columnsSet.add(column));
+      }
+      rows.push(rowObj);
+    });
+
+    const totalRows = Number.isFinite(data.total) ? Number(data.total) : null;
+    if (totalRows !== null) {
+      expectedTotal = totalRows;
+    }
+    if (expectedTotal !== null && rows.length >= expectedTotal) {
+      break;
+    }
+    if (!rawRows.length || rawRows.length < OPEN_TABLE_EXPORT_CHUNK) {
+      break;
+    }
+
+    offset += rawRows.length;
+  }
+
+  return { columns: Array.from(columnsSet), rows };
 }
 
 function getColumnPriorityScore(name, index) {
@@ -237,17 +437,36 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
   const tokens = (options && options.tokens) || [];
   const orderedCols = orderColumnsForDisplay(tableName, rawColumns);
   const pinnedCols = pickPinnedColumns(orderedCols);
+  const columnGroups = buildColumnGroups(orderedCols);
   const shell = document.createElement('div');
   shell.className = 'results-table-shell';
 
   const table = document.createElement('table');
   table.className = 'results results-enhanced';
   const thead = document.createElement('thead');
+  if (columnGroups.length > 1) {
+    const groupRow = document.createElement('tr');
+    if (includeScore) {
+      const scoreTh = document.createElement('th');
+      scoreTh.className = 'results-score-col results-group-cell';
+      scoreTh.rowSpan = 2;
+      scoreTh.textContent = 'pontuacao';
+      groupRow.appendChild(scoreTh);
+    }
+    columnGroups.forEach((group) => {
+      const th = document.createElement('th');
+      th.className = 'results-group-header';
+      th.colSpan = Math.max(1, group.columns.length);
+      th.textContent = group.name;
+      groupRow.appendChild(th);
+    });
+    thead.appendChild(groupRow);
+  }
   const headRow = document.createElement('tr');
   if (includeScore) {
     const scoreTh = document.createElement('th');
     scoreTh.className = 'results-score-col';
-    scoreTh.textContent = 'pontuacao';
+    scoreTh.textContent = includeScore ? 'pontuacao' : 'score';
     headRow.appendChild(scoreTh);
   }
   orderedCols.forEach((column) => {
@@ -294,14 +513,14 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
   });
   table.appendChild(tbody);
   shell.appendChild(table);
-  return { shell, orderedCols };
+  return { shell, orderedCols, columnGroups };
 }
 
-function collectRowObjects(rows) {
+function collectRowObjects(rows, fallbackColumns = null) {
   const colsSet = new Set();
   const rowObjs = [];
   rows.forEach((it) => {
-    const row = it.row || (it.row_json ? JSON.parse(it.row_json) : {});
+    const row = normalizeTableRowPayload(it, fallbackColumns);
     rowObjs.push({ score: it.score, row });
     if (row && typeof row === 'object') {
       Object.keys(row).forEach((column) => colsSet.add(column));
@@ -372,6 +591,8 @@ function renderResults(q, results, per_table) {
         rowObjs.length
       )
     );
+    const groupLegend = buildColumnGroupLegend(tableView.columnGroups || []);
+    if (groupLegend) block.appendChild(groupLegend);
     block.appendChild(buildRowPreviewBand(shownRows, tableView.orderedCols));
     block.appendChild(tableView.shell);
     if (rowObjs.length > shownRows.length) {
@@ -392,94 +613,205 @@ function renderResults(q, results, per_table) {
   }
 }
 
-async function openTable(ev, tableEnc) {
-  if (ev) ev.stopPropagation();
-  const table = decodeURIComponent(tableEnc);
-  const limit = 100;
-  const offset = 0;
+function getOpenTableState(table) {
+  return (
+    openTableStates.get(table) || {
+      table: table,
+      rows: [],
+      columns: [],
+      total: 0,
+      offset: 0,
+      dbEngine: '',
+      loading: false,
+    }
+  );
+}
+
+function setOpenTableState(table, patch) {
+  const state = getOpenTableState(table);
+  const merged = { ...state, ...patch };
+  openTableStates.set(table, merged);
+  return merged;
+}
+
+function hasOpenTableRows(state) {
+  return state.total > 0 && state.rows.length < state.total;
+}
+
+function mergeUniqueColumns(base, extra) {
+  const set = new Set(base);
+  const merged = base.slice();
+  (extra || []).forEach((name) => {
+    if (!set.has(name)) {
+      set.add(name);
+      merged.push(name);
+    }
+  });
+  return merged;
+}
+
+function buildOpenTableHeader(table, state) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  const details = [`linhas: ${state.total}`, `engine: ${escapeHtml(state.dbEngine || '')}`];
+  if (hasOpenTableRows(state)) {
+    details.unshift(`carregadas: ${state.rows.length}`);
+  }
+  card.innerHTML = `<h3>Tabela: ${escapeHtml(
+    table
+  )} <span class="muted">${details.join(' · ')}</span></h3>`;
+  return card;
+}
+
+function renderOpenTablePager(table, state, container) {
+  const footer = document.createElement('div');
+  footer.className = 'controls-footer open-table-pager';
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'btn ghost';
+  nextBtn.type = 'button';
+  const loading = !!state.loading;
+  const canLoadMore = hasOpenTableRows(state);
+
+  if (canLoadMore) {
+    const remain = Math.max(0, state.total - state.rows.length);
+    const loadCount = Math.min(OPEN_TABLE_CHUNK, remain);
+    nextBtn.textContent = `Carregar mais ${loadCount} linha(s)`;
+    nextBtn.disabled = loading;
+    nextBtn.addEventListener('click', async () => {
+      const currentState = getOpenTableState(table);
+      if (currentState.loading) {
+        return;
+      }
+      await loadOpenTable(table, {
+        clear: false,
+        offset: currentState.rows.length,
+      });
+    });
+  } else {
+    nextBtn.textContent = 'Todos os registros carregados';
+    nextBtn.disabled = true;
+  }
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn ghost small';
+  backBtn.type = 'button';
+  backBtn.textContent = 'Voltar';
+  backBtn.addEventListener('click', () => backToResults());
+
+  footer.appendChild(nextBtn);
+  footer.appendChild(backBtn);
+  container.appendChild(footer);
+}
+
+async function loadOpenTable(table, options) {
+  const currentState = getOpenTableState(table);
+  const clear = !options || options.clear !== false;
+  const requestedOffset =
+    options && Number.isFinite(options.offset) ? options.offset : 0;
+  const offset = clear ? requestedOffset : currentState.rows.length;
+
+  if (!clear && currentState.loading) {
+    return;
+  }
+
+  const state = setOpenTableState(table, {
+    loading: true,
+    offset,
+  });
+
   try {
     const data = await apiJSON(
-      `/api/table?name=${encodeURIComponent(table)}&limit=${limit}&offset=${offset}`
+      `/api/table?name=${encodeURIComponent(table)}&limit=${OPEN_TABLE_CHUNK}&offset=${offset}`
     );
     if (data.error) {
       alert('Erro ao abrir tabela: ' + data.error);
+      state.loading = false;
+      openTableStates.set(table, state);
       return;
     }
-    const area = $('resultsArea');
-    area.innerHTML = `<div class="card"><h3>Tabela: ${escapeHtml(
-      table
-    )} <span class="muted">linhas: ${data.total}</span> <span class="muted">engine: ${escapeHtml(
-      data.db_engine || ''
-    )}</span></h3></div>`;
-    if (!data.rows || !data.rows.length) {
-      const empty = document.createElement('div');
-      empty.className = 'card small';
-      empty.textContent = 'Sem linhas para mostrar.';
-      area.appendChild(empty);
-      return;
-    }
-    const hdr = document.createElement('div');
-    hdr.className = 'card';
-    const rowObjs = (data.rows || []).map((row) => {
-      const mapped = {};
-      (data.columns || []).forEach((column, index) => {
-        mapped[column] = row[index];
-      });
-      return { row: mapped };
+
+    const { cols, rowObjs } = collectRowObjects(
+      data.rows || [],
+      data.columns || []
+    );
+    const mergedColumns = clear
+      ? cols
+      : mergeUniqueColumns(state.columns.slice(), cols);
+    const mergedRows = clear
+      ? rowObjs
+      : state.rows.concat(rowObjs);
+    const nextState = setOpenTableState(table, {
+      columns: mergedColumns.slice(0, 200),
+      rows: mergedRows,
+      total: Number.isFinite(data.total) ? data.total : mergedRows.length,
+      dbEngine: data.db_engine || state.dbEngine,
+      loading: false,
     });
-    const tableView = buildResultsTable(table, rowObjs, data.columns || [], {
+
+    const area = $('resultsArea');
+    if (!area) return;
+    area.innerHTML = '';
+    if (!mergedRows.length) {
+      area.innerHTML =
+        '<div class="card small">Sem linhas para mostrar.</div>';
+      return;
+    }
+
+    const hdr = buildOpenTableHeader(table, nextState);
+    const tableView = buildResultsTable(table, mergedRows, nextState.columns, {
       includeScore: false,
       tokens: [],
     });
+    const groupLegend = buildColumnGroupLegend(tableView.columnGroups || []);
+    if (groupLegend) hdr.appendChild(groupLegend);
     hdr.appendChild(
       buildTableOverview(
         table,
         tableView.orderedCols,
-        rowObjs.length,
-        data.total || rowObjs.length
+        mergedRows.length,
+        nextState.total || mergedRows.length
       )
     );
-    hdr.appendChild(buildRowPreviewBand(rowObjs, tableView.orderedCols));
+    hdr.appendChild(buildRowPreviewBand(mergedRows.slice(0, 3), tableView.orderedCols));
     hdr.appendChild(tableView.shell);
-    const pager = document.createElement('div');
-    pager.className = 'controls-footer';
-    pager.innerHTML =
-      '<button class="btn ghost" onclick="backToResults()">Voltar</button>';
-    hdr.appendChild(pager);
     area.appendChild(hdr);
+    renderOpenTablePager(table, nextState, area);
   } catch (e) {
     logUi('ERROR', 'abrir tabela falhou');
     alert('Erro ao abrir tabela');
+  } finally {
+    setOpenTableState(table, { loading: false });
   }
+}
+
+async function openTable(ev, tableEnc) {
+  if (ev) ev.stopPropagation();
+  const table = decodeURIComponent(tableEnc);
+  setOpenTableState(table, {
+    table,
+    rows: [],
+    columns: [],
+    total: 0,
+    offset: 0,
+    dbEngine: '',
+    loading: false,
+  });
+  await loadOpenTable(table, { clear: true, offset: 0 });
 }
 
 async function exportTableCsv(tableEnc) {
   const table = decodeURIComponent(tableEnc);
   try {
-    const res = await fetch(
-      `/api/table?name=${encodeURIComponent(table)}&limit=1000&offset=0`
+    const { columns, rows } = await fetchAllTableRowsForExport(table);
+    if (!rows.length) {
+      alert('Sem dados para exportar');
+      return;
+    }
+    const normalizedRows = rows.map((row) =>
+      row && typeof row === 'object' ? row : {}
     );
-    if (!res.ok) {
-      alert('Erro ao exportar: http ' + res.status);
-      return;
-    }
-    const data = await res.json();
-    if (data.error) {
-      alert('Erro ao exportar: ' + data.error);
-      return;
-    }
-    const cols = data.columns;
-    const rows = data.rows;
-    const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-    const header = cols.map(esc).join(',') + '\n';
-    const body = rows.map((r) => r.map(esc).join(',')).join('\n');
-    const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${table}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const csvText = makeCsvText(columns, normalizedRows, (row) => row);
+    downloadCsv(`${table}.csv`, csvText);
   } catch (e) {
     alert('Erro ao exportar: falha na requisicao');
     logUi('ERROR', 'export csv falhou');
@@ -496,14 +828,7 @@ function exportResultsCsv() {
   const rowsOut = [];
   Object.keys(results).forEach((tbl) => {
     (results[tbl] || []).forEach((item) => {
-      let rowObj = item && item.row ? item.row : null;
-      if (!rowObj && item && item.row_json) {
-        try {
-          rowObj = JSON.parse(item.row_json);
-        } catch (e) {
-          rowObj = {};
-        }
-      }
+      let rowObj = normalizeTableRowPayload(item);
       if (!rowObj || typeof rowObj !== 'object') rowObj = {};
       Object.keys(rowObj).forEach((k) => colsSet.add(k));
       rowsOut.push({
@@ -514,27 +839,21 @@ function exportResultsCsv() {
     });
   });
   const cols = Array.from(colsSet);
-  const esc = (v) => '"' + String(v).replace(/"/g, '""') + '"';
-  const lines = [cols.map(esc).join(',')];
-  rowsOut.forEach((r) => {
-    const line = cols.map((c) => {
-      if (c === 'table') return r.table;
-      if (c === 'score') return r.score;
-      const v =
-        r.row && Object.prototype.hasOwnProperty.call(r.row, c) ? r.row[c] : '';
-      return v && typeof v === 'object' ? JSON.stringify(v) : v;
+  const csvText = makeCsvText(cols, rowsOut, (r) => {
+    const rowOut = {};
+    cols.forEach((c) => {
+      if (c === 'table') {
+        rowOut[c] = r.table;
+      } else if (c === 'score') {
+        rowOut[c] = r.score;
+      } else {
+        const v = r.row && Object.prototype.hasOwnProperty.call(r.row, c) ? r.row[c] : '';
+        rowOut[c] = v && typeof v === 'object' ? JSON.stringify(v) : v;
+      }
     });
-    lines.push(line.map(esc).join(','));
+    return rowOut;
   });
-  const blob = new Blob([lines.join('\n')], {
-    type: 'text/csv;charset=utf-8;',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'resultados.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsv('resultados.csv', csvText);
 }
 
 function backToResults() {
