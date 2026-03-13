@@ -32,18 +32,26 @@ class _AccessParserNoiseFilter(logging.Filter):
         return True
 
 
+def _attach_noise_filter_once(target: Any) -> None:
+    has_filter = any(
+        isinstance(existing, _AccessParserNoiseFilter)
+        for existing in getattr(target, "filters", [])
+    )
+    if not has_filter and hasattr(target, "addFilter"):
+        target.addFilter(_AccessParserNoiseFilter())
+
+
 def ensure_access_parser_logging() -> None:
     if _access_parser_verbose_enabled():
         return
-    logging.getLogger("access_parser").setLevel(logging.WARNING)
+    parser_logger = logging.getLogger("access_parser")
+    parser_logger.setLevel(logging.WARNING)
+    _attach_noise_filter_once(parser_logger)
     root = logging.getLogger()
     for handler in root.handlers:
-        has_filter = any(
-            isinstance(existing, _AccessParserNoiseFilter)
-            for existing in getattr(handler, "filters", [])
-        )
-        if not has_filter:
-            handler.addFilter(_AccessParserNoiseFilter())
+        _attach_noise_filter_once(handler)
+    for handler in parser_logger.handlers:
+        _attach_noise_filter_once(handler)
 
 
 def load_access_parser_module():
@@ -113,6 +121,12 @@ def is_access_parser_no_data_message(message: Any) -> bool:
         "0 rows",
     )
     return any(token in text for token in patterns)
+
+
+def is_access_parser_no_data_error(error: Any) -> bool:
+    if isinstance(error, BaseException):
+        return is_access_parser_no_data_message(str(error))
+    return is_access_parser_no_data_message(error)
 
 
 def _normalize_access_row_object(row: Any) -> Dict[str, Any]:

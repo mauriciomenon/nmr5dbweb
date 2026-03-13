@@ -12,7 +12,7 @@ import pandas as pd
 import logging
 from interface.access_parser_utils import (
     ensure_access_parser_logging,
-    is_access_parser_no_data_message,
+    is_access_parser_no_data_error,
     list_access_tables_from_parser,
     load_access_parser_module,
     normalize_access_parser_rows,
@@ -26,10 +26,6 @@ ensure_access_parser_logging()
 def _access_parser_allow_skips() -> bool:
     raw = str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS", "")).strip().lower()
     return raw in ("1", "true", "yes", "on")
-
-
-def _is_access_parser_no_data_error(message: str) -> bool:
-    return is_access_parser_no_data_message(message)
 
 
 def _sanitize_parser_value(value):
@@ -294,6 +290,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             converted_tables = 0
             skipped_tables = []
             no_data_tables = 0
+            no_data_samples = []
 
             for i, table_name in enumerate(tables):
                 safe_table = str(table_name).replace('"', '""')
@@ -348,9 +345,10 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     )
                 except Exception as e:
                     err_msg = str(e)
-                    if _is_access_parser_no_data_error(err_msg):
+                    if is_access_parser_no_data_error(err_msg):
                         no_data_tables += 1
-                        logger.info("Tabela sem dados via access-parser: %s", table_name)
+                        if len(no_data_samples) < 5:
+                            no_data_samples.append(str(table_name))
                         _report(
                             total_tables=total,
                             processed_tables=i + 1,
@@ -369,6 +367,14 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                         msg=f"skipped:{err_msg}",
                     )
                     continue
+
+            if no_data_tables:
+                logger.info(
+                    "access-parser no-data tables: %s/%s sample=%s",
+                    no_data_tables,
+                    total,
+                    ",".join(no_data_samples),
+                )
 
             dconn.close()
             if skipped_tables and not _access_parser_allow_skips():

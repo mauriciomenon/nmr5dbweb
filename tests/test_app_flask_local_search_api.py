@@ -895,6 +895,69 @@ def test_api_search_access_odbc_falha_usa_parser(tmp_path, monkeypatch):
     assert payload["results"]["t1"][0]["row"]["id"] == 1
 
 
+def test_api_search_access_parser_contabiliza_no_data_sem_falhar(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(local_search, "pyodbc", None)
+
+    class FakeParser:
+        def __init__(self, _path):
+            self.catalog = {"t1": {}, "t2": {}}
+
+        def parse_table(self, table):
+            if table == "t1":
+                raise RuntimeError("table t1 has no data")
+            return {"id": [2], "text": ["needle bar"]}
+
+    class FakeModule:
+        AccessParser = FakeParser
+
+    monkeypatch.setattr(local_search, "load_access_parser_module", lambda: (FakeModule, None))
+
+    resp = client.get("/api/search?q=needle")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["search_backend"] == "access_parser"
+    assert payload["returned_count"] == 1
+    stats = payload.get("access_parser_stats") or {}
+    assert stats.get("tables_no_data") == 1
+    assert stats.get("tables_error") == 0
+
+
+def test_api_search_access_parser_contabiliza_erro_real(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(local_search, "pyodbc", None)
+
+    class FakeParser:
+        def __init__(self, _path):
+            self.catalog = {"t1": {}, "t2": {}}
+
+        def parse_table(self, table):
+            if table == "t1":
+                raise RuntimeError("parser exploded")
+            return {"id": [2], "text": ["needle bar"]}
+
+    class FakeModule:
+        AccessParser = FakeParser
+
+    monkeypatch.setattr(local_search, "load_access_parser_module", lambda: (FakeModule, None))
+
+    resp = client.get("/api/search?q=needle")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    stats = payload.get("access_parser_stats") or {}
+    assert stats.get("tables_no_data") == 0
+    assert stats.get("tables_error") == 1
+    assert stats.get("error_samples")
+
+
 def test_api_search_access_odbc_ok_marca_backend(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.accdb"

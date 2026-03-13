@@ -39,6 +39,7 @@ from interface.compare_dbs import (
     compare_tables_overview_duckdb,
 )
 from interface.access_parser_utils import (
+    is_access_parser_no_data_error,
     load_access_parser_module,
     list_access_tables_from_parser,
     normalize_access_parser_rows,
@@ -1891,6 +1892,9 @@ def fallback_search_access_parser(
     results = {}
     candidate_count = 0
     returned_count = 0
+    no_data_tables = 0
+    error_tables = 0
+    error_samples = []
 
     module, module_err = load_access_parser_module()
     if module is None:
@@ -1912,7 +1916,14 @@ def fallback_search_access_parser(
             break
         try:
             parsed = parser.parse_table(table_name)
-        except Exception:
+        except Exception as exc:
+            err_text = str(exc)
+            if is_access_parser_no_data_error(err_text):
+                no_data_tables += 1
+                continue
+            error_tables += 1
+            if len(error_samples) < 3:
+                error_samples.append(f"{table_name}: {err_text}")
             continue
         rows = normalize_access_parser_rows(parsed)
         if not rows:
@@ -1955,7 +1966,7 @@ def fallback_search_access_parser(
             if returned_count >= total_limit:
                 break
 
-    return build_search_payload_with_backend(
+    payload = build_search_payload_with_backend(
         q,
         q_norm,
         candidate_count,
@@ -1963,6 +1974,14 @@ def fallback_search_access_parser(
         results,
         "access_parser",
     )
+    if isinstance(payload, dict) and not payload.get("error"):
+        payload["access_parser_stats"] = {
+            "tables_seen": len(table_names),
+            "tables_no_data": int(no_data_tables),
+            "tables_error": int(error_tables),
+            "error_samples": list(error_samples),
+        }
+    return payload
 
 
 def fallback_search_sqlite(

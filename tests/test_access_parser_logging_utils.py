@@ -3,6 +3,7 @@ import logging
 
 from interface.access_parser_utils import (
     ensure_access_parser_logging,
+    is_access_parser_no_data_error,
     is_access_parser_no_data_message,
 )
 
@@ -61,3 +62,9 @@ def test_is_access_parser_no_data_message_variants():
     assert is_access_parser_no_data_message("table contains no records")
     assert is_access_parser_no_data_message("query returned 0 rows")
     assert not is_access_parser_no_data_message("table loaded successfully")
+
+
+def test_is_access_parser_no_data_error_accepts_exception():
+    err = RuntimeError("table contains no records")
+    assert is_access_parser_no_data_error(err)
+    assert not is_access_parser_no_data_error(ValueError("hard parser crash"))
