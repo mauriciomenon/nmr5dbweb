@@ -10,6 +10,7 @@ import os
 import sys
 import argparse
 import socket
+import subprocess
 from pathlib import Path
 from datetime import datetime
 
@@ -49,7 +50,20 @@ def obter_processo_na_porta(porta):
                     nome = ""
             return {"pid": pid, "name": nome}
     except Exception:
-        return None
+        pass
+
+    # Fallback para sistemas Unix quando psutil nao encontrar.
+    if os.name != "nt":
+        try:
+            cmd = ["lsof", "-nP", f"-iTCP:{porta}", "-sTCP:LISTEN"]
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+            lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                if len(parts) >= 2:
+                    return {"pid": parts[1], "name": parts[0]}
+        except Exception:
+            pass
     return None
 
 
