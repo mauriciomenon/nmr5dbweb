@@ -1572,7 +1572,7 @@ def fallback_search_sqlite(
             results,
             score_by_table,
         )
-        return attach_search_backend(payload, "access_odbc")
+        return attach_search_backend(payload, "sqlite_scan")
     except Exception as exc:
         return {"error": str(exc)}
     finally:
@@ -2393,7 +2393,15 @@ def fallback_search_access(
                 if returned_count >= total_limit:
                     break
         score_by_table = build_score_by_table(results)
-        return build_search_response(q, q_norm, candidate_count, returned_count, results, score_by_table)
+        payload = build_search_response(
+            q,
+            q_norm,
+            candidate_count,
+            returned_count,
+            results,
+            score_by_table,
+        )
+        return attach_search_backend(payload, "access_odbc")
     except Exception as e:
         return {"error": str(e)}
     finally:
@@ -2449,7 +2457,8 @@ def run_search_for_context(ctx, search_args):
                     "hint": "Access search unavailable in this environment. Convert to DuckDB first.",
                 }, 503
             return {"error": error_text}, 500
-        return payload, None
+        backend = payload.get("search_backend") if isinstance(payload, dict) else None
+        return attach_search_backend(payload, backend or "access_odbc"), None
     return {"error": f"Unsupported DB format: {ctx['db_path']}"}, 400
 
 @app.route("/api/search", methods=["GET"])

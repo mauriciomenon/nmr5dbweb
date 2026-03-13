@@ -807,6 +807,71 @@ def test_api_search_access_odbc_falha_usa_parser(tmp_path, monkeypatch):
     assert payload["results"]["t1"][0]["row"]["id"] == 1
 
 
+def test_api_search_access_odbc_ok_marca_backend(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.accdb"
+    db_path.write_bytes(b"access-placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    class FakeTableRow:
+        table_name = "t1"
+
+    class FakeColumnRow:
+        def __init__(self, name, type_name="TEXT"):
+            self.column_name = name
+            self.type_name = type_name
+
+    class FakeCursor:
+        def __init__(self):
+            self.description = [("id",), ("text",)]
+            self._rows = []
+
+        def tables(self):
+            return [FakeTableRow()]
+
+        def columns(self, table=None):
+            if table == "t1":
+                return [FakeColumnRow("id"), FakeColumnRow("text")]
+            return []
+
+        def execute(self, sql, _params=None):
+            if "SELECT TOP" in sql and "[t1]" in sql:
+                self.description = [("id",), ("text",)]
+                self._rows = [(1, "needle data"), (2, "other value")]
+            else:
+                self._rows = []
+            return self
+
+        def fetchall(self):
+            return self._rows
+
+    class FakeConn:
+        def __init__(self):
+            self._cursor = FakeCursor()
+
+        def cursor(self):
+            return self._cursor
+
+        def close(self):
+            return None
+
+    class FakePyodbc:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            return FakeConn()
+
+    monkeypatch.setattr(local_search, "pyodbc", FakePyodbc)
+
+    resp = client.get("/api/search?q=needle&tables=t1")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["search_backend"] == "access_odbc"
+    assert payload["returned_count"] >= 1
+    assert list(payload["results"].keys()) == ["t1"]
+    assert any(item["row"]["id"] == 1 for item in payload["results"]["t1"])
+
+
 def test_admin_select_access_resolve_para_duckdb_derivado(tmp_path, monkeypatch):
     client = app.test_client()
     selected = []
