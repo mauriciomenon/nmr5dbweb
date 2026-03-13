@@ -225,7 +225,13 @@ async function fetchAllTableRowsForExport(table) {
 
   (initialState.columns || []).forEach((column) => columnsSet.add(column));
   if (Array.isArray(initialState.rows) && initialState.rows.length) {
-    initialState.rows.forEach((row) => rows.push(row));
+    initialState.rows.forEach((row) => {
+      const rowObj = normalizeTableRowPayload(row, initialState.columns || []);
+      if (rowObj && typeof rowObj === 'object') {
+        Object.keys(rowObj).forEach((column) => columnsSet.add(column));
+      }
+      rows.push(rowObj);
+    });
     offset = initialState.rows.length;
   }
 
@@ -690,7 +696,15 @@ function renderOpenTablePager(table, state, container) {
   backBtn.textContent = 'Voltar';
   backBtn.addEventListener('click', () => backToResults());
 
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'btn ghost';
+  exportBtn.type = 'button';
+  exportBtn.textContent = 'Export CSV';
+  exportBtn.disabled = loading || !state.total;
+  exportBtn.addEventListener('click', () => exportTableCsv(encodeURIComponent(table)));
+
   footer.appendChild(nextBtn);
+  footer.appendChild(exportBtn);
   footer.appendChild(backBtn);
   container.appendChild(footer);
 }

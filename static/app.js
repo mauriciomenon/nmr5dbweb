@@ -1867,9 +1867,39 @@ if (!window.__appSearchFlowBound) {
 
   const handleSelectDbResult = async (name, msg, response, closeOnSuccess) => {
     if (response && response.ok) {
-      if (msg) msg.textContent = 'DB selecionado: ' + name;
+      if (response.status === 'converting') {
+        const outputPath = response.output || '';
+        if (msg) {
+          msg.textContent = outputPath
+            ? 'Conversao iniciada: ' + outputPath
+            : 'Conversao iniciada para: ' + name;
+        }
+        setFlowBanner(
+          'Conversao de Access iniciada. Aguarde concluir para liberar busca e comparacao.',
+          'info'
+        );
+        await refreshUiState();
+        if (closeOnSuccess) closeModal();
+        return;
+      }
+      if (response.resolved_from_access) {
+        const resolved = response.db_path || '';
+        if (msg) {
+          msg.textContent = resolved
+            ? 'Access resolvido para DuckDB: ' + resolved
+            : 'Access resolvido para DuckDB derivado';
+        }
+        setFlowBanner(
+          'Arquivo Access selecionado com DuckDB derivado. Fluxo rapido de busca/comparacao ativo.',
+          'info'
+        );
+      } else if (msg) {
+        msg.textContent = 'DB selecionado: ' + name;
+      }
       manualFlowOverride = '';
-      setFlowBanner('', '');
+      if (!response.resolved_from_access) {
+        setFlowBanner('', '');
+      }
       await refreshUiState();
       if (closeOnSuccess) closeModal();
       return;
@@ -2044,6 +2074,13 @@ if (!window.__appSearchFlowBound) {
     try {
       const res = await fetch(request.url);
       const data = await res.json();
+      const backendLabels = {
+        duckdb_fulltext: 'DuckDB/_fulltext',
+        sqlite_scan: 'SQLite scan',
+        access_parser: 'Access parser',
+        access_odbc: 'Access ODBC',
+      };
+      const backendLabel = backendLabels[data.search_backend] || 'desconhecido';
       if (data.error) {
         setSearchMeta('Erro: ' + data.error, 'error');
         $('resultsArea').innerHTML =
@@ -2066,7 +2103,7 @@ if (!window.__appSearchFlowBound) {
       }
       if (!data.returned_count) {
         setSearchMeta(
-          `Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}.`,
+          `Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}. Backend: ${backendLabel}.`,
           'warn'
         );
         setFlowBanner(
@@ -2075,7 +2112,7 @@ if (!window.__appSearchFlowBound) {
         );
       } else {
         setSearchMeta(
-          `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`,
+          `Resultados: ${data.returned_count} (candidatos: ${data.candidate_count}) - Backend: ${backendLabel}`,
           ''
         );
         setFlowBanner(
@@ -2085,6 +2122,9 @@ if (!window.__appSearchFlowBound) {
       }
       if (exportBtn) exportBtn.disabled = !data.returned_count;
       renderResults(q, data.results || {}, request.per_table);
+      if (activeModalId === 'searchModal') {
+        closeModal();
+      }
     } catch (e) {
       setSearchMeta('Erro na busca.', 'error');
       $('resultsArea').innerHTML =
