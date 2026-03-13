@@ -28,12 +28,7 @@ async function loadTables() {
 
   if (!db1 || !db2) {
     statusEl.textContent = 'Informe os caminhos de ambos os bancos (.duckdb).';
-    setFlowHint(
-      'Informe os caminhos de ambos os bancos A e B para continuar.',
-      'warn'
-    );
-    setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
-    setStepState('stepLoadTables', 'Aguardando', null);
+    applyCompareMissingDbState();
     tableSelect.innerHTML =
       '<option value="">-- informe os caminhos acima --</option>';
     if (compareDbState.tablesTimeout) {
@@ -194,6 +189,47 @@ function getErrorText(err) {
   return String(err || 'erro desconhecido');
 }
 
+function applyCompareMissingDbState() {
+  setCompareStatus(
+    'Informe os caminhos de ambos os bancos (.duckdb).',
+    'warn'
+  );
+  setFlowHint(
+    'Informe os caminhos de ambos os bancos A e B para conseguir comparar.',
+    'warn'
+  );
+  setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
+  setStepState('stepLoadTables', 'Aguardando', null);
+  setStepState('stepCompare', 'Aguardando', null);
+}
+
+function validateCompareRequest(compareRequest) {
+  if (!compareRequest.db1 || !compareRequest.db2) {
+    applyCompareMissingDbState();
+    return false;
+  }
+  if (!compareRequest.table) {
+    setCompareStatus('Selecione uma tabela.', 'warn');
+    setFlowHint(
+      'Carregue as tabelas em comum e selecione uma tabela antes de comparar.',
+      'warn'
+    );
+    setStepState('stepLoadTables', 'Tabela nao selecionada', 'warn');
+    setStepState('stepCompare', 'Aguardando', null);
+    return false;
+  }
+  if (!compareRequest.keyColsStr) {
+    setCompareStatus('Informe pelo menos uma coluna-chave K.', 'warn');
+    setFlowHint(
+      'Informe pelo menos uma coluna-chave K para identificar os registros unicos.',
+      'warn'
+    );
+    setStepState('stepCompare', 'Chave K faltando', 'warn');
+    return false;
+  }
+  return true;
+}
+
 async function executeCompareRequest(payload, options) {
   const compareTimeout = setCompareBusy(
     options.busyStatus,
@@ -234,39 +270,7 @@ async function runCompare() {
   resultsEl.innerHTML = '';
   setCompareStatus('', 'info');
 
-  if (!compareRequest.db1 || !compareRequest.db2) {
-    setCompareStatus(
-      'Informe os caminhos de ambos os bancos (.duckdb).',
-      'warn'
-    );
-    setFlowHint(
-      'Informe os caminhos de ambos os bancos A e B para conseguir comparar.',
-      'warn'
-    );
-    setStepState('stepPickFiles', 'Caminhos faltando', 'warn');
-    setStepState('stepLoadTables', 'Aguardando', null);
-    setStepState('stepCompare', 'Aguardando', null);
-    return;
-  }
-  if (!compareRequest.table) {
-    setCompareStatus('Selecione uma tabela.', 'warn');
-    setFlowHint(
-      'Carregue as tabelas em comum e selecione uma tabela antes de comparar.',
-      'warn'
-    );
-    setStepState('stepLoadTables', 'Tabela nao selecionada', 'warn');
-    setStepState('stepCompare', 'Aguardando', null);
-    return;
-  }
-  if (!compareRequest.keyColsStr) {
-    setCompareStatus('Informe pelo menos uma coluna-chave K.', 'warn');
-    setFlowHint(
-      'Informe pelo menos uma coluna-chave K para identificar os registros unicos.',
-      'warn'
-    );
-    setStepState('stepCompare', 'Chave K faltando', 'warn');
-    return;
-  }
+  if (!validateCompareRequest(compareRequest)) return;
 
   compareDbState.lastComparePayload = compareRequest.payload;
   compareDbState.lastCompareMeta = null;

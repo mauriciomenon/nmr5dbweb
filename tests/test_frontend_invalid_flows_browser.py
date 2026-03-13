@@ -313,6 +313,7 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert "Mudancas vazio/preenchido" in (page.locator("#summary").text_content() or "")
         assert "Deltas numericos relevantes" in (page.locator("#summary").text_content() or "")
         assert "Prioridade de revisao:" in (page.locator("#summary").text_content() or "")
+        assert "Anomalias prioritarias" in (page.locator("#summary").text_content() or "")
         assert "A (NOVO):" in (page.locator("#summary").text_content() or "")
         assert "B (ANTIGO):" in (page.locator("#summary").text_content() or "")
         assert "Volume bruto:" in (page.locator("#summary").text_content() or "")
@@ -370,6 +371,15 @@ def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_
         assert payload["summary"]["by_type"]["changed"] >= 1
         assert isinstance(payload["summary"]["top_priority_anomalies"], list)
         assert payload["summary"]["top_priority_anomalies"]
+        first_item = payload["summary"]["top_priority_anomalies"][0]
+        assert "label" in first_item
+        assert "detail" in first_item
+        assert "score" in first_item
+        if len(payload["summary"]["top_priority_anomalies"]) > 1:
+            assert (
+                payload["summary"]["top_priority_anomalies"][0]["score"]
+                >= payload["summary"]["top_priority_anomalies"][1]["score"]
+            )
 
 
 def test_success_frontend_smoke_track_page(ui_server, sample_data):
