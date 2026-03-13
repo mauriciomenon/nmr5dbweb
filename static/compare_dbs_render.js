@@ -273,26 +273,6 @@ function buildCompareAnomalySignals(data, changedRows) {
   };
 }
 
-function isBlankValue(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') return value.trim() === '';
-  return false;
-}
-
-function toFiniteNumber(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
-
 function buildCompareValueSignals(data, changedRows) {
   const compareColumns = data.compare_columns || [];
   const nullTransitions = {};
@@ -304,16 +284,16 @@ function buildCompareValueSignals(data, changedRows) {
       const valueB = (row.b || {})[column];
       if (!valuesDifferent(valueA, valueB)) return;
 
-      const oldBlank = isBlankValue(valueB);
-      const newBlank = isBlankValue(valueA);
+      const oldBlank = isBlankCompareValue(valueB);
+      const newBlank = isBlankCompareValue(valueA);
       if (oldBlank !== newBlank) {
         const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
         const key = `${column} | ${direction}`;
         nullTransitions[key] = (nullTransitions[key] || 0) + 1;
       }
 
-      const numA = toFiniteNumber(valueA);
-      const numB = toFiniteNumber(valueB);
+      const numA = toFiniteCompareNumber(valueA);
+      const numB = toFiniteCompareNumber(valueB);
       if (numA === null || numB === null) return;
 
       const delta = numA - numB;

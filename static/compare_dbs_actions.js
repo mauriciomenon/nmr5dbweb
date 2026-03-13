@@ -1,8 +1,8 @@
 async function loadTables() {
-  const db1 = document.getElementById('db1Path').value.trim();
-  const db2 = document.getElementById('db2Path').value.trim();
+  const { db1Input, db2Input, tableSelect } = getCompareFormRefs();
+  const db1 = db1Input ? db1Input.value.trim() : '';
+  const db2 = db2Input ? db2Input.value.trim() : '';
   const statusEl = document.getElementById('statusMeta');
-  const tableSelect = document.getElementById('tableSelect');
   const btn = document.getElementById('btnLoadTables');
   compareDbState.tablesMeta = [];
   compareDbState.tablesLoadedOnce = false;
@@ -148,18 +148,26 @@ const COMPARE_UI_TO_BACKEND_TYPES = {
 };
 
 function collectCompareRequest(page = 1) {
-  const db1 = document.getElementById('db1Path').value.trim();
-  const db2 = document.getElementById('db2Path').value.trim();
-  const table = document.getElementById('tableSelect').value;
-  const keyColsStr = document.getElementById('keyColumns').value.trim();
-  const cmpColsStr = document.getElementById('compareColumns').value.trim();
-  const keyFilterStr = document.getElementById('keyFilter').value.trim();
-  const cbChanged = document.getElementById('filterChanged');
-  const cbAdded = document.getElementById('filterAdded');
-  const cbRemoved = document.getElementById('filterRemoved');
-  const colSelect = document.getElementById('filterColumn');
-  const rowLimitEl = document.getElementById('rowLimit');
-  const rowLimitEnabledEl = document.getElementById('rowLimitEnabled');
+  const {
+    db1Input,
+    db2Input,
+    tableSelect,
+    keyCols,
+    cmpCols,
+    keyFilterEl,
+    cbChanged,
+    cbAdded,
+    cbRemoved,
+    colSelect,
+    rowLimitEl,
+    rowLimitEnabledEl,
+  } = getCompareFormRefs();
+  const db1 = db1Input ? db1Input.value.trim() : '';
+  const db2 = db2Input ? db2Input.value.trim() : '';
+  const table = tableSelect ? tableSelect.value : '';
+  const keyColsStr = keyCols ? keyCols.value.trim() : '';
+  const cmpColsStr = cmpCols ? cmpCols.value.trim() : '';
+  const keyFilterStr = keyFilterEl ? keyFilterEl.value.trim() : '';
 
   const key_columns = keyColsStr
     .split(',')
@@ -483,34 +491,14 @@ function buildCompareCsvLines(meta, allRows) {
   return lines;
 }
 
-function isBlankExportValue(value) {
-  if (value === null || value === undefined) return true;
-  if (typeof value === 'string') return value.trim() === '';
-  return false;
-}
-
 function pickFirstNonBlank(rowA, rowB, candidates) {
   for (const candidate of candidates || []) {
     const valueA = rowA ? rowA[candidate] : null;
-    if (!isBlankExportValue(valueA)) return String(valueA);
+    if (!isBlankCompareValue(valueA)) return String(valueA);
     const valueB = rowB ? rowB[candidate] : null;
-    if (!isBlankExportValue(valueB)) return String(valueB);
+    if (!isBlankCompareValue(valueB)) return String(valueB);
   }
   return '';
-}
-
-function toFiniteExportNumber(value) {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null;
-  }
-  if (typeof value === 'string') {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
 }
 
 function buildCompareReportSummary(meta, allRows) {
@@ -538,7 +526,7 @@ function buildCompareReportSummary(meta, allRows) {
           .join('|')
       : `index_${index + 1}`;
     const hasBlankKey = keyColumns.some((column) =>
-      isBlankExportValue(keyObj[column])
+      isBlankCompareValue(keyObj[column])
     );
     if (hasBlankKey) blankKeyRows += 1;
     if (keySeen.has(keyText)) duplicateKeyRows += 1;
@@ -581,16 +569,16 @@ function buildCompareReportSummary(meta, allRows) {
 
       changedColumnsCount[column] = (changedColumnsCount[column] || 0) + 1;
 
-      const oldBlank = isBlankExportValue(valueB);
-      const newBlank = isBlankExportValue(valueA);
+      const oldBlank = isBlankCompareValue(valueB);
+      const newBlank = isBlankCompareValue(valueA);
       if (oldBlank !== newBlank) {
         const direction = oldBlank ? 'vazio -> preenchido' : 'preenchido -> vazio';
         const key = `${column} | ${direction}`;
         nullTransitions[key] = (nullTransitions[key] || 0) + 1;
       }
 
-      const numA = toFiniteExportNumber(valueA);
-      const numB = toFiniteExportNumber(valueB);
+      const numA = toFiniteCompareNumber(valueA);
+      const numB = toFiniteCompareNumber(valueB);
       if (numA === null || numB === null) return;
       const delta = numA - numB;
       const absDelta = Math.abs(delta);
@@ -873,8 +861,7 @@ async function exportComparisonReport() {
 
 async function generateTablesOverview() {
   const container = document.getElementById('tablesOverview');
-  const db1Input = document.getElementById('db1Path');
-  const db2Input = document.getElementById('db2Path');
+  const { db1Input, db2Input } = getCompareFormRefs();
   const overviewBtn = document.getElementById('btnTablesOverview');
   const restoreBtn = setButtonBusy(
     overviewBtn,

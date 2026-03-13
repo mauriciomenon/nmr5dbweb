@@ -3,6 +3,26 @@ function valuesDifferent(a, b) {
   return JSON.stringify(a) !== JSON.stringify(b);
 }
 
+function isBlankCompareValue(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  return false;
+}
+
+function toFiniteCompareNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().replace(',', '.');
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function shortValue(v, maxLen = 80) {
   let s;
   try {
@@ -56,6 +76,8 @@ function guessKeyColumnsForTable(tableName, columns) {
 }
 
 window.valuesDifferent = valuesDifferent;
+window.isBlankCompareValue = isBlankCompareValue;
+window.toFiniteCompareNumber = toFiniteCompareNumber;
 window.shortValue = shortValue;
 window.showRowSegment = showRowSegment;
 window.guessKeyColumnsForTable = guessKeyColumnsForTable;

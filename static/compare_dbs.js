@@ -108,6 +108,23 @@ function getCompareActionButtons() {
   };
 }
 
+function getCompareFormRefs() {
+  return {
+    db1Input: document.getElementById('db1Path'),
+    db2Input: document.getElementById('db2Path'),
+    tableSelect: document.getElementById('tableSelect'),
+    keyCols: document.getElementById('keyColumns'),
+    cmpCols: document.getElementById('compareColumns'),
+    keyFilterEl: document.getElementById('keyFilter'),
+    cbChanged: document.getElementById('filterChanged'),
+    cbAdded: document.getElementById('filterAdded'),
+    cbRemoved: document.getElementById('filterRemoved'),
+    colSelect: document.getElementById('filterColumn'),
+    rowLimitEl: document.getElementById('rowLimit'),
+    rowLimitEnabledEl: document.getElementById('rowLimitEnabled'),
+  };
+}
+
 function setButtonBusy(btn, busyText, idleText) {
   if (!btn) return () => {};
   const original = idleText || btn.textContent;
@@ -188,18 +205,20 @@ function updateLastCompareMeta(data, fallbackPage = 1) {
 
 function saveCompareState() {
   try {
-    const db1Input = document.getElementById('db1Path');
-    const db2Input = document.getElementById('db2Path');
-    const tableSelect = document.getElementById('tableSelect');
-    const keyCols = document.getElementById('keyColumns');
-    const cmpCols = document.getElementById('compareColumns');
-    const keyFilterEl = document.getElementById('keyFilter');
-    const cbChanged = document.getElementById('filterChanged');
-    const cbAdded = document.getElementById('filterAdded');
-    const cbRemoved = document.getElementById('filterRemoved');
-    const colSelect = document.getElementById('filterColumn');
-    const rowLimitEl = document.getElementById('rowLimit');
-    const rowLimitEnabledEl = document.getElementById('rowLimitEnabled');
+    const {
+      db1Input,
+      db2Input,
+      tableSelect,
+      keyCols,
+      cmpCols,
+      keyFilterEl,
+      cbChanged,
+      cbAdded,
+      cbRemoved,
+      colSelect,
+      rowLimitEl,
+      rowLimitEnabledEl,
+    } = getCompareFormRefs();
 
     const state = {
       db1Path: db1Input ? db1Input.value : '',
@@ -251,6 +270,7 @@ window.updateRowLimitState = updateRowLimitState;
 window.setUploadStatus = setUploadStatus;
 window.getRunCompareButton = getRunCompareButton;
 window.getCompareActionButtons = getCompareActionButtons;
+window.getCompareFormRefs = getCompareFormRefs;
 window.setButtonBusy = setButtonBusy;
 window.postJson = postJson;
 window.setCompareBusy = setCompareBusy;
