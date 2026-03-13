@@ -66,6 +66,20 @@ def list_access_tables_from_parser(parser) -> List[str]:
             parsed_tables = getattr(parser, "tables", {})
             if hasattr(parsed_tables, "keys"):
                 tables = [str(name) for name in parsed_tables.keys()]
+            elif isinstance(parsed_tables, (list, tuple, set)):
+                tables = [str(name) for name in parsed_tables]
+        elif hasattr(parser, "table_names"):
+            parsed_tables = getattr(parser, "table_names")
+            if callable(parsed_tables):
+                values = parsed_tables()
+                if isinstance(values, (list, tuple, set)):
+                    tables = [str(name) for name in values]
+            elif isinstance(parsed_tables, (list, tuple, set)):
+                tables = [str(name) for name in parsed_tables]
+        elif hasattr(parser, "get_table_names"):
+            values = parser.get_table_names()
+            if isinstance(values, (list, tuple, set)):
+                tables = [str(name) for name in values]
     except Exception:
         tables = []
     seen = set()
@@ -74,7 +88,7 @@ def list_access_tables_from_parser(parser) -> List[str]:
         text = str(name or "").strip()
         if not text:
             continue
-        if text.startswith("MSys"):
+        if text.lower().startswith("msys"):
             continue
         if text in seen:
             continue
@@ -126,8 +140,6 @@ def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
     if isinstance(parsed, list):
         if not parsed:
             return []
-        if isinstance(parsed[0], dict):
-            return [dict(row) for row in parsed]
         normalized_rows: List[Dict[str, Any]] = []
         for row in parsed:
             if isinstance(row, dict):
