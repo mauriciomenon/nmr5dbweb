@@ -609,10 +609,36 @@
           3) Quando o passo 4 estiver liberado, clique em <strong>Ir</strong> para abrir a tela de busca, digite o termo e rode a pesquisa.
         </div>
         <div class="muted" style="font-size:13px;margin-top:8px;">
+          <strong>Quando usar cada formato:</strong><br/>
+          • <strong>DuckDB (.duckdb)</strong>: modo principal para busca com _fulltext e comparacao entre versoes.<br/>
+          • <strong>SQLite (.sqlite/.sqlite3/.db)</strong>: busca e navegacao sem _fulltext obrigatorio; util para validacao leve e interoperabilidade.<br/>
+          • <strong>Access (.accdb/.mdb)</strong>: entrada de origem; fluxo recomendado e converter para DuckDB antes de buscar/comparar.<br/>
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">
+          <strong>Indexacao _fulltext (texto):</strong><br/>
+          • A busca principal em DuckDB usa o indice _fulltext (texto normalizado por linha).<br/>
+          • A comparacao entre bancos <strong>nao</strong> usa _fulltext: ela roda SQL tipado por chave/coluna.<br/>
+          • Exemplo local (bench 50k linhas): recriar _fulltext levou ~50.6s no ambiente atual.
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">
           Dicas rapidas:<br/>
           • Os <strong>badges do topo</strong> mostram o DB ativo, modo (Access/DuckDB), status do indice e alertas.<br/>
           • A coluna da esquerda tem dois blocos: <strong>Bancos</strong> (em cima, para escolher o arquivo .duckdb) e <strong>Tabelas</strong> (embaixo, com a lista de tabelas do banco selecionado).<br/>
           • No modal de busca, voce pode filtrar por tabelas, ajustar limites e exportar o resultado em CSV.
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">
+          <strong>Mac vs Windows (Access):</strong><br/>
+          • No macOS, .accdb costuma depender de driver ODBC nao disponivel por padrao.<br/>
+          • No Windows 11, use driver Access (ACE/ODBC) para manter a conversao .accdb -> .duckdb funcional.<br/>
+        </div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">
+          <strong>Previsao de prioridade (resumo):</strong><br/>
+          • <strong>Extrema:</strong> padrao estavel de conversao .accdb no W11 e smoke automatizado desse fluxo.<br/>
+          • <strong>Alta:</strong> reduzir concentracao de codigo em static/app.js e manter lint limpo sem duplicacao.<br/>
+          • <strong>Media:</strong> ampliar reports de diferenca com mais foco em anomalias por dominio.<br/>
+          • <strong>Baixa:</strong> melhorar microcopias e textos de ajuda por contexto de tela.<br/>
+          • <strong>Boas praticas:</strong> consolidar validacao (eslint/ruff/pytest/playwright) em script unico de release local.<br/>
+          • <strong>Minor:</strong> pequenos ajustes visuais e nomenclaturas internas.
         </div>
       </div>
       <div class="card operations-stage" style="--stagger:2">
@@ -719,7 +745,8 @@
       <button class="tab-btn" data-flow="access">Access (conversao)</button>
     </div>
     <div id="flowDuckdb" class="flow-panel">
-      <div class="small"><strong>Fluxo 1:</strong> selecione ou envie um .duckdb. Para buscar, o _fulltext precisa estar criado.</div>
+      <div class="small"><strong>Fluxo 1:</strong> selecione ou envie um .duckdb/.sqlite/.sqlite3/.db.</div>
+      <div class="small" style="margin-top:6px">DuckDB usa _fulltext para busca principal; SQLite roda busca direta sem esse indice.</div>
       <div class="small" style="margin-top:6px">Dica: use o botao "Indice _fulltext" quando a busca estiver bloqueada.</div>
     </div>
     <div id="flowAccess" class="flow-panel">

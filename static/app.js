@@ -1798,7 +1798,7 @@ async function refreshTables() {
 if (!window.__appSearchFlowBound) {
   window.__appSearchFlowBound = true;
 
-  function setBusyButton(btn, busyText, idleText) {
+  const setBusyButton = (btn, busyText, idleText) => {
     if (!btn) return () => {};
     const original = idleText || btn.textContent;
     btn.disabled = true;
@@ -1807,9 +1807,9 @@ if (!window.__appSearchFlowBound) {
       btn.disabled = false;
       btn.textContent = original;
     };
-  }
+  };
 
-  function setSearchMeta(text, level) {
+  const setSearchMeta = (text, level) => {
     const el = $('searchMeta');
     if (!el) return;
     el.textContent = text || '';
@@ -1817,9 +1817,9 @@ if (!window.__appSearchFlowBound) {
     if (level === 'warn' || level === 'error') {
       el.classList.add(level);
     }
-  }
+  };
 
-  function onSelectRowClick(ev, nameEnc) {
+  const onSelectRowClick = (ev, nameEnc) => {
     if (
       ev &&
       ev.target &&
@@ -1828,9 +1828,9 @@ if (!window.__appSearchFlowBound) {
     )
       return;
     selectUpload(nameEnc, null);
-  }
+  };
 
-  async function deleteUpload(nameEnc, btn) {
+  const deleteUpload = async (nameEnc, btn) => {
     if (!confirm('Deseja realmente excluir este arquivo?')) return;
     const name = decodeURIComponent(nameEnc);
     const msg = $('uploadMsg');
@@ -1865,9 +1865,9 @@ if (!window.__appSearchFlowBound) {
     } finally {
       restoreBtn();
     }
-  }
+  };
 
-  async function selectUpload(nameEnc, btn) {
+  const selectUpload = async (nameEnc, btn) => {
     const name = decodeURIComponent(nameEnc);
     const msg = $('uploadMsg');
     const restoreBtn = setBusyButton(
@@ -1904,9 +1904,9 @@ if (!window.__appSearchFlowBound) {
     } finally {
       restoreBtn();
     }
-  }
+  };
 
-  async function selectDbFromTab(nameEnc) {
+  const selectDbFromTab = async (nameEnc) => {
     const name = decodeURIComponent(nameEnc);
     const msg = $('uploadMsg');
     if (msg) msg.textContent = 'Selecionando: ' + name;
@@ -1935,9 +1935,9 @@ if (!window.__appSearchFlowBound) {
       setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
       logUi('ERROR', 'select db falhou');
     }
-  }
+  };
 
-  async function doSearch(opts) {
+  const doSearch = async (opts) => {
     const q = $('q').value.trim();
     if (!q) {
       setSearchMeta('Digite um termo para pesquisar.', 'warn');
@@ -2071,11 +2071,11 @@ if (!window.__appSearchFlowBound) {
       btn.disabled = false;
       btn.textContent = 'Pesquisar';
     }
-  }
+  };
 
-  function tableTagId(name) {
+  const tableTagId = (name) => {
     return 'tag-' + encodeURIComponent(name);
-  }
+  };
 
   if (typeof window.setBusyButton !== 'function') window.setBusyButton = setBusyButton;
   if (typeof window.setSearchMeta !== 'function') window.setSearchMeta = setSearchMeta;

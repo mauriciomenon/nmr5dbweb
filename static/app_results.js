@@ -243,7 +243,7 @@ async function fetchAllTableRowsForExport(table) {
     }
 
     const cols = data.columns || [];
-    (cols || []).forEach((column) => columnsSet.add(column));
+    cols.forEach((column) => columnsSet.add(column));
 
     const rawRows = data.rows || [];
     const rowObjs = rawRows.map((row) => normalizeTableRowPayload(row, cols));
@@ -458,7 +458,7 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
   if (includeScore) {
     const scoreTh = document.createElement('th');
     scoreTh.className = 'results-score-col';
-    scoreTh.textContent = includeScore ? 'pontuacao' : 'score';
+    scoreTh.textContent = 'pontuacao';
     headRow.appendChild(scoreTh);
   }
   orderedCols.forEach((column) => {

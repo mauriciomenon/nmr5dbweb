@@ -652,6 +652,24 @@
           <div class="help-text">
             O resumo geral mostra o impacto total da tabela. Os filtros abaixo apenas controlam a visualizacao detalhada e a exportacao.
           </div>
+          <div class="help-text">
+            <strong>Como a comparacao funciona hoje:</strong><br/>
+            • Compara DuckDB A vs B com SQL tipado (FULL OUTER JOIN por chave K).<br/>
+            • Diferencas sao classificadas em: nova em A, removida em B, alterada em A/B.<br/>
+            • Nao usa _fulltext/texto puro para comparar colunas; _fulltext e so para busca textual.
+          </div>
+          <div class="help-text">
+            <strong>Exemplo local real (output/smoke):</strong><br/>
+            • tabela: <code>items</code><br/>
+            • resumo: <code>keys_total=2, same=1, changed=1, added=0, removed=0</code><br/>
+            • arquivo de exemplo gerado: <code>artifacts/validation/reports/compare_report_example.json</code>
+          </div>
+          <div class="help-text">
+            <strong>Sobre Access (.accdb/.mdb):</strong><br/>
+            • Esta tela espera DuckDB para comparar rapido e consistente.<br/>
+            • Em macOS, .accdb normalmente falha sem driver ODBC/ACE.<br/>
+            • Em Windows 11, mantenha a conversao Access -> DuckDB para entrar neste fluxo.
+          </div>
         </div>
 
         <div class="card step-card" id="step1Card" style="--stagger:0;">
