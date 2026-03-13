@@ -74,8 +74,9 @@ Relatorios:
 - `documentos/reports/latest_conversion_report.md`
 - `documentos/reports/latest_conversion_report.json`
 - `documentos/reports/latest_conversion_validation.json`
-- `documentos/reports/latest_sqlite_duckdb_validation.md`
-- `documentos/reports/latest_sqlite_duckdb_validation.json`
+- `documentos/reports/latest_db_compare_report.html`
+- `documentos/reports/latest_db_compare_report.md`
+- `documentos/reports/latest_db_compare_report.txt`
 
 ## Formatos e quando usar
 
@@ -135,7 +136,7 @@ PYTHONPATH=. uv run python tools/auto_compare_report.py \
 
 ```bash
 uv run python -m py_compile main.py interface/app_flask_local_search.py access_convert.py
-uv run ruff check .
+uv run ruff check tools/auto_compare_report.py tests/test_auto_compare_report.py interface/app_flask_local_search.py
 PYTHONPATH=. uv run pytest -q
 pnpm exec eslint static --ext .js
 ```
