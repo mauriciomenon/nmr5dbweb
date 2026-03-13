@@ -374,16 +374,35 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             return True, msg4
         return False, f"All methods failed: pyodbc: {msg}; pypyodbc: {msg2}; mdbtools: {msg3}; access-parser: {msg4}"
     else:
-        ok, msg = try_mdbtools()
+        # Non-ODBC preferred path (used in non-Windows runtime):
+        # - .mdb: mdbtools first, then access-parser
+        # - .accdb: access-parser first
+        ext = os.path.splitext(access_path)[1].lower()
+        if ext == ".mdb":
+            ok, msg = try_mdbtools()
+            if ok:
+                return True, msg
+            ok2, msg2 = try_access_parser()
+            if ok2:
+                return True, msg2
+            ok3, msg3 = try_pyodbc()
+            if ok3:
+                return True, msg3
+            ok4, msg4 = try_pypyodbc()
+            if ok4:
+                return True, msg4
+            return False, f"No method succeeded: mdbtools: {msg}; access-parser: {msg2}; pyodbc: {msg3}; pypyodbc: {msg4}"
+
+        ok, msg = try_access_parser()
         if ok:
             return True, msg
-        ok2, msg2 = try_pyodbc()
+        ok2, msg2 = try_mdbtools()
         if ok2:
             return True, msg2
-        ok3, msg3 = try_pypyodbc()
+        ok3, msg3 = try_pyodbc()
         if ok3:
             return True, msg3
-        ok4, msg4 = try_access_parser()
+        ok4, msg4 = try_pypyodbc()
         if ok4:
             return True, msg4
-        return False, f"No method succeeded: mdbtools: {msg}; pyodbc: {msg2}; pypyodbc: {msg3}; access-parser: {msg4}"
+        return False, f"No method succeeded: access-parser: {msg}; mdbtools: {msg2}; pyodbc: {msg3}; pypyodbc: {msg4}"

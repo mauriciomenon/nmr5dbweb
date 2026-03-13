@@ -912,6 +912,10 @@ def maybe_start_auto_index(db_path):
         index_thread.start()
 
 
+def should_prefer_odbc_for_conversion():
+    return os.name == "nt"
+
+
 def start_access_conversion(source_path, output_path, converter):
     global convert_thread, convert_status
 
@@ -931,6 +935,7 @@ def start_access_conversion(source_path, output_path, converter):
                 str(output_path),
                 chunk_size=20000,
                 progress_callback=progress_cb,
+                prefer_odbc=should_prefer_odbc_for_conversion(),
             )
             with convert_lock:
                 convert_status["running"] = False

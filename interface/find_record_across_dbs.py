@@ -23,6 +23,7 @@ import csv
 import datetime
 import re
 import sqlite3
+import importlib
 
 try:  # opcionais
     import duckdb
@@ -37,6 +38,75 @@ except Exception:  # pragma: no cover
 
 SUPPORTED_EXTS = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
 DATE_RE = re.compile(r"(?P<y>\d{4})[-_]? ?(?P<m>\d{2})[-_]? ?(?P<d>\d{2})")
+
+
+def load_access_parser_module():
+    try:
+        return importlib.import_module("access_parser"), None
+    except Exception as exc1:
+        try:
+            return importlib.import_module("access_parser_access"), None
+        except Exception as exc2:
+            return None, f"{exc1}; {exc2}"
+
+
+def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
+    if parsed is None:
+        return []
+    if isinstance(parsed, dict):
+        normalized: Dict[str, List[Any]] = {}
+        max_len = 0
+        for col_name, col_data in parsed.items():
+            if isinstance(col_data, (list, tuple)):
+                seq = list(col_data)
+            elif col_data is None:
+                seq = []
+            else:
+                seq = [col_data]
+            normalized[str(col_name)] = seq
+            max_len = max(max_len, len(seq))
+        if max_len == 0:
+            return []
+        rows: List[Dict[str, Any]] = []
+        for idx in range(max_len):
+            row_obj: Dict[str, Any] = {}
+            for col_name, seq in normalized.items():
+                row_obj[col_name] = seq[idx] if idx < len(seq) else None
+            rows.append(row_obj)
+        return rows
+    if isinstance(parsed, list):
+        if not parsed:
+            return []
+        if isinstance(parsed[0], dict):
+            return [dict(row) for row in parsed]
+    if hasattr(parsed, "to_dict"):
+        try:
+            data = parsed.to_dict(orient="records")
+            if isinstance(data, list):
+                return [dict(row) for row in data if isinstance(row, dict)]
+        except Exception:
+            return []
+    return []
+
+
+def values_equal(left: Any, right: Any) -> bool:
+    if left is None and right is None:
+        return True
+    if right is None:
+        return left is None
+    if isinstance(right, bool):
+        return bool(left) == right
+    if isinstance(right, int) and not isinstance(right, bool):
+        try:
+            return int(left) == right
+        except Exception:
+            return str(left) == str(right)
+    if isinstance(right, float):
+        try:
+            return float(left) == right
+        except Exception:
+            return str(left) == str(right)
+    return str(left) == str(right)
 
 
 def parse_filters_string(s: str) -> List[Tuple[str, Any]]:
@@ -161,46 +231,77 @@ def list_columns_duckdb(path: Path, table: str) -> List[str]:
 
 
 def list_tables_access(path: Path) -> List[str]:
-    conn = connect_access(path)
-    try:
-        cur = conn.cursor()
-        tables: List[str] = []
-        for r in cur.tables():
-            try:
-                name = getattr(r, "table_name", None) or (r[2] if len(r) > 2 else None)
-            except Exception:
-                name = None
-            if name and not str(name).startswith("MSys"):
-                tables.append(name)
-        return tables
-    finally:
+    odbc_error = None
+    if pyodbc is not None:
         try:
-            conn.close()
-        except Exception:
-            pass
+            conn = connect_access(path)
+            try:
+                cur = conn.cursor()
+                tables: List[str] = []
+                for r in cur.tables():
+                    try:
+                        name = getattr(r, "table_name", None) or (r[2] if len(r) > 2 else None)
+                    except Exception:
+                        name = None
+                    if name and not str(name).startswith("MSys"):
+                        tables.append(name)
+                return tables
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            odbc_error = str(exc)
+
+    tables, parser_err = list_tables_access_parser(path)
+    if tables:
+        return tables
+    if odbc_error and parser_err:
+        raise RuntimeError(f"falha ODBC: {odbc_error}; falha access-parser: {parser_err}")
+    if odbc_error:
+        raise RuntimeError(f"falha ODBC: {odbc_error}")
+    if parser_err:
+        raise RuntimeError(f"falha access-parser: {parser_err}")
+    return []
 
 
 def list_columns_access(path: Path, table: str) -> List[str]:
-    conn = connect_access(path)
-    try:
-        cols: List[str] = []
-        cur = conn.cursor()
+    odbc_error = None
+    if pyodbc is not None:
         try:
-            for c in cur.columns(table=table):
-                name = getattr(c, "column_name", None) or (c[3] if len(c) > 3 else None)
-                if name:
-                    cols.append(name)
-        except Exception:
-            # fallback: SELECT * LIMIT 0
-            cur = conn.cursor()
-            cur.execute(f"SELECT TOP 0 * FROM [{table}]")
-            cols = [d[0] for d in cur.description]
+            conn = connect_access(path)
+            try:
+                cols: List[str] = []
+                cur = conn.cursor()
+                try:
+                    for c in cur.columns(table=table):
+                        name = getattr(c, "column_name", None) or (c[3] if len(c) > 3 else None)
+                        if name:
+                            cols.append(name)
+                except Exception:
+                    cur = conn.cursor()
+                    cur.execute(f"SELECT TOP 0 * FROM [{table}]")
+                    cols = [d[0] for d in cur.description]
+                return cols
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            odbc_error = str(exc)
+
+    cols, parser_err = list_columns_access_parser(path, table)
+    if cols:
         return cols
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+    if odbc_error and parser_err:
+        raise RuntimeError(f"falha ODBC: {odbc_error}; falha access-parser: {parser_err}")
+    if odbc_error:
+        raise RuntimeError(f"falha ODBC: {odbc_error}")
+    if parser_err:
+        raise RuntimeError(f"falha access-parser: {parser_err}")
+    return []
 
 
 def connect_access(path: Path):
@@ -224,6 +325,81 @@ def connect_access(path: Path):
             raise last_err
         raise RuntimeError("Falha ao conectar via ODBC")
     return conn
+
+
+def list_tables_access_parser(path: Path) -> Tuple[List[str], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return [], f"modulo access-parser indisponivel: {err}"
+    try:
+        parser = module.AccessParser(str(path))
+    except Exception as exc:
+        return [], str(exc)
+    try:
+        catalog = getattr(parser, "catalog", None)
+        tables: List[str] = []
+        if catalog is not None and hasattr(catalog, "keys"):
+            tables = [str(name) for name in catalog.keys()]
+        elif hasattr(parser, "tables"):
+            parsed_tables = getattr(parser, "tables", {})
+            if hasattr(parsed_tables, "keys"):
+                tables = [str(name) for name in parsed_tables.keys()]
+        tables = [name for name in tables if name and not str(name).startswith("MSys")]
+        return tables, None
+    except Exception as exc:
+        return [], str(exc)
+
+
+def list_columns_access_parser(path: Path, table: str) -> Tuple[List[str], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return [], f"modulo access-parser indisponivel: {err}"
+    try:
+        parser = module.AccessParser(str(path))
+        rows = normalize_access_parser_rows(parser.parse_table(table))
+    except Exception as exc:
+        return [], str(exc)
+    if not rows:
+        return [], None
+    columns = [str(col) for col in rows[0].keys()]
+    return columns, None
+
+
+def search_in_table_access_parser(path: Path, table: str, filters: List[Tuple[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return False, None, f"modulo access-parser indisponivel: {err}"
+    try:
+        parser = module.AccessParser(str(path))
+        rows = normalize_access_parser_rows(parser.parse_table(table))
+    except Exception as exc:
+        return False, None, f"erro access-parser: {exc}"
+    if not rows:
+        return False, None, None
+
+    first = rows[0]
+    lookup = {str(col).lower(): str(col) for col in first.keys()}
+    for col, _val in filters:
+        if str(col).lower() not in lookup:
+            return False, None, f"coluna '{col}' nao encontrada na tabela {table}"
+
+    for row in rows:
+        matched = True
+        for col, expected in filters:
+            real_col = lookup[str(col).lower()]
+            if not values_equal(row.get(real_col), expected):
+                matched = False
+                break
+        if not matched:
+            continue
+        row_dict: Dict[str, Any] = {}
+        for cname, value in row.items():
+            if isinstance(value, (datetime.date, datetime.datetime)):
+                row_dict[str(cname)] = value.isoformat()
+            else:
+                row_dict[str(cname)] = value
+        return True, row_dict, None
+    return False, None, None
 
 
 def list_tables_for_engine(engine: str, path: Path) -> List[str]:
@@ -307,28 +483,31 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
             desc = [c[0] for c in cur.description]
         finally:
             conn.close()
-    else:  # access via pyodbc
+    else:  # access via pyodbc, com fallback access-parser
         if pyodbc is None:
-            return False, None, "pyodbc nao instalado"
+            return search_in_table_access_parser(path, table, filters)
         try:
             conn = connect_access(path)
-        except Exception as exc:
-            return False, None, f"falha ao conectar via ODBC: {exc}"
-        try:
-            cur = conn.cursor()
-            sql = (
-                "SELECT TOP 1 * FROM [" + table + "] WHERE " + " AND ".join(where_parts)
-            )
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            if not row:
-                return False, None, None
-            desc = [d[0] for d in cur.description]
-        finally:
             try:
-                conn.close()
-            except Exception:
-                pass
+                cur = conn.cursor()
+                sql = (
+                    "SELECT TOP 1 * FROM [" + table + "] WHERE " + " AND ".join(where_parts)
+                )
+                cur.execute(sql, params)
+                row = cur.fetchone()
+                if not row:
+                    return False, None, None
+                desc = [d[0] for d in cur.description]
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            found, sample, parser_err = search_in_table_access_parser(path, table, filters)
+            if parser_err is not None:
+                return False, None, f"falha ODBC: {exc}; falha access-parser: {parser_err}"
+            return found, sample, None
 
     # converte linha em dict simples, mas limitando a alguns campos mais úteis
     row_dict: Dict[str, Any] = {}

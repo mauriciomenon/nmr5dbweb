@@ -834,6 +834,116 @@ def test_admin_select_access_sem_derivado_rejeita_conversao_em_execucao(tmp_path
     assert resp.get_json()["error"] == "Já existe uma conversão em execução"
 
 
+def test_start_access_conversion_repassa_prefer_odbc_false(tmp_path, monkeypatch):
+    source = tmp_path / "sample.accdb"
+    output = tmp_path / "sample.duckdb"
+    source.write_bytes(b"access")
+    calls = {}
+
+    class FakeThread:
+        def __init__(self, target=None, daemon=False):
+            self.target = target
+            self.daemon = daemon
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            if self.target is not None:
+                self.target()
+
+    monkeypatch.setattr(local_search.threading, "Thread", FakeThread)
+    monkeypatch.setattr(local_search, "should_prefer_odbc_for_conversion", lambda: False)
+    monkeypatch.setattr(local_search, "set_db_path", lambda p: calls.setdefault("db_path", p))
+    monkeypatch.setattr(local_search, "maybe_start_auto_index", lambda p: calls.setdefault("index_path", str(p)))
+    monkeypatch.setattr(
+        local_search,
+        "convert_status",
+        {
+            "running": False,
+            "ok": None,
+            "msg": "",
+            "input": "",
+            "output": "",
+            "total_tables": 0,
+            "processed_tables": 0,
+            "current_table": "",
+            "percent": 0,
+        },
+    )
+
+    def fake_converter(src, dst, chunk_size=0, progress_callback=None, prefer_odbc=None):
+        calls["src"] = src
+        calls["dst"] = dst
+        calls["chunk_size"] = chunk_size
+        calls["prefer_odbc"] = prefer_odbc
+        return True, "converted via access-parser"
+
+    local_search.start_access_conversion(source, output, fake_converter)
+
+    assert calls["src"] == str(source)
+    assert calls["dst"] == str(output)
+    assert calls["chunk_size"] == 20000
+    assert calls["prefer_odbc"] is False
+    assert calls["db_path"] == str(output)
+    assert calls["index_path"] == str(output)
+
+
+def test_start_access_conversion_repassa_prefer_odbc_true(tmp_path, monkeypatch):
+    source = tmp_path / "sample.accdb"
+    output = tmp_path / "sample.duckdb"
+    source.write_bytes(b"access")
+    calls = {}
+
+    class FakeThread:
+        def __init__(self, target=None, daemon=False):
+            self.target = target
+            self.daemon = daemon
+
+        def is_alive(self):
+            return False
+
+        def start(self):
+            if self.target is not None:
+                self.target()
+
+    monkeypatch.setattr(local_search.threading, "Thread", FakeThread)
+    monkeypatch.setattr(local_search, "should_prefer_odbc_for_conversion", lambda: True)
+    monkeypatch.setattr(local_search, "set_db_path", lambda p: calls.setdefault("db_path", p))
+    monkeypatch.setattr(local_search, "maybe_start_auto_index", lambda p: calls.setdefault("index_path", str(p)))
+    monkeypatch.setattr(
+        local_search,
+        "convert_status",
+        {
+            "running": False,
+            "ok": None,
+            "msg": "",
+            "input": "",
+            "output": "",
+            "total_tables": 0,
+            "processed_tables": 0,
+            "current_table": "",
+            "percent": 0,
+        },
+    )
+
+    def fake_converter(src, dst, chunk_size=0, progress_callback=None, prefer_odbc=None):
+        calls["src"] = src
+        calls["dst"] = dst
+        calls["chunk_size"] = chunk_size
+        calls["prefer_odbc"] = prefer_odbc
+        return True, "converted via pyodbc"
+
+    local_search.start_access_conversion(source, output, fake_converter)
+
+    assert calls["src"] == str(source)
+    assert calls["dst"] == str(output)
+    assert calls["chunk_size"] == 20000
+    assert calls["prefer_odbc"] is True
+    assert calls["db_path"] == str(output)
+    assert calls["index_path"] == str(output)
+
+
 def test_api_search_duckdb_usa_db_path_recebido(tmp_path, monkeypatch):
     active_db = tmp_path / "active.duckdb"
     route_db = tmp_path / "route.duckdb"
