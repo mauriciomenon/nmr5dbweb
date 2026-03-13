@@ -1,5 +1,45 @@
 # Round Status
 
+## Current Slice: Operator-Focused Search And Anomaly Reading
+
+### Goal
+
+1. Make the main search screen useful for wide real operator tables
+2. Push compare reading closer to anomaly review
+3. Keep reducing duplication in browse/search without broad refactor
+
+### Applied
+
+1. `static/app_results.js` now renders search results as an operator-focused workbench:
+   - sticky score and leading columns
+   - long-field handling
+   - compact preview cards per row
+   - same renderer reused for full table open
+2. `static/compare_dbs_render.js` now adds:
+   - families most affected
+   - observed state transitions
+   on top of the existing compare summary
+3. `interface/app_flask_local_search.py` now shares more browse/search internals:
+   - table-page query execution
+   - Access search column selection
+   - Access row text/payload building
+
+### What Was Proved
+
+- Search output is more readable for real wide tables without changing the API.
+- Compare output now surfaces more operational anomaly signals before row-by-row inspection.
+- Access search path repeats less backend logic while keeping the current behavior.
+
+### Validation After Changes
+
+- `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+- `pnpm exec eslint static`: passed
+- `node --check static/app_results.js`: passed
+- `node --check static/compare_dbs_render.js`: passed
+- `./.venv/bin/python -m py_compile $(rg --files -g "*.py")`: passed
+- `ruff`, `ty`: passed
+- focused `pytest`: `62 passed`
+
 ## Current Slice: Search Usability With Better Table Reading
 
 ### Goal

@@ -47,6 +47,7 @@ Track real product debt that should not be fixed in the current slice.
 21. If `output/` grows further, define retention rules so the local validation area does not become an unbounded dump of operator samples.
 22. Reassess the legacy `.eslintrc.cjs` fallback only after external analyzers stop depending on old `ESLint 8.x` behavior.
 23. If the real operator datasets keep exposing the same column families, consider making the frontend column-priority list configurable instead of hard-coded.
+24. Reassess whether the operator preview cards in the search screen should become collapsible when datasets with many short tables dominate usage.
 
 ## Do Not Pull Into Slice 1
 

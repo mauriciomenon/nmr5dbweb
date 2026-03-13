@@ -30,6 +30,14 @@ The first stabilization slice is intentionally narrow:
 
 ## Setup Status
 
+- Search results are now rendered as an operator-oriented table view:
+  - sticky score and leading columns
+  - compact row preview cards
+  - long-field handling for wide schemas
+- Compare summary now also surfaces:
+  - families most affected
+  - state transitions observed
+- Access search path in `interface/app_flask_local_search.py` now repeats less row/column preparation logic.
 - The main search results table is no longer a raw dump:
   - fields are reordered toward operator-relevant columns
   - long-text fields are called out explicitly

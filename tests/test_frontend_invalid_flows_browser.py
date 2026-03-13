@@ -178,6 +178,7 @@ def test_success_frontend_smoke_search_page(ui_server, sample_data):
         assert "signals" in (page.locator("#resultsArea").text_content() or "")
         assert "Campos na frente" in (page.locator("#resultsArea").text_content() or "")
         assert "Linhas exibidas" in (page.locator("#resultsArea").text_content() or "")
+        assert "Linha 1" in (page.locator("#resultsArea").text_content() or "")
 
         page.goto(ui_server + "/admin.html")
         page.wait_for_selector("#statusBox")
@@ -220,6 +221,7 @@ def test_success_frontend_smoke_compare_page(ui_server, sample_data):
         assert "beta-old" in (page.locator("#results").text_content() or "")
         assert "Pistas operacionais" in (page.locator("#summary").text_content() or "")
         assert "Padroes de alteracao" in (page.locator("#summary").text_content() or "")
+        assert "Familias mais afetadas" in (page.locator("#summary").text_content() or "")
 
 
 def test_success_frontend_smoke_compare_pagination_and_export(ui_server, sample_data):

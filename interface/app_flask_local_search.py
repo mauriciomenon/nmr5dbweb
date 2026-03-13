@@ -951,6 +951,35 @@ def build_score_by_table(results):
     }
 
 
+def select_access_search_columns(columns):
+    text_columns = [
+        column_name
+        for column_name, data_type in columns
+        if any(token in data_type for token in ("CHAR", "TEXT", "VARCHAR", "MEMO"))
+    ]
+    if text_columns:
+        return text_columns
+    return [column_name for column_name, _data_type in columns]
+
+
+def build_access_row_payload(row, columns):
+    row_json = {}
+    try:
+        for index, column_name in enumerate(columns):
+            row_json[column_name] = row[index]
+    except Exception:
+        row_json = {"row": str(row)}
+    return row_json
+
+
+def build_access_row_text(row):
+    try:
+        row_values = [serialize_value(value) for value in row]
+        return normalize_text(" ".join(row_values))
+    except Exception:
+        return normalize_text(str(row))
+
+
 def fallback_search_sqlite(
     sqlite_path,
     q,
@@ -1721,8 +1750,7 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                         cols = [(name, "") for name in desc]
                 except Exception:
                     cols = []
-            text_cols = [c for c, dt in cols if any(x in dt for x in ("CHAR","TEXT","VARCHAR","MEMO"))] if cols else []
-            search_cols = text_cols if text_cols else [c for c, _ in cols] if cols else []
+            search_cols = select_access_search_columns(cols) if cols else []
             if not search_cols:
                 continue
             where_sql = build_where_for_columns(search_cols)
@@ -1746,11 +1774,7 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
             desc = [d[0] for d in cur.description] if cur.description else []
             table_results = []
             for r in rows:
-                try:
-                    row_vals = [serialize_value(v) for v in r]
-                    row_text = normalize_text(" ".join(row_vals))
-                except Exception:
-                    row_text = normalize_text(str(r))
+                row_text = build_access_row_text(r)
                 scored = score_search_content(q_norm, tokens, row_text, min_score)
                 if scored is None:
                     continue
@@ -1766,12 +1790,7 @@ def fallback_search_access(access_path, q, per_table=10, candidate_limit=1000, t
                         pk_val = r[0] if len(r) > 0 else None
                 except Exception:
                     pass
-                row_json = {}
-                try:
-                    for i, cname in enumerate(desc):
-                        row_json[cname] = r[i]
-                except Exception:
-                    row_json = {"row": str(r)}
+                row_json = build_access_row_payload(r, desc)
                 table_results.append({"score": scored["score"], "pk_col": pk_col, "pk_value": pk_val, "row": row_json})
                 candidate_count += 1
                 if candidate_count >= candidate_limit:

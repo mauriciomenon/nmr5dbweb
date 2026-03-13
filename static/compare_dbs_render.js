@@ -163,6 +163,54 @@ function buildComparePatterns(data, changedRows) {
     .slice(0, 5);
 }
 
+function pickDomainField(row, candidates) {
+  for (const candidate of candidates) {
+    const valueA = (row.a || {})[candidate];
+    const valueB = (row.b || {})[candidate];
+    if (valueA !== undefined && valueA !== null && valueA !== '') {
+      return String(valueA);
+    }
+    if (valueB !== undefined && valueB !== null && valueB !== '') {
+      return String(valueB);
+    }
+  }
+  return '';
+}
+
+function buildCompareDomainSignals(changedRows) {
+  const familyCounts = {};
+  const stateTransitions = {};
+
+  for (const row of changedRows) {
+    const family =
+      pickDomainField(row, ['PNLNAM', 'SUBNAM', 'DEVNAM']) ||
+      'familia nao identificada';
+    familyCounts[family] = (familyCounts[family] || 0) + 1;
+
+    const oldState = pickDomainField(row, ['STACON', 'NORMST', 'SOEHIS']);
+    const newState = pickDomainField(
+      {
+        a: row.b || {},
+        b: row.a || {},
+      },
+      ['STACON', 'NORMST', 'SOEHIS']
+    );
+    if (oldState || newState) {
+      const label = `${oldState || '-'} -> ${newState || '-'}`;
+      stateTransitions[label] = (stateTransitions[label] || 0) + 1;
+    }
+  }
+
+  return {
+    topFamilies: Object.entries(familyCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5),
+    topTransitions: Object.entries(stateTransitions)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5),
+  };
+}
+
 function renderCompareSummary(data, summaryData) {
   const summaryEl = document.getElementById('summary');
   const changedRows = data.rows
@@ -184,6 +232,7 @@ function renderCompareSummary(data, summaryData) {
   const alerts = buildCompareAlerts(data, changedRows);
   const review = buildComparePriorityReview(data, changedRows);
   const patterns = buildComparePatterns(data, changedRows);
+  const domainSignals = buildCompareDomainSignals(changedRows);
   const topKeysHtml = review.topKeys.length
     ? `<div class="report-review-list">${review.topKeys
         .map(
@@ -208,6 +257,22 @@ function renderCompareSummary(data, summaryData) {
         )
         .join('')}</div>`
     : '';
+  const familyHtml = domainSignals.topFamilies.length
+    ? `<div class="report-review-list">${domainSignals.topFamilies
+        .map(
+          ([family, count]) =>
+            `<div class="report-review-item"><strong>${family}</strong><span>${count} chave(s) alteradas</span></div>`
+        )
+        .join('')}</div>`
+    : '';
+  const transitionsHtml = domainSignals.topTransitions.length
+    ? `<div class="report-review-list">${domainSignals.topTransitions
+        .map(
+          ([label, count]) =>
+            `<div class="report-review-item"><strong>${label}</strong><span>${count} ocorrencia(s)</span></div>`
+        )
+        .join('')}</div>`
+    : '';
   summaryEl.innerHTML = `
     <div class="result-summary-card">
       <div class="result-summary-grid">
@@ -228,6 +293,8 @@ function renderCompareSummary(data, summaryData) {
         ${topKeysHtml ? `<div class="result-col-diff"><strong>Chaves para revisar primeiro:</strong>${topKeysHtml}</div>` : ''}
         ${topColumnsHtml ? `<div class="result-col-diff"><strong>Colunas mais impactadas:</strong>${topColumnsHtml}</div>` : ''}
         ${patternsHtml ? `<div class="result-col-diff"><strong>Padroes de alteracao:</strong>${patternsHtml}</div>` : ''}
+        ${familyHtml ? `<div class="result-col-diff"><strong>Familias mais afetadas:</strong>${familyHtml}</div>` : ''}
+        ${transitionsHtml ? `<div class="result-col-diff"><strong>Transicoes de estado observadas:</strong>${transitionsHtml}</div>` : ''}
       </div>
     </div>
   `;

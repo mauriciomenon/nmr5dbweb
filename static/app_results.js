@@ -155,6 +155,60 @@ function buildTableOverview(tableName, orderedCols, shownCount, totalCount) {
   return overview;
 }
 
+function pickRowHeadlineFields(row, orderedCols) {
+  const preferred = [
+    'PNTNAM',
+    'SUBNAM',
+    'PNLNAM',
+    'ITEMNB',
+    'PNTNO',
+    'RTUNO',
+    'INHPRO',
+    'STACON',
+    'NORMST',
+  ];
+  const byKey = new Map(
+    orderedCols.map((name) => [normalizeColumnKey(name), name])
+  );
+  const fields = [];
+  preferred.forEach((key) => {
+    const column = byKey.get(key);
+    if (!column) return;
+    const value =
+      row && Object.prototype.hasOwnProperty.call(row, column)
+        ? row[column]
+        : '';
+    if (value === '' || value === null || value === undefined) return;
+    fields.push([column, value]);
+  });
+  return fields.slice(0, 4);
+}
+
+function buildRowPreviewBand(rowObjs, orderedCols) {
+  const preview = document.createElement('div');
+  preview.className = 'row-preview-band';
+  rowObjs.slice(0, 3).forEach((item, index) => {
+    const card = document.createElement('div');
+    card.className = 'row-preview-card';
+    const fields = pickRowHeadlineFields(item.row || {}, orderedCols);
+    card.innerHTML = `
+      <div class="row-preview-title">Linha ${index + 1}${item.score != null ? ` · score ${item.score}` : ''}</div>
+      ${
+        fields.length
+          ? fields
+              .map(
+                ([column, value]) =>
+                  `<div class="row-preview-line"><strong>${escapeHtml(column)}:</strong> ${escapeHtml(serializeCellValue(value))}</div>`
+              )
+              .join('')
+          : '<div class="row-preview-line">Sem campos prioritarios preenchidos neste recorte.</div>'
+      }
+    `;
+    preview.appendChild(card);
+  });
+  return preview;
+}
+
 function buildTableCell(value, tokens, wide, extraClass) {
   const td = document.createElement('td');
   td.className = `results-cell${wide ? ' results-cell-wide' : ''}${extraClass ? ' ' + extraClass : ''}`;
@@ -318,6 +372,7 @@ function renderResults(q, results, per_table) {
         rowObjs.length
       )
     );
+    block.appendChild(buildRowPreviewBand(shownRows, tableView.orderedCols));
     block.appendChild(tableView.shell);
     if (rowObjs.length > shownRows.length) {
       const note = document.createElement('div');
@@ -384,6 +439,7 @@ async function openTable(ev, tableEnc) {
         data.total || rowObjs.length
       )
     );
+    hdr.appendChild(buildRowPreviewBand(rowObjs, tableView.orderedCols));
     hdr.appendChild(tableView.shell);
     const pager = document.createElement('div');
     pager.className = 'controls-footer';
