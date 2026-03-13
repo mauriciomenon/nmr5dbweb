@@ -38,6 +38,27 @@ async function loadTables() {
     restoreBtn();
     return;
   }
+  if (normalizePathForCompare(db1) === normalizePathForCompare(db2)) {
+    statusEl.textContent = 'Selecione arquivos diferentes para A e B.';
+    setCompareStatus(
+      'Selecione arquivos diferentes para A (novo) e B (antigo).',
+      'warn'
+    );
+    setFlowHint(
+      'A e B apontam para o mesmo arquivo. Escolha bancos diferentes para comparar.',
+      'warn'
+    );
+    setStepState('stepPickFiles', 'Arquivos iguais', 'warn');
+    setStepState('stepLoadTables', 'Aguardando', null);
+    tableSelect.innerHTML =
+      '<option value="">-- informe arquivos diferentes --</option>';
+    if (compareDbState.tablesTimeout) {
+      clearTimeout(compareDbState.tablesTimeout);
+      compareDbState.tablesTimeout = null;
+    }
+    restoreBtn();
+    return;
+  }
 
   setFlowHint('Carregando tabelas em comum entre os dois bancos...', 'info');
   setStepState('stepPickFiles', 'Concluido', 'done');
@@ -203,9 +224,31 @@ function applyCompareMissingDbState() {
   setStepState('stepCompare', 'Aguardando', null);
 }
 
+function normalizePathForCompare(pathValue) {
+  return String(pathValue || '').trim().replace(/\\/g, '/').toLowerCase();
+}
+
 function validateCompareRequest(compareRequest) {
   if (!compareRequest.db1 || !compareRequest.db2) {
     applyCompareMissingDbState();
+    return false;
+  }
+  if (
+    normalizePathForCompare(compareRequest.db1) &&
+    normalizePathForCompare(compareRequest.db1) ===
+      normalizePathForCompare(compareRequest.db2)
+  ) {
+    setCompareStatus(
+      'Selecione arquivos diferentes para A (novo) e B (antigo).',
+      'warn'
+    );
+    setFlowHint(
+      'A e B apontam para o mesmo arquivo. Escolha bancos diferentes para comparar.',
+      'warn'
+    );
+    setStepState('stepPickFiles', 'Arquivos iguais', 'warn');
+    setStepState('stepLoadTables', 'Aguardando', null);
+    setStepState('stepCompare', 'Aguardando', null);
     return false;
   }
   if (!compareRequest.table) {

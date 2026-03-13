@@ -216,6 +216,22 @@ def test_invalid_frontend_flows_render_inline_feedback(ui_server):
         assert "Preencha os filtros antes de executar." in (page.locator("#statusText").text_content() or "")
 
 
+def test_invalid_compare_rejects_same_db_file(ui_server, sample_data):
+    with with_browser() as (_browser, _browser_context, page):
+        page.goto(ui_server + "/compare_dbs")
+        page.wait_for_selector("#db1Path")
+        same_path = str(sample_data["db_a"])
+        page.locator("#db1Path").fill(same_path)
+        page.locator("#db2Path").fill(same_path)
+        page.locator("#btnLoadTables").click()
+        page.wait_for_function(
+            "() => (document.getElementById('statusMeta').textContent || '').includes('Selecione arquivos diferentes para A e B.')"
+        )
+        assert "Selecione arquivos diferentes para A e B." in (
+            page.locator("#statusMeta").text_content() or ""
+        )
+
+
 def test_success_frontend_smoke_search_page(ui_server, sample_data):
     with with_browser() as (_browser, _browser_context, page):
         page.goto(ui_server + "/")
