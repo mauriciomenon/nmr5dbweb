@@ -902,6 +902,15 @@ def compare_internal_error(route_name, exc):
     return jsonify({"error": str(exc)}), 500
 
 
+def run_compare_json_route(route_name, payload_builder):
+    try:
+        return jsonify(payload_builder())
+    except (ValueError, FileNotFoundError) as exc:
+        return compare_bad_request(exc)
+    except Exception as exc:  # noqa: BLE001
+        return compare_internal_error(route_name, exc)
+
+
 def json_error(message, status_code=400, **extra):
     payload = {"error": str(message)}
     if extra:
@@ -2019,18 +2028,17 @@ def api_compare_db_tables():
     }
     """
     data = request.get_json(silent=True) or {}
-    try:
+
+    def _build_payload():
         db1, db2 = parse_compare_db_pair_request(data, "compare_db_tables")
         tables = list_common_tables(db1, db2)
         detailed = []
         for t in tables:
             cols = list_table_columns(db1, t)
             detailed.append({"name": t, "columns": cols})
-        return jsonify({"tables": detailed})
-    except (ValueError, FileNotFoundError) as exc:
-        return compare_bad_request(exc)
-    except Exception as exc:  # noqa: BLE001
-        return compare_internal_error("api_compare_db_tables", exc)
+        return {"tables": detailed}
+
+    return run_compare_json_route("api_compare_db_tables", _build_payload)
 
 
 @app.route("/api/compare_db_table_content", methods=["POST"])
@@ -2048,32 +2056,29 @@ def api_compare_db_table_content():
     table = (data.get("table") or "").strip()
     if not table:
         return jsonify({"error": "table é obrigatório"}), 400
-    try:
+
+    def _build_payload():
         db1, db2 = parse_compare_db_pair_request(data, "compare_db_table_content")
-        result = compare_table_content_duckdb(db1, db2, table)
-        return jsonify(result)
-    except (ValueError, FileNotFoundError) as exc:
-        return compare_bad_request(exc)
-    except Exception as exc:  # noqa: BLE001
-        return compare_internal_error("api_compare_db_table_content", exc)
+        return compare_table_content_duckdb(db1, db2, table)
+
+    return run_compare_json_route("api_compare_db_table_content", _build_payload)
 
 
 @app.route("/api/compare_db_overview", methods=["POST"])
 def api_compare_db_overview():
     """Retorna overview de diferenca por tabela para dois bancos DuckDB."""
     data = request.get_json(silent=True) or {}
-    try:
+
+    def _build_payload():
         tables = parse_compare_overview_tables(data.get("tables"))
         db1, db2 = parse_compare_db_pair_request(data, "compare_db_overview")
         overview = compare_tables_overview_duckdb(db1, db2, tables=tables)
-        return jsonify({
+        return {
             "overview": overview,
             "summary": build_compare_overview_summary(overview),
-        })
-    except (ValueError, FileNotFoundError) as exc:
-        return compare_bad_request(exc)
-    except Exception as exc:  # noqa: BLE001
-        return compare_internal_error("api_compare_db_overview", exc)
+        }
+
+    return run_compare_json_route("api_compare_db_overview", _build_payload)
 
 
 @app.route("/api/compare_db_rows", methods=["POST"])
