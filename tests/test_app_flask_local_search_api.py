@@ -725,6 +725,42 @@ def test_api_search_access_driver_error_retorna_503(tmp_path, monkeypatch):
     assert "Convert to DuckDB first" in payload["hint"]
 
 
+def test_api_search_duckdb_internal_error_retorna_500(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    db_path.write_bytes(b"placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(
+        local_search,
+        "api_search_duckdb",
+        lambda *_args, **_kwargs: {"error": "search failed: forced"},
+    )
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 500
+    payload = resp.get_json()
+    assert "forced" in payload["error"]
+
+
+def test_api_search_sqlite_internal_error_retorna_500(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.sqlite3"
+    db_path.write_bytes(b"placeholder")
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(
+        local_search,
+        "fallback_search_sqlite",
+        lambda *_args, **_kwargs: {"error": "sqlite fallback failed"},
+    )
+
+    resp = client.get("/api/search?q=alpha")
+
+    assert resp.status_code == 500
+    payload = resp.get_json()
+    assert "sqlite fallback failed" in payload["error"]
+
+
 def test_api_search_access_com_duckdb_derivado_usa_duckdb(tmp_path, monkeypatch):
     client = app.test_client()
     access_path = tmp_path / "sample.accdb"

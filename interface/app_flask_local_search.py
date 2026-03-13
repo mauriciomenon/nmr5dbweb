@@ -2512,6 +2512,11 @@ def fallback_search_access(
 
 
 def run_search_for_context(ctx, search_args):
+    def _as_search_error(payload, status_code=500):
+        if isinstance(payload, dict) and payload.get("error"):
+            return {"error": str(payload.get("error"))}, status_code
+        return None
+
     if ctx["db_engine"] == "duckdb":
         payload = api_search_duckdb(
             ctx["db_path"],
@@ -2523,6 +2528,9 @@ def run_search_for_context(ctx, search_args):
             search_args["min_score"],
             tables=search_args["tables"],
         )
+        err = _as_search_error(payload, 500)
+        if err is not None:
+            return err
         return attach_search_backend(payload, "duckdb_fulltext"), None
     if ctx["db_engine"] == "sqlite":
         payload = fallback_search_sqlite(
@@ -2535,6 +2543,9 @@ def run_search_for_context(ctx, search_args):
             min_score=search_args["min_score"],
             tables=search_args["tables"],
         )
+        err = _as_search_error(payload, 500)
+        if err is not None:
+            return err
         return attach_search_backend(payload, "sqlite_scan"), None
     if ctx["db_engine"] == "access":
         payload = fallback_search_access(
