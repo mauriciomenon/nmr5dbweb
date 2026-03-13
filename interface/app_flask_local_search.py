@@ -481,6 +481,8 @@ def list_uploaded_files():
     for path in sorted(UPLOAD_DIR.iterdir(), key=lambda item: item.name):
         if not path.is_file():
             continue
+        if path.suffix.lower() not in ALLOWED_EXTENSIONS:
+            continue
         stat_info = path.stat()
         uploads.append({
             "name": path.name,
@@ -495,12 +497,40 @@ def resolve_upload_target(filename, *, required=False):
     safe_filename = sanitize_filename(filename)
     if not safe_filename:
         raise ValueError("filename required" if required else "invalid filename or path")
+    try:
+        safe_path = Path(safe_filename)
+        if safe_path.suffix.lower() not in ALLOWED_EXTENSIONS:
+            raise ValueError("extensao invalida")
+    except Exception as exc:
+        raise ValueError("invalid filename or path") from exc
     target = UPLOAD_DIR / safe_filename
     try:
         target.resolve().relative_to(UPLOAD_DIR.resolve())
     except Exception as exc:
         raise ValueError("invalid filename or path") from exc
     return target
+
+
+def next_upload_dest(filename):
+    safe_filename = sanitize_filename(filename)
+    if not safe_filename:
+        raise ValueError("invalid filename")
+
+    base = Path(safe_filename).stem
+    ext = Path(safe_filename).suffix
+    if ext.lower() not in ALLOWED_EXTENSIONS:
+        raise ValueError(f"extensão não permitida: {ext}")
+
+    candidate = UPLOAD_DIR / safe_filename
+    if not candidate.exists():
+        return candidate
+
+    for idx in range(1, 1000):
+        alt_name = f"{base}_{idx}{ext}"
+        candidate = UPLOAD_DIR / alt_name
+        if not candidate.exists():
+            return candidate
+    raise ValueError("não foi possivel encontrar nome unico para upload")
 
 
 def should_select_uploaded_db(extension):
@@ -1157,7 +1187,10 @@ def admin_upload():
     converter = convert_access_to_duckdb
     if ext in (".mdb", ".accdb") and converter is None:
         return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
-    dest = UPLOAD_DIR / filename
+    try:
+        dest = next_upload_dest(filename)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
     f.save(dest)
     if should_select_uploaded_db(ext):
         set_db_path(str(dest))
@@ -1169,7 +1202,7 @@ def admin_upload():
             active_converter = converter
             if active_converter is None:
                 return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
-            out_duckdb = build_access_conversion_output(filename)
+            out_duckdb = build_access_conversion_output(dest.name)
             convert_status.update({
                 "running": True, "ok": None, "msg": "started",
                 "input": str(dest), "output": str(out_duckdb),
