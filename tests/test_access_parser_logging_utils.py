@@ -58,4 +58,6 @@ def test_is_access_parser_no_data_message_variants():
     assert is_access_parser_no_data_message("tabela vazia")
     assert is_access_parser_no_data_message("sem dados")
     assert is_access_parser_no_data_message("No rows returned")
+    assert is_access_parser_no_data_message("table contains no records")
+    assert is_access_parser_no_data_message("query returned 0 rows")
     assert not is_access_parser_no_data_message("table loaded successfully")

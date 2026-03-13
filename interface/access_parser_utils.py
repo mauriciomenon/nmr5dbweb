@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+from collections.abc import Iterable, Mapping
 from typing import Any, Dict, List
 
 
@@ -108,8 +109,32 @@ def is_access_parser_no_data_message(message: Any) -> bool:
         "tabela vazia",
         "table empty",
         "no rows",
+        "contains no records",
+        "0 rows",
     )
     return any(token in text for token in patterns)
+
+
+def _normalize_access_row_object(row: Any) -> Dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    if isinstance(row, Mapping):
+        return {str(key): value for key, value in row.items()}
+    if hasattr(row, "_asdict"):
+        try:
+            return dict(row._asdict())
+        except Exception:
+            pass
+    if isinstance(row, (list, tuple)):
+        return {f"col_{idx}": value for idx, value in enumerate(row)}
+    if hasattr(row, "__dict__"):
+        try:
+            raw = dict(vars(row))
+            if raw:
+                return raw
+        except Exception:
+            pass
+    return {"value": row}
 
 
 def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
@@ -142,30 +167,13 @@ def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
             return []
         normalized_rows: List[Dict[str, Any]] = []
         for row in parsed:
-            if isinstance(row, dict):
-                normalized_rows.append(dict(row))
-                continue
-            if hasattr(row, "_asdict"):
-                try:
-                    normalized_rows.append(dict(row._asdict()))
-                    continue
-                except Exception:
-                    pass
-            if isinstance(row, (list, tuple)):
-                normalized_rows.append(
-                    {f"col_{idx}": value for idx, value in enumerate(row)}
-                )
-                continue
-            if hasattr(row, "__dict__"):
-                try:
-                    raw = dict(vars(row))
-                    if raw:
-                        normalized_rows.append(raw)
-                        continue
-                except Exception:
-                    pass
-            normalized_rows.append({"value": row})
+            normalized_rows.append(_normalize_access_row_object(row))
         return normalized_rows
+    if isinstance(parsed, Iterable) and not isinstance(parsed, (str, bytes, bytearray)):
+        items = list(parsed)
+        if not items:
+            return []
+        return [_normalize_access_row_object(row) for row in items]
     if hasattr(parsed, "to_dict"):
         try:
             data = parsed.to_dict(orient="records")
