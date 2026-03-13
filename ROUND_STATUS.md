@@ -1,5 +1,49 @@
 # Round Status
 
+## Current Slice: Auto Compare Report Hardening And Operator Readability
+
+### Goal
+
+1. Keep the report path stable while improving readability for real operator review.
+2. Make report metadata explicit and easier to audit across Access, DuckDB, and SQLite flows.
+3. Add practical table controls in exported HTML without touching backend compare performance.
+4. Keep behavior-preserving fixes focused on data fidelity (no synthetic formatting noise).
+
+### Applied
+
+1. Strengthened `tools/auto_compare_report.py` and its focused coverage in `tests/test_auto_compare_report.py`.
+2. Added and refined interactive report outputs (`.html`, `.md`, `.txt`) with:
+   - per-column quick filter
+   - access-style quick mode (`contains` / `not_contains`)
+   - column sort controls (`asc` / `desc`)
+   - reset controls per table block
+3. Improved metadata readability in report sources:
+   - size rendered in MB
+   - mtime rendered as `YYYY-MM-DD HH:MM`
+   - clickable source/derived paths in HTML and Markdown outputs
+   - explicit "engines used" section tied to where each engine participates
+4. Reduced visual noise in report rendering:
+   - removed heavy bold usage
+   - normalized numeric display to avoid synthetic `.0` when value is integer
+   - preserved decimals when they are real
+   - compact long cells with clip + tooltip in HTML details
+5. Hardened key/value fidelity in detail tables:
+   - key header now uses real key columns (for example `UNIQID`)
+   - integer display normalization includes `UNIQID`, `RTUNO`, and `PNTNO`
+   - SOANLG forced columns no longer include `HLIM5`/`LLIM5` unless they are actually changed
+
+### What Was Proved
+
+- Report generation stayed stable while gaining practical review controls.
+- Exported outputs became easier to read without changing compare backend semantics.
+- The recent report-focused sequence remained covered by focused tests (`tests/test_auto_compare_report.py`) through iterative commits.
+
+### Validation After Changes
+
+- `uv run python -m py_compile tools/auto_compare_report.py tests/test_auto_compare_report.py`: passed
+- `uv run ruff check tools/auto_compare_report.py tests/test_auto_compare_report.py`: passed
+- `PYTHONPATH=. uv run pytest -q tests/test_auto_compare_report.py`: passed
+
 ## Current Slice: Full UI Playwright Reliability Sweep
 
 ### Goal

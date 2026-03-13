@@ -19,6 +19,8 @@ Map the current product structure in a stable way so future rounds can update th
   - Includes validation pipeline scripts:
     - `tools/prepare_validation_artifacts.py`
     - `tools/benchmark_validation_flows.py`
+  - Includes operator compare report automation:
+    - `tools/auto_compare_report.py` (interactive compare report exporter to HTML/MD/TXT)
 - `docs/`
   - End-user setup and usage guides.
 - `artifacts/`
@@ -45,6 +47,7 @@ Map the current product structure in a stable way so future rounds can update th
 5. Search uses `_fulltext` for DuckDB and ODBC fallback for Access.
 6. Compare uses `interface/compare_dbs.py`.
 7. Multi-file record tracking uses `interface/find_record_across_dbs.py`.
+8. Operator compare report automation uses `tools/auto_compare_report.py`, which can resolve Access/DuckDB/SQLite inputs and export human-readable artifacts under `documentos/reports/`.
 
 ## Product Decisions
 
@@ -74,6 +77,8 @@ Map the current product structure in a stable way so future rounds can update th
   - Access to DuckDB conversion entrypoint.
 - `interface/utils.py`
   - Shared normalization and serialization helpers.
+- `tools/auto_compare_report.py`
+  - Compare report automation with interactive HTML controls and companion MD/TXT outputs.
 
 ## Product Surfaces
 
@@ -106,6 +111,7 @@ Map the current product structure in a stable way so future rounds can update th
 - The main UI still works around a single active DB selection model in the backend.
 - SQLite is accepted by the product, but the main UI/backend contract around it still needs explicit hardening.
 - Safe cleanup is now proving use before removal; unrelated notes and the old simplified Flask backend are no longer part of the product path.
+- The report automation script has grown into a key operator path and now needs disciplined regression coverage to avoid UI/control drift.
 
 ## Reporting Notes
 
@@ -114,6 +120,11 @@ Map the current product structure in a stable way so future rounds can update th
   - keyed row diff
   - changed-column summaries
   - record tracking across many DB files
+- The dedicated compare report automation now also provides:
+  - multi-engine input awareness (Access, DuckDB, SQLite)
+  - interactive HTML quick filters and sorting controls
+  - synchronized Markdown and text outputs for non-browser review
+  - source metadata and engine-usage visibility for auditability
 - These reports are already useful for spotting:
   - unexpected row additions/removals
   - wrong categorical values

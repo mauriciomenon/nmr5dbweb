@@ -55,6 +55,11 @@ Track real product debt that should not be fixed in the current slice.
    - optional `mdbtools` path for `.mdb`
 26. Decide if `artifacts/validation/derived/` should stay local-only forever or gain a curated tiny committed fixture subset for CI.
 27. Add a dedicated compare-browser smoke for report export payload quality per filter mode (`changed`, `added`, `removed`), not only combined mode.
+28. Add a lightweight regression check for `tools/auto_compare_report.py` interactive controls (`contains`/`not_contains`, sort asc/desc, clear) to reduce future UI drift in exported HTML.
+29. Review whether `tools/auto_compare_report.py` should support an optional machine-readable JSON output for downstream automation while keeping current HTML/MD/TXT outputs stable.
+30. Revisit forced-columns policy per table (for example SOSTAT/SOANLG) to keep operator readability without hiding real changed columns.
+31. Keep conversion validation visibility coherent between runtime `/admin/status` and generated validation artifacts to avoid contradictory operator signals.
+32. Add a short release checklist item to always sync control docs (`ROUND_STATUS.md`, `HANDOFF.md`, `PROJECT_STRUCTURE.md`, `interface/README.md`) after each completed feature slice.
 
 ## Do Not Pull Into Slice 1
 

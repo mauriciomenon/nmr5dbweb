@@ -15,7 +15,7 @@ The first stabilization slice is intentionally narrow:
 - Product working clone is `/Users/menon/git/nmr5dbweb`
 - Student source is `allysonalmeidaa/mdb2sql_fork`
 - Clone source branch was `minha-alteracao`
-- Current local/product branch is `master`
+- Repo bootstrap happened on `master` and active development is now on `codex/dev`
 - Current development branch is `codex/dev`
 - `origin`: `https://github.com/mauriciomenon/nmr5dbweb.git`
 - `upstream`: `https://github.com/allysonalmeidaa/mdb2sql_fork.git`
@@ -196,6 +196,17 @@ The first stabilization slice is intentionally narrow:
   - row order is ignored
   - duplicate-only differences are ignored
   - `row_count_a` and `row_count_b` still reflect raw row totals
+- Access conversion validation now enforces per-table sample hash checks and exposes validation state/report path in `/admin/status`
+- Compare page request guards now handle null/missing request contexts more defensively in UI paths
+- Search results view now has compact row display with explicit show-all-columns toggling for wide tables
+- `tools/auto_compare_report.py` is now an actively hardened operator path with:
+  - interactive HTML controls (`contains` / `not_contains`, sort asc/desc, clear)
+  - dynamic title by selected DB pair
+  - explicit "engines used" section
+  - source metadata readability updates (size in MB, short mtime, clickable paths)
+  - key/header and numeric normalization updates (`UNIQID`, `RTUNO`, `PNTNO`)
+  - SOANLG forced-column adjustment (`HLIM5`/`LLIM5` removed from always-visible set unless changed)
+- Focused regression coverage for that report flow now lives in `tests/test_auto_compare_report.py`
 - Local smoke tests should avoid port `5000` here, because another machine service is already bound there; `5081` worked for Flask route checks
 - This machine also has no `curl` in PATH, so local HTTP smoke checks should prefer Python `urllib` or another available client
 
@@ -207,6 +218,8 @@ The first stabilization slice is intentionally narrow:
 - Keep changes minimal and behavior-preserving
 - Use the project-local `.venv` only; do not rely on `/Users/menon/git/.venv`
 - Natural next slices are:
+  - keep control docs (`ROUND_STATUS.md`, `HANDOFF.md`, `RECOVERY_BACKLOG.md`, `PROJECT_STRUCTURE.md`, `interface/README.md`) in sync after each feature slice
+  - add browser-level assertions for `tools/auto_compare_report.py` exported HTML controls where feasible
   - continue reducing page-specific CSS duplication on top of the shared shell base now used by `index`, `track_record`, and `admin`
   - keep shrinking `static/app_search.js`, `static/app_bootstrap.js`, and `static/compare_dbs_render.js` by responsibility where there is measured gain
   - decide whether the browser regression should bootstrap its own browser binary or remain environment-driven
