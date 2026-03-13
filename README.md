@@ -246,6 +246,27 @@ brew install openjdk             # Para convert_jackcess.py (macOS)
 # Ou instale o Access Engine     # Para convert_pyodbc.py no Windows
 ```
 
+### Pipeline local de validacao (dados reais em `output/`)
+
+Use um comando unico para:
+- preparar artefatos canonicos (`DuckDB` e `SQLite`),
+- gerar manifesto do dataset,
+- rodar benchmark de fluxo (opcional),
+- gerar resumo operacional em Markdown.
+
+```bash
+# pipeline completo (prepare + benchmark + resumo)
+uv run python tools/run_validation_pipeline.py \
+  --input-dir output \
+  --out-root artifacts/validation
+
+# pipeline rapido (sem benchmark)
+uv run python tools/run_validation_pipeline.py \
+  --input-dir output/smoke \
+  --out-root artifacts/validation_smoke \
+  --skip-benchmark
+```
+
 ---
 
 ## Uso (CLI)
