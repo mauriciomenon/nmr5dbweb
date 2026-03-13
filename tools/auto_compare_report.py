@@ -204,6 +204,38 @@ def _fmt_size(size_bytes: int) -> str:
     return f"{size_bytes}B"
 
 
+def _format_size_mb(size_bytes: int) -> str:
+    mb = float(size_bytes) / (1024.0 * 1024.0)
+    return f"{mb:.2f} MB"
+
+
+def _format_mtime_short(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        dt_value = dt.datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return dt_value.strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        pass
+    return text[:16].replace("T", " ")
+
+
+def _file_uri(path_text: str) -> str:
+    try:
+        return Path(str(path_text)).expanduser().resolve().as_uri()
+    except Exception:
+        return ""
+
+
+def _html_link_for_path(path_text: str) -> str:
+    text = html.escape(str(path_text))
+    uri = _file_uri(path_text)
+    if not uri:
+        return text
+    return f"<a href='{html.escape(uri)}' target='_blank' rel='noopener'>{text}</a>"
+
+
 def _item_line(item: FileItem) -> str:
     date_label = item.iso_date.isoformat() if item.iso_date else "sem-data"
     return (
@@ -1107,6 +1139,8 @@ def render_report_html(payload: dict) -> str:
     h1 {{ margin: 0 0 10px; font-size: 24px; font-weight: 500; }}
     h2 {{ margin: 0 0 8px; font-size: 18px; font-weight: 500; }}
     .meta {{ color: #4b5563; font-size: 13px; }}
+    .meta a {{ color: #1d4ed8; text-decoration: none; }}
+    .meta a:hover {{ text-decoration: underline; }}
     .grid {{ display: grid; grid-template-columns: repeat(2, minmax(320px, 1fr)); gap: 12px; }}
     .kpi {{ display: flex; gap: 12px; flex-wrap: wrap; }}
     .pill {{ background: #eef2ff; border: 1px solid #c7d2fe; color: #1e3a8a; border-radius: 999px; padding: 6px 10px; font-size: 13px; }}
@@ -1120,6 +1154,7 @@ def render_report_html(payload: dict) -> str:
     code {{ background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }}
     .filter-row th {{ background: #ffffff; }}
     .col-filter-input {{ width: 95%; min-width: 90px; font-size: 12px; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 6px; }}
+    details.meta-detail {{ margin-top: 6px; }}
   </style>
 </head>
 <body>
@@ -1133,19 +1168,19 @@ def render_report_html(payload: dict) -> str:
       <div class="grid">
         <div>
           A: {html.escape(a["file"])} ({html.escape(a["engine"])})<br/>
-          <span class="meta">{html.escape(a["path"])}</span><br/>
-          <span class="meta">size: {html.escape(str(a["size_bytes"]))} bytes | mtime: {html.escape(a["mtime"])}</span><br/>
-          <span class="meta">duckdb: {html.escape(a["duckdb"])}</span><br/>
-          <span class="meta">sqlite: {html.escape(a["sqlite"])}</span><br/>
-          <span class="meta">steps: {html.escape(" | ".join(a["steps"]))}</span>
+          <span class="meta">source: {_html_link_for_path(a["path"])}</span><br/>
+          <span class="meta">size: {html.escape(_format_size_mb(int(a["size_bytes"])))} | mtime: {html.escape(_format_mtime_short(a["mtime"]))}</span><br/>
+          <span class="meta">duckdb: {_html_link_for_path(a["duckdb"])}</span><br/>
+          <span class="meta">sqlite: {_html_link_for_path(a["sqlite"])}</span><br/>
+          <details class="meta meta-detail"><summary>pipeline tecnico</summary>{html.escape(" | ".join(a["steps"]))}</details>
         </div>
         <div>
           B: {html.escape(b["file"])} ({html.escape(b["engine"])})<br/>
-          <span class="meta">{html.escape(b["path"])}</span><br/>
-          <span class="meta">size: {html.escape(str(b["size_bytes"]))} bytes | mtime: {html.escape(b["mtime"])}</span><br/>
-          <span class="meta">duckdb: {html.escape(b["duckdb"])}</span><br/>
-          <span class="meta">sqlite: {html.escape(b["sqlite"])}</span><br/>
-          <span class="meta">steps: {html.escape(" | ".join(b["steps"]))}</span>
+          <span class="meta">source: {_html_link_for_path(b["path"])}</span><br/>
+          <span class="meta">size: {html.escape(_format_size_mb(int(b["size_bytes"])))} | mtime: {html.escape(_format_mtime_short(b["mtime"]))}</span><br/>
+          <span class="meta">duckdb: {_html_link_for_path(b["duckdb"])}</span><br/>
+          <span class="meta">sqlite: {_html_link_for_path(b["sqlite"])}</span><br/>
+          <details class="meta meta-detail"><summary>pipeline tecnico</summary>{html.escape(" | ".join(b["steps"]))}</details>
         </div>
       </div>
     </div>
@@ -1233,22 +1268,56 @@ def render_report_md(payload: dict) -> str:
     s = payload["summary"]
     details = payload.get("table_details") or []
     line_a_label, line_b_label = _source_line_labels(payload)
+    src_a_uri = _file_uri(payload["source_a"]["path"])
+    src_b_uri = _file_uri(payload["source_b"]["path"])
+    duck_a_uri = _file_uri(payload["source_a"]["duckdb"])
+    duck_b_uri = _file_uri(payload["source_b"]["duckdb"])
+    sqlite_a_uri = _file_uri(payload["source_a"]["sqlite"])
+    sqlite_b_uri = _file_uri(payload["source_b"]["sqlite"])
+    fonte_a_path = (
+        f"[{payload['source_a']['path']}]({src_a_uri})"
+        if src_a_uri
+        else payload["source_a"]["path"]
+    )
+    fonte_b_path = (
+        f"[{payload['source_b']['path']}]({src_b_uri})"
+        if src_b_uri
+        else payload["source_b"]["path"]
+    )
+    duck_a_path = (
+        f"[{payload['source_a']['duckdb']}]({duck_a_uri})"
+        if duck_a_uri
+        else payload["source_a"]["duckdb"]
+    )
+    duck_b_path = (
+        f"[{payload['source_b']['duckdb']}]({duck_b_uri})"
+        if duck_b_uri
+        else payload["source_b"]["duckdb"]
+    )
+    sqlite_a_path = (
+        f"[{payload['source_a']['sqlite']}]({sqlite_a_uri})"
+        if sqlite_a_uri
+        else payload["source_a"]["sqlite"]
+    )
+    sqlite_b_path = (
+        f"[{payload['source_b']['sqlite']}]({sqlite_b_uri})"
+        if sqlite_b_uri
+        else payload["source_b"]["sqlite"]
+    )
     lines = [
         "# Comparacao automatizada de bancos",
         "",
         f"- gerado_em: {payload['generated_at']}",
-        f"- fonte_a: {payload['source_a']['path']} ({payload['source_a']['engine']})",
-        f"- fonte_a_size_bytes: {payload['source_a']['size_bytes']}",
-        f"- fonte_a_mtime: {payload['source_a']['mtime']}",
-        f"- fonte_a_steps: {' | '.join(payload['source_a']['steps'])}",
-        f"- fonte_b: {payload['source_b']['path']} ({payload['source_b']['engine']})",
-        f"- fonte_b_size_bytes: {payload['source_b']['size_bytes']}",
-        f"- fonte_b_mtime: {payload['source_b']['mtime']}",
-        f"- fonte_b_steps: {' | '.join(payload['source_b']['steps'])}",
-        f"- duckdb_a: {payload['source_a']['duckdb']}",
-        f"- duckdb_b: {payload['source_b']['duckdb']}",
-        f"- sqlite_a: {payload['source_a']['sqlite']}",
-        f"- sqlite_b: {payload['source_b']['sqlite']}",
+        f"- fonte_a: {fonte_a_path} ({payload['source_a']['engine']})",
+        f"- fonte_a_size: {_format_size_mb(int(payload['source_a']['size_bytes']))}",
+        f"- fonte_a_mtime: {_format_mtime_short(payload['source_a']['mtime'])}",
+        f"- fonte_b: {fonte_b_path} ({payload['source_b']['engine']})",
+        f"- fonte_b_size: {_format_size_mb(int(payload['source_b']['size_bytes']))}",
+        f"- fonte_b_mtime: {_format_mtime_short(payload['source_b']['mtime'])}",
+        f"- duckdb_a: {duck_a_path}",
+        f"- duckdb_b: {duck_b_path}",
+        f"- sqlite_a: {sqlite_a_path}",
+        f"- sqlite_b: {sqlite_b_path}",
         "",
         "## Resumo",
         "",
@@ -1327,15 +1396,13 @@ def render_report_txt(payload: dict) -> str:
         f"Gerado em: {payload['generated_at']}",
         "",
         f"A: {payload['source_a']['path']} ({payload['source_a']['engine']})",
-        f"   size_bytes: {payload['source_a']['size_bytes']} | mtime: {payload['source_a']['mtime']}",
+        f"   size: {_format_size_mb(int(payload['source_a']['size_bytes']))} | mtime: {_format_mtime_short(payload['source_a']['mtime'])}",
         f"   duckdb: {payload['source_a']['duckdb']}",
         f"   sqlite: {payload['source_a']['sqlite']}",
-        f"   steps: {' | '.join(payload['source_a']['steps'])}",
         f"B: {payload['source_b']['path']} ({payload['source_b']['engine']})",
-        f"   size_bytes: {payload['source_b']['size_bytes']} | mtime: {payload['source_b']['mtime']}",
+        f"   size: {_format_size_mb(int(payload['source_b']['size_bytes']))} | mtime: {_format_mtime_short(payload['source_b']['mtime'])}",
         f"   duckdb: {payload['source_b']['duckdb']}",
         f"   sqlite: {payload['source_b']['sqlite']}",
-        f"   steps: {' | '.join(payload['source_b']['steps'])}",
         "",
         "RESUMO",
         f"  tabelas_comuns: {s['total_tables']}",

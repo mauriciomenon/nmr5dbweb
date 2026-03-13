@@ -62,7 +62,7 @@ def test_run_compare_pipeline_sqlite_inputs(tmp_path: Path) -> None:
     md_text = outputs["md"].read_text(encoding="utf-8")
     assert "diff_tables" in md_text
     assert "T1" in md_text
-    assert "fonte_a_steps" in md_text
+    assert "fonte_a_size" in md_text
 
 
 def test_build_table_detail_compact_usa_uniao_de_colunas_alteradas() -> None:
@@ -273,3 +273,4 @@ def test_render_report_html_sem_pintura_de_linha_e_com_classes_de_texto() -> Non
     assert "<th>UNIQID</th>" in html
     assert "<strong>" not in html
     assert "font-weight: 700" not in html
+    assert "pipeline tecnico" in html
