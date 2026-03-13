@@ -52,6 +52,9 @@ class FileItem:
 class PreparedSource:
     source: Path
     source_engine: str
+    source_size: int
+    source_mtime: str
+    source_iso_date: str
     duckdb_path: Path
     sqlite_path: Path
     steps: list[str]
@@ -154,34 +157,71 @@ def _item_line(item: FileItem) -> str:
     )
 
 
-def _print_page(items: Sequence[FileItem], page: int, page_size: int) -> None:
+def _print_page(items: Sequence[FileItem], page: int, page_size: int, label: str) -> None:
     total_pages = max(1, (len(items) + page_size - 1) // page_size)
     page = max(0, min(page, total_pages - 1))
     start = page * page_size
     end = min(len(items), start + page_size)
     print("")
-    print(f"Arquivos [{start + 1}-{end}] de {len(items)} (pagina {page + 1}/{total_pages})")
+    print(
+        f"Arquivos {label}[{start + 1}-{end}] de {len(items)} "
+        f"(pagina {page + 1}/{total_pages})"
+    )
     for idx in range(start, end):
         local_num = idx - start + 1
-        print(f"  {local_num:>2}. {_item_line(items[idx])}")
-    print("Comandos: numero=selecionar | n=proxima | p=anterior | b=voltar | q=sair")
+        global_num = idx + 1
+        print(f"  {local_num:>2}. [{global_num:>3}] {_item_line(items[idx])}")
+    print(
+        "Comandos: numero=selecionar | n=proxima | p=anterior | "
+        "/texto=filtrar | *=limpar filtro | b=voltar | q=sair"
+    )
+
+
+def _filter_items(items: Sequence[FileItem], term: str) -> list[FileItem]:
+    needle = term.strip().lower()
+    if not needle:
+        return list(items)
+    filtered: list[FileItem] = []
+    for item in items:
+        hay = (
+            f"{item.path.name} {item.engine} "
+            f"{item.iso_date.isoformat() if item.iso_date else ''}"
+        ).lower()
+        if needle in hay:
+            filtered.append(item)
+    return filtered
 
 
 def pick_file_interactive(items: Sequence[FileItem], title: str, page_size: int = DEFAULT_PAGE_SIZE) -> FileItem | None:
     if not items:
         return None
     page = 0
+    filtered_items = list(items)
+    filter_term = ""
     while True:
         print("")
         print(title)
-        _print_page(items, page, page_size)
+        label = f"(filtro='{filter_term}') " if filter_term else ""
+        _print_page(filtered_items, page, page_size, label)
         raw = input("> ").strip().lower()
         if raw in {"q", "quit", "sair"}:
             return None
         if raw in {"b", "back", "voltar"}:
             return None
+        if raw.startswith("/"):
+            filter_term = raw[1:].strip()
+            filtered_items = _filter_items(items, filter_term)
+            page = 0
+            if not filtered_items:
+                print("Nenhum arquivo para o filtro informado.")
+            continue
+        if raw == "*":
+            filter_term = ""
+            filtered_items = list(items)
+            page = 0
+            continue
         if raw in {"n", "next", "proxima"}:
-            max_page = max(0, (len(items) - 1) // page_size)
+            max_page = max(0, (len(filtered_items) - 1) // page_size)
             page = min(max_page, page + 1)
             continue
         if raw in {"p", "prev", "anterior"}:
@@ -193,10 +233,10 @@ def pick_file_interactive(items: Sequence[FileItem], title: str, page_size: int 
                 print("Opcao invalida.")
                 continue
             idx = page * page_size + (local_num - 1)
-            if idx >= len(items):
+            if idx >= len(filtered_items):
                 print("Opcao invalida.")
                 continue
-            return items[idx]
+            return filtered_items[idx]
         print("Comando invalido.")
 
 
@@ -370,6 +410,11 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
     stem = source.stem
     duck_target = docs_dir / f"{stem}.duckdb"
     sqlite_target = docs_dir / f"{stem}.sqlite"
+    st = source.stat()
+    source_size = int(st.st_size)
+    source_mtime = dt.datetime.fromtimestamp(st.st_mtime).isoformat()
+    source_iso = parse_iso_prefix(source.name)
+    source_iso_date = source_iso.isoformat() if source_iso else ""
 
     if engine == "access":
         if _needs_rebuild(source, duck_target):
@@ -391,7 +436,16 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
                 raise RuntimeError(f"falha na conversao DuckDB->SQLite: {msg}")
         else:
             steps.append("duckdb_to_sqlite: reutilizado")
-        return PreparedSource(source, engine, duck_target.resolve(), sqlite_target.resolve(), steps)
+        return PreparedSource(
+            source,
+            engine,
+            source_size,
+            source_mtime,
+            source_iso_date,
+            duck_target.resolve(),
+            sqlite_target.resolve(),
+            steps,
+        )
 
     if engine == "duckdb":
         if _needs_rebuild(source, sqlite_target):
@@ -401,7 +455,16 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
                 raise RuntimeError(f"falha na conversao DuckDB->SQLite: {msg}")
         else:
             steps.append("duckdb_to_sqlite: reutilizado")
-        return PreparedSource(source, engine, source, sqlite_target.resolve(), steps)
+        return PreparedSource(
+            source,
+            engine,
+            source_size,
+            source_mtime,
+            source_iso_date,
+            source,
+            sqlite_target.resolve(),
+            steps,
+        )
 
     if engine == "sqlite":
         if _needs_rebuild(source, duck_target):
@@ -411,7 +474,16 @@ def prepare_source(path: Path, docs_dir: Path) -> PreparedSource:
                 raise RuntimeError(f"falha na conversao SQLite->DuckDB: {msg}")
         else:
             steps.append("sqlite_to_duckdb: reutilizado")
-        return PreparedSource(source, engine, duck_target.resolve(), source, steps)
+        return PreparedSource(
+            source,
+            engine,
+            source_size,
+            source_mtime,
+            source_iso_date,
+            duck_target.resolve(),
+            source,
+            steps,
+        )
 
     raise RuntimeError(f"engine nao suportada para {source.name}")
 
@@ -455,6 +527,9 @@ def build_report_payload(a: PreparedSource, b: PreparedSource, overview_rows: Se
             "file": a.source.name,
             "path": str(a.source),
             "engine": a.source_engine,
+            "size_bytes": a.source_size,
+            "mtime": a.source_mtime,
+            "iso_date": a.source_iso_date,
             "duckdb": str(a.duckdb_path),
             "sqlite": str(a.sqlite_path),
             "steps": a.steps,
@@ -463,6 +538,9 @@ def build_report_payload(a: PreparedSource, b: PreparedSource, overview_rows: Se
             "file": b.source.name,
             "path": str(b.source),
             "engine": b.source_engine,
+            "size_bytes": b.source_size,
+            "mtime": b.source_mtime,
+            "iso_date": b.source_iso_date,
             "duckdb": str(b.duckdb_path),
             "sqlite": str(b.sqlite_path),
             "steps": b.steps,
@@ -541,14 +619,18 @@ def render_report_html(payload: dict) -> str:
         <div>
           <strong>A:</strong> {html.escape(a["file"])} ({html.escape(a["engine"])})<br/>
           <span class="meta">{html.escape(a["path"])}</span><br/>
+          <span class="meta">size: {html.escape(str(a["size_bytes"]))} bytes | mtime: {html.escape(a["mtime"])}</span><br/>
           <span class="meta">duckdb: {html.escape(a["duckdb"])}</span><br/>
-          <span class="meta">sqlite: {html.escape(a["sqlite"])}</span>
+          <span class="meta">sqlite: {html.escape(a["sqlite"])}</span><br/>
+          <span class="meta">steps: {html.escape(" | ".join(a["steps"]))}</span>
         </div>
         <div>
           <strong>B:</strong> {html.escape(b["file"])} ({html.escape(b["engine"])})<br/>
           <span class="meta">{html.escape(b["path"])}</span><br/>
+          <span class="meta">size: {html.escape(str(b["size_bytes"]))} bytes | mtime: {html.escape(b["mtime"])}</span><br/>
           <span class="meta">duckdb: {html.escape(b["duckdb"])}</span><br/>
-          <span class="meta">sqlite: {html.escape(b["sqlite"])}</span>
+          <span class="meta">sqlite: {html.escape(b["sqlite"])}</span><br/>
+          <span class="meta">steps: {html.escape(" | ".join(b["steps"]))}</span>
         </div>
       </div>
     </div>
@@ -593,7 +675,13 @@ def render_report_md(payload: dict) -> str:
         "",
         f"- gerado_em: {payload['generated_at']}",
         f"- fonte_a: {payload['source_a']['path']} ({payload['source_a']['engine']})",
+        f"- fonte_a_size_bytes: {payload['source_a']['size_bytes']}",
+        f"- fonte_a_mtime: {payload['source_a']['mtime']}",
+        f"- fonte_a_steps: {' | '.join(payload['source_a']['steps'])}",
         f"- fonte_b: {payload['source_b']['path']} ({payload['source_b']['engine']})",
+        f"- fonte_b_size_bytes: {payload['source_b']['size_bytes']}",
+        f"- fonte_b_mtime: {payload['source_b']['mtime']}",
+        f"- fonte_b_steps: {' | '.join(payload['source_b']['steps'])}",
         f"- duckdb_a: {payload['source_a']['duckdb']}",
         f"- duckdb_b: {payload['source_b']['duckdb']}",
         f"- sqlite_a: {payload['source_a']['sqlite']}",
@@ -627,11 +715,15 @@ def render_report_txt(payload: dict) -> str:
         f"Gerado em: {payload['generated_at']}",
         "",
         f"A: {payload['source_a']['path']} ({payload['source_a']['engine']})",
+        f"   size_bytes: {payload['source_a']['size_bytes']} | mtime: {payload['source_a']['mtime']}",
         f"   duckdb: {payload['source_a']['duckdb']}",
         f"   sqlite: {payload['source_a']['sqlite']}",
+        f"   steps: {' | '.join(payload['source_a']['steps'])}",
         f"B: {payload['source_b']['path']} ({payload['source_b']['engine']})",
+        f"   size_bytes: {payload['source_b']['size_bytes']} | mtime: {payload['source_b']['mtime']}",
         f"   duckdb: {payload['source_b']['duckdb']}",
         f"   sqlite: {payload['source_b']['sqlite']}",
+        f"   steps: {' | '.join(payload['source_b']['steps'])}",
         "",
         "RESUMO",
         f"  tabelas_comuns: {s['total_tables']}",
@@ -667,6 +759,12 @@ def write_report_files(payload: dict, reports_dir: Path) -> dict[str, Path]:
     html_path.write_text(render_report_html(payload), encoding="utf-8")
     md_path.write_text(render_report_md(payload), encoding="utf-8")
     txt_path.write_text(render_report_txt(payload), encoding="utf-8")
+    latest_html = reports_dir / "latest_db_compare_report.html"
+    latest_md = reports_dir / "latest_db_compare_report.md"
+    latest_txt = reports_dir / "latest_db_compare_report.txt"
+    latest_html.write_text(html_path.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_md.write_text(md_path.read_text(encoding="utf-8"), encoding="utf-8")
+    latest_txt.write_text(txt_path.read_text(encoding="utf-8"), encoding="utf-8")
     return {"html": html_path, "md": md_path, "txt": txt_path}
 
 

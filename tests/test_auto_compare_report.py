@@ -51,10 +51,13 @@ def test_run_compare_pipeline_sqlite_inputs(tmp_path: Path) -> None:
     assert outputs["html"].exists()
     assert outputs["md"].exists()
     assert outputs["txt"].exists()
+    assert (reports / "latest_db_compare_report.html").exists()
+    assert (reports / "latest_db_compare_report.md").exists()
+    assert (reports / "latest_db_compare_report.txt").exists()
     assert (docs / "2026-01-29 DB2.duckdb").exists()
     assert (docs / "2026-02-27 DB4.duckdb").exists()
 
     md_text = outputs["md"].read_text(encoding="utf-8")
     assert "diff_tables" in md_text
     assert "T1" in md_text
-
+    assert "fonte_a_steps" in md_text
