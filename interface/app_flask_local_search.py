@@ -797,6 +797,15 @@ def parse_compare_rows_request(data):
     }
 
 
+def compare_bad_request(exc):
+    return jsonify({"error": str(exc)}), 400
+
+
+def compare_internal_error(route_name, exc):
+    app.logger.exception("Erro em %s", route_name)
+    return jsonify({"error": str(exc)}), 500
+
+
 def sanitize_filename(value):
     if value is None:
         return ""
@@ -1919,10 +1928,9 @@ def api_compare_db_tables():
             detailed.append({"name": t, "columns": cols})
         return jsonify({"tables": detailed})
     except (ValueError, FileNotFoundError) as exc:
-        return jsonify({"error": str(exc)}), 400
+        return compare_bad_request(exc)
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("Erro em api_compare_db_tables")
-        return jsonify({"error": str(exc)}), 500
+        return compare_internal_error("api_compare_db_tables", exc)
 
 
 @app.route("/api/compare_db_table_content", methods=["POST"])
@@ -1947,10 +1955,9 @@ def api_compare_db_table_content():
         result = compare_table_content_duckdb(db1, db2, table)
         return jsonify(result)
     except (ValueError, FileNotFoundError) as exc:
-        return jsonify({"error": str(exc)}), 400
+        return compare_bad_request(exc)
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("Erro em api_compare_db_table_content")
-        return jsonify({"error": str(exc)}), 500
+        return compare_internal_error("api_compare_db_table_content", exc)
 
 
 @app.route("/api/compare_db_overview", methods=["POST"])
@@ -1971,10 +1978,9 @@ def api_compare_db_overview():
         overview = compare_tables_overview_duckdb(db1, db2, tables=tables)
         return jsonify({"overview": overview})
     except (ValueError, FileNotFoundError) as exc:
-        return jsonify({"error": str(exc)}), 400
+        return compare_bad_request(exc)
     except Exception as exc:  # noqa: BLE001
-        app.logger.exception("Erro em api_compare_db_overview")
-        return jsonify({"error": str(exc)}), 500
+        return compare_internal_error("api_compare_db_overview", exc)
 
 
 @app.route("/api/compare_db_rows", methods=["POST"])
