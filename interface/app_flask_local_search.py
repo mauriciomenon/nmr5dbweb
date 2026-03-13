@@ -221,6 +221,7 @@ def get_current_db_context(*, require_selected=False, require_exists=False, allo
 
 
 def build_admin_status():
+    capabilities = get_runtime_capabilities()
     ctx = get_current_db_context()
     status = {
         "indexing": False,
@@ -231,8 +232,14 @@ def build_admin_status():
         "fulltext_count": 0,
         "top_tables": [],
         "startup_warnings": list(startup_warnings),
-        "capabilities": get_runtime_capabilities(),
+        "capabilities": capabilities,
+        "indexer_available": capabilities.get("duckdb_fulltext", False),
+        "indexer_error": "",
     }
+    if not capabilities.get("duckdb_fulltext", False):
+        status["indexer_error"] = OPTIONAL_IMPORT_ERRORS.get(
+            "create_fulltext", "indexador indisponivel"
+        )
     with index_lock:
         if index_thread and index_thread.is_alive():
             status["indexing"] = True
@@ -305,6 +312,7 @@ def list_existing_record_dirs():
                 "id": key,
                 "label": meta.get("label", key),
                 "path": str(path),
+                "has_db": dir_has_supported_file(path),
             })
     return items
 
@@ -503,6 +511,17 @@ def sanitize_filename(value):
     return secure_filename(str(value))
 
 
+def dir_has_supported_file(path: Path) -> bool:
+    """Retorna true se o diretorio contem algum arquivo com extensao suportada."""
+    try:
+        for entry in path.iterdir():
+            if entry.is_file() and entry.suffix.lower() in SUPPORTED_EXTS:
+                return True
+    except Exception:
+        return False
+    return False
+
+
 def list_uploaded_files():
     uploads = []
     for path in sorted(UPLOAD_DIR.iterdir(), key=lambda item: item.name):
@@ -528,6 +547,8 @@ def resolve_upload_target(filename, *, required=False):
         safe_path = Path(safe_filename)
         if safe_path.suffix.lower() not in ALLOWED_EXTENSIONS:
             raise ValueError("extensao invalida")
+        if safe_path.name != safe_filename:
+            raise ValueError("invalid filename or path")
     except Exception as exc:
         raise ValueError("invalid filename or path") from exc
     target = UPLOAD_DIR / safe_filename
@@ -1157,11 +1178,13 @@ def list_tables_access(path):
 # ---------------- Admin endpoints ----------------
 @app.route("/admin/list_uploads", methods=["GET"])
 def admin_list_uploads():
+    current_db = get_db_path()
     return jsonify({
         "uploads": list_uploaded_files(),
-        "current_db": get_db_path(),
+        "current_db": current_db,
         "priority_tables": cfg.get("priority_tables", []),
         "auto_index_after_convert": cfg.get("auto_index_after_convert", True),
+        "current_db_exists": bool(current_db) and Path(current_db).exists(),
     })
 
 @app.route("/admin/status", methods=["GET"])

@@ -80,6 +80,20 @@ def test_admin_list_uploads_retorna_metadados_basicos(tmp_path, monkeypatch):
     assert payload["auto_index_after_convert"] is False
     assert payload["uploads"][0]["name"] == "sample.sqlite3"
     assert payload["uploads"][0]["size"] == 4
+    assert payload["current_db_exists"] is True
+
+
+def test_admin_list_uploads_indica_db_inexistente(tmp_path, monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(tmp_path / "missing.sqlite3"))
+
+    resp = client.get("/admin/list_uploads")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["current_db"] == str(tmp_path / "missing.sqlite3")
+    assert payload["current_db_exists"] is False
 
 
 def test_admin_start_index_sem_indexador_retorna_erro(monkeypatch):
@@ -162,6 +176,11 @@ def test_admin_status_expoe_capacidades_e_warning(monkeypatch):
     assert payload["capabilities"]["duckdb_fulltext"] in {True, False}
     assert payload["capabilities"]["access_conversion"] in {True, False}
     assert payload["capabilities"]["access_fallback"] in {True, False}
+    assert isinstance(payload["indexer_available"], bool)
+    if payload["indexer_available"]:
+        assert payload["indexer_error"] == ""
+    else:
+        assert isinstance(payload["indexer_error"], str)
 
 
 def test_client_log_e_admin_logs_expoem_count(monkeypatch):
@@ -263,7 +282,36 @@ def test_api_record_dirs_lista_apenas_existentes(tmp_path, monkeypatch):
     resp = client.get("/api/record_dirs")
 
     assert resp.status_code == 200
-    assert resp.get_json()["dirs"] == [{"id": "ok", "label": "OK", "path": str(existing.resolve())}]
+    assert resp.get_json()["dirs"] == [{
+        "id": "ok",
+        "label": "OK",
+        "path": str(existing.resolve()),
+        "has_db": False,
+    }]
+
+
+def test_api_record_dirs_lista_com_status_has_db(tmp_path, monkeypatch):
+    client = app.test_client()
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    (existing / "sample.sqlite3").write_bytes(b"SQLite format 3\x00")
+    monkeypatch.setattr(
+        local_search,
+        "RECORD_DIRS",
+        {
+            "ok": {"label": "OK", "path": existing},
+        },
+    )
+
+    resp = client.get("/api/record_dirs")
+
+    assert resp.status_code == 200
+    assert resp.get_json()["dirs"] == [{
+        "id": "ok",
+        "label": "OK",
+        "path": str(existing.resolve()),
+        "has_db": True,
+    }]
 
 
 def test_api_browse_dirs_rejeita_diretorio_invalido(tmp_path):
