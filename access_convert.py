@@ -20,6 +20,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("access_convert")
 ensure_access_parser_logging()
 
+
+def _access_parser_allow_skips() -> bool:
+    raw = str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS", "")).strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
 def _ensure_clean_duckdb(path):
     try:
         if os.path.exists(path):
@@ -253,6 +259,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             total = len(tables)
             _ensure_clean_duckdb(duckdb_path)
             dconn = duckdb.connect(duckdb_path)
+            converted_tables = 0
+            skipped_tables = []
 
             for i, table_name in enumerate(tables):
                 safe_table = str(table_name).replace('"', '""')
@@ -296,6 +304,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     dconn.register(tmp_name, frame)
                     dconn.execute(f'CREATE TABLE "{safe_table}" AS SELECT * FROM {tmp_name}')
                     dconn.unregister(tmp_name)
+                    converted_tables += 1
 
                     _report(
                         total_tables=total,
@@ -305,17 +314,30 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                         msg="table_done",
                     )
                 except Exception as e:
-                    logger.warning("Skipping table %s after access-parser error: %s", table_name, e)
+                    err_msg = str(e)
+                    logger.warning("Skipping table %s after access-parser error: %s", table_name, err_msg)
+                    skipped_tables.append((str(table_name), err_msg))
                     _report(
                         total_tables=total,
                         processed_tables=i + 1,
                         current_table=str(table_name),
                         percent=int(((i + 1) / total) * 100),
-                        msg=f"skipped:{e}",
+                        msg=f"skipped:{err_msg}",
                     )
                     continue
 
             dconn.close()
+            if skipped_tables and not _access_parser_allow_skips():
+                sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
+                return (
+                    False,
+                    "access-parser strict mode: "
+                    f"skipped {len(skipped_tables)}/{total} table(s). "
+                    "Set NMR5DBWEB_ACCESS_PARSER_ALLOW_SKIPS=1 to allow partial conversion. "
+                    f"samples: {sample}",
+                )
+            if converted_tables == 0 and total > 0:
+                return False, "access-parser strict mode: no tables converted"
             _report(
                 total_tables=total,
                 processed_tables=total,
@@ -323,6 +345,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 percent=100,
                 msg="converted",
             )
+            if skipped_tables:
+                return True, f"converted via access-parser (skipped={len(skipped_tables)})"
             return True, "converted via access-parser"
         except Exception as e:
             try:
