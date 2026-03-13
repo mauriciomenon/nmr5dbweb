@@ -659,16 +659,14 @@
             • Nao usa _fulltext/texto puro para comparar colunas; _fulltext e so para busca textual.
           </div>
           <div class="help-text">
-            <strong>Exemplo local real (output/smoke):</strong><br/>
-            • tabela: <code>items</code><br/>
-            • resumo: <code>keys_total=2, same=1, changed=1, added=0, removed=0</code><br/>
-            • arquivo de exemplo gerado: <code>artifacts/validation/reports/compare_report_example.json</code>
+            <strong>Leitura recomendada:</strong><br/>
+            • Veja primeiro o resumo (impacto total), depois filtre o detalhe por tipo/coluna.<br/>
+            • Use o export de report para registrar evidencia e revisao por lote.
           </div>
           <div class="help-text">
             <strong>Sobre Access (.accdb/.mdb):</strong><br/>
             • Esta tela espera DuckDB para comparar rapido e consistente.<br/>
-            • Em macOS, .accdb normalmente falha sem driver ODBC/ACE.<br/>
-            • Em Windows 11, mantenha a conversao Access -> DuckDB para entrar neste fluxo.
+            • Em qualquer SO, converta Access para DuckDB antes de usar esta tela.
           </div>
         </div>
 

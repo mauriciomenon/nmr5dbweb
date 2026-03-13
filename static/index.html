@@ -612,13 +612,13 @@
           <strong>Quando usar cada formato:</strong><br/>
           • <strong>DuckDB (.duckdb)</strong>: modo principal para busca com _fulltext e comparacao entre versoes.<br/>
           • <strong>SQLite (.sqlite/.sqlite3/.db)</strong>: busca e navegacao sem _fulltext obrigatorio; util para validacao leve e interoperabilidade.<br/>
-          • <strong>Access (.accdb/.mdb)</strong>: entrada de origem; fluxo recomendado e converter para DuckDB antes de buscar/comparar.<br/>
+          • <strong>Access (.accdb/.mdb)</strong>: formato de origem; converta para DuckDB para manter desempenho e consistencia.<br/>
         </div>
         <div class="muted" style="font-size:13px;margin-top:8px;">
           <strong>Indexacao _fulltext (texto):</strong><br/>
           • A busca principal em DuckDB usa o indice _fulltext (texto normalizado por linha).<br/>
           • A comparacao entre bancos <strong>nao</strong> usa _fulltext: ela roda SQL tipado por chave/coluna.<br/>
-          • Exemplo local (bench 50k linhas): recriar _fulltext levou ~50.6s no ambiente atual.
+          • O tempo de indexacao varia com volume de linhas e numero de colunas.
         </div>
         <div class="muted" style="font-size:13px;margin-top:8px;">
           Dicas rapidas:<br/>
@@ -627,18 +627,9 @@
           • No modal de busca, voce pode filtrar por tabelas, ajustar limites e exportar o resultado em CSV.
         </div>
         <div class="muted" style="font-size:13px;margin-top:8px;">
-          <strong>Mac vs Windows (Access):</strong><br/>
-          • No macOS, .accdb costuma depender de driver ODBC nao disponivel por padrao.<br/>
-          • No Windows 11, use driver Access (ACE/ODBC) para manter a conversao .accdb -> .duckdb funcional.<br/>
-        </div>
-        <div class="muted" style="font-size:13px;margin-top:8px;">
-          <strong>Previsao de prioridade (resumo):</strong><br/>
-          • <strong>Extrema:</strong> padrao estavel de conversao .accdb no W11 e smoke automatizado desse fluxo.<br/>
-          • <strong>Alta:</strong> reduzir concentracao de codigo em static/app.js e manter lint limpo sem duplicacao.<br/>
-          • <strong>Media:</strong> ampliar reports de diferenca com mais foco em anomalias por dominio.<br/>
-          • <strong>Baixa:</strong> melhorar microcopias e textos de ajuda por contexto de tela.<br/>
-          • <strong>Boas praticas:</strong> consolidar validacao (eslint/ruff/pytest/playwright) em script unico de release local.<br/>
-          • <strong>Minor:</strong> pequenos ajustes visuais e nomenclaturas internas.
+          <strong>Compatibilidade Access:</strong><br/>
+          • macOS/Linux: use conversao sem ODBC quando necessario (parser/mdbtools) e opere no DuckDB gerado.<br/>
+          • Windows 11: com ACE/ODBC ativo, mantenha o fluxo Access -> DuckDB no mesmo workspace.
         </div>
       </div>
       <div class="card operations-stage" style="--stagger:2">

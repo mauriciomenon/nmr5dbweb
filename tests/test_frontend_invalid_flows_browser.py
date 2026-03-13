@@ -341,7 +341,7 @@ def test_success_frontend_smoke_open_table_and_export(ui_server, sample_data, tm
         assert export_path.exists()
         content = export_path.read_text(encoding="utf-8")
         lines = [line for line in content.splitlines() if line]
-        assert len(lines) >= 181
+        assert len(lines) == 181
         assert lines[0].startswith('"id",') or lines[0].startswith('"id"')
         assert "alpha" in content
         assert "item-180" in content
