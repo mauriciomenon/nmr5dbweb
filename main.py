@@ -140,7 +140,7 @@ Exemplos de uso:
         from interface.app_flask_local_search import app
 
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
-        print(f"Iniciando servidor Flask")
+        print("Iniciando servidor Flask")
         print(f"Pasta de uploads: {args.upload_folder or 'interface/uploads'}")
         print(f"Servidor: http://{args.host}:{args.port}")
         print(f"Debug: {'Ativado' if args.debug else 'Desativado'}")
@@ -163,7 +163,7 @@ Exemplos de uso:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print(f"Erro ao importar o modulo Flask: {e}")
         print("Verifique se as dependencias estao instaladas:")
-        print("   pip install -r requirements.txt")
+        print("   uv sync --python .venv/bin/python --all-groups")
         sys.exit(1)
     except KeyboardInterrupt:
         print(f"\n{timestamp_exec} - MDB2SQL - Interface Principal")

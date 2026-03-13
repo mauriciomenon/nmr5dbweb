@@ -15,13 +15,17 @@ if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
   throw "uv not found in PATH. Install uv first."
 }
 
+if (-not (Test-Path "pyproject.toml")) {
+  throw "pyproject.toml not found at repository root."
+}
+
 if (-not (Test-Path ".venv")) {
   Write-Host "Creating .venv with Python $PythonVersion ..."
   uv venv --python $PythonVersion .venv
 }
 
-Write-Host "Installing runtime deps in .venv ..."
-uv pip install --python .venv -r requirements.txt
+Write-Host "Syncing dependencies from pyproject.toml ..."
+uv sync --python .venv\\Scripts\\python.exe --all-groups
 
 Write-Host "Checking pyodbc and ODBC drivers ..."
 $driverOut = uv run --python .venv python -c "import pyodbc;print(pyodbc.drivers())"
@@ -40,4 +44,3 @@ if ($SmokeAccdb -ne "") {
 }
 
 Write-Host "Done."
-

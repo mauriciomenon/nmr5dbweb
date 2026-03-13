@@ -58,8 +58,8 @@ uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
 # macOS / Linux
 source .venv/bin/activate
 
-# 3) instalar dependencias de runtime + dev
-uv pip install --python .venv -r requirements-dev.txt
+# 3) sincronizar dependencias (runtime + dev) via pyproject.toml
+uv sync --python .venv/bin/python --all-groups
 
 # 4) iniciar a interface Flask
 python main.py
@@ -88,8 +88,12 @@ Os detalhes da interface estão descritos em mais profundidade em
 
 ### Instaladores por SO
 
-- `install_windows.bat`: wrapper para `tools/windows_access_setup.ps1` (usa `uv`, `.venv`, `requirements-dev.txt`, check de pyodbc/driver).
-- `install_macos.sh` e `install_linux.sh`: setup padrao do projeto com `uv`, `.venv` e `requirements-dev.txt`.
+- `install_windows.bat`: wrapper para `tools/windows_access_setup.ps1` (usa `uv`, `.venv`, `pyproject.toml`, check de pyodbc/driver).
+- `install_macos.sh` e `install_linux.sh`: setup padrao do projeto com `uv`, `.venv` e `pyproject.toml`.
+
+Fonte canonica de dependencias Python:
+- `pyproject.toml` (runtime + grupo `dev`)
+- `requirements.txt` e `requirements-dev.txt` ficam como compatibilidade legada
 
 ---
 
@@ -230,7 +234,7 @@ source .venv/bin/activate
 .venv\Scripts\activate
 
 # Instalar dependencias Python
-uv pip install --python .venv -r requirements-dev.txt
+uv sync --python .venv/bin/python --all-groups
 
 # Instalar dependências de sistema (escolha a que você for usar)
 brew install mdbtools            # Para convert_mdbtools.py (macOS)
@@ -392,13 +396,13 @@ sudo apt install default-jdk
 
 ```bash
 # Criar/atualizar ambiente de desenvolvimento
-uv venv --python 3.12.8 .venv
+uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
 
 # Ativar o ambiente
 source .venv/bin/activate
 
-# Instalar dependências de runtime + ferramentas de validacao
-uv pip sync requirements-dev.txt
+# Instalar dependencias de runtime + ferramentas de validacao
+uv sync --python .venv/bin/python --all-groups
 
 # Validacoes principais
 python -m py_compile $(find . -name "*.py" -type f)
