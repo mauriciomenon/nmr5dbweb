@@ -28,6 +28,8 @@ wheels/
 
 .env
 .venv
+node_modules/
+bkp_limpeza/
 env/
 venv/
 ENV/
@@ -50,3 +52,4 @@ benchmark_results_*.json
 /uploads
 /interface/uploads
 /interface/config.json
+/documentos/

@@ -10,6 +10,7 @@ Pure Python implementation for converting Microsoft Access MDB/ACCDB files
 import argparse
 import re
 import sys
+import traceback
 from pathlib import Path
 from datetime import datetime
 
@@ -56,23 +57,6 @@ def sanitize_table_name(name):
 
 
 def convert_mdb_to_duckdb(mdb_path, duckdb_path, batch_mode=False):
-    from pathlib import Path
-    from datetime import datetime
-    import traceback
-
-    try:
-        import access_parser as ap
-    except Exception:
-        try:
-            import access_parser_access as ap
-        except Exception:
-            ap = None
-
-    try:
-        import duckdb
-    except Exception:
-        duckdb = None
-
     mdb_file = Path(mdb_path)
 
     if not mdb_file.exists():
@@ -89,14 +73,6 @@ def convert_mdb_to_duckdb(mdb_path, duckdb_path, batch_mode=False):
         print("Warning: Could not extract date from filename")
         date_suffix = datetime.now().strftime("%Y%m%d")
 
-    if ap is None:
-        print("Error: access_parser module not available. Please install access-parser.")
-        return False
-
-    if duckdb is None:
-        print("Error: duckdb module not available. Please install duckdb.")
-        return False
-
     conn = None
     try:
         print("Opening MDB file...")
@@ -105,8 +81,9 @@ def convert_mdb_to_duckdb(mdb_path, duckdb_path, batch_mode=False):
         try:
             table_names = list(db.catalog.keys())
         except Exception:
-            if hasattr(db, "tables"):
-                table_names = list(db.tables.keys())
+            tables_obj = getattr(db, "tables", None)
+            if isinstance(tables_obj, dict):
+                table_names = [str(name) for name in tables_obj.keys()]
             else:
                 table_names = []
 
@@ -197,12 +174,14 @@ def convert_mdb_to_duckdb(mdb_path, duckdb_path, batch_mode=False):
                 conn.execute(f'CREATE TABLE "{final_table_name}" ({column_defs})')
 
                 placeholders = ", ".join(["?" for _ in sanitized_columns])
-                for i in range(row_count):
-                    row_data = [table_data[col][i] for col in column_names]
-                    conn.execute(
-                        f'INSERT INTO "{final_table_name}" VALUES ({placeholders})',
-                        row_data,
-                    )
+                rows_data = [
+                    [table_data[col][i] for col in column_names]
+                    for i in range(row_count)
+                ]
+                conn.executemany(
+                    f'INSERT INTO "{final_table_name}" VALUES ({placeholders})',
+                    rows_data,
+                )
 
                 conn.execute(
                     "INSERT INTO _metadata VALUES (?, ?, ?, ?, ?)",

@@ -2,22 +2,43 @@
 
 Este diretório contém o backend Flask e utilitários para busca local em bases DuckDB (com fallback opcional para Access via ODBC) e a construção do índice `_fulltext`.
 
-## Componentes
+## Atualizacao rapida (2026-03-14)
 
-- `app_flask_search.py`: Backend Flask simples.
-  - Endpoints: `/` (serve `static/index.html`), `/api/tables`, `/api/table`, `/api/search`.
-  - Busca por ILIKE diretamente nas colunas das tabelas (sem `_fulltext`).
-  - Usa `DB_PATH` fixo (`minha.duckdb`). Ideal para demo rápida.
+- Fechamento de modal por overlay no bootstrap agora usa apenas evento `click` (sem fechamento em `pointerdown`) para reduzir comportamento de clique prematuro.
+- Destaque de termos na renderizacao de resultados agora prioriza tokens maiores antes dos menores para reduzir match parcial indevido.
+- Export CSV de tabela agora exibe erro generico para operador e mantem detalhe tecnico no log.
+- Normalizacao de linhas do parser Access agora prioriza objetos com `to_dict(orient="records")` antes do fallback generico de iteravel.
+- Quando `to_dict` falha, a normalizacao agora segue para fallback iteravel/objeto em vez de retornar vazio imediato.
+- Conversao Access->DuckDB agora evita concatenar detalhes internos de todos os backends no erro final exposto ao usuario; detalhes continuam em log interno.
+- Erro final de conversao agora preserva mensagem de strict mode de qualquer backend tentado antes da sanitizacao publica.
+- O cliente de comparacao agora trata resposta de upload invalida (nao JSON) sem quebrar o fluxo de erro na UI.
+- O cliente de comparacao agora reseta estado stale (payload/meta, tabelas e overview em cache) quando o par de DBs muda.
+- O smoke Windows de conversao Access remove arquivo temporario de saida quando a conversao falha ou nao gera tabelas de usuario.
+- O export CSV da comparacao agora neutraliza payloads que poderiam ser interpretados como formula em planilhas.
+
+## Componentes
 
 - `app_flask_local_search.py`: Backend Flask completo para operação local.
   - Upload/seleção/remoção de arquivos: `/admin/upload`, `/admin/select`, `/admin/delete`, `/admin/list_uploads`.
   - Conversão Access→DuckDB (se existir `access_convert.convert_access_to_duckdb`).
-  - Status consolidado: `/admin/status` (progresso de conversão, contagem `_fulltext`, top tabelas).
+  - Status consolidado: `/admin/status` (progresso de conversao, contagem `_fulltext`, top tabelas, sinais de validacao da conversao e backend usado).
   - Iniciar indexação `_fulltext`: `/admin/start_index` (usa `create_fulltext.create_or_resume_fulltext`).
   - Definir prioridade de tabelas: `/admin/set_priority` (afeta ordenação de resultados na UI).
+  - Comparacao principal:
+    - `/api/compare_db_tables`
+    - `/api/compare_db_table_content`
+    - `/api/compare_db_overview`
+    - `/api/compare_db_rows`
+    - contrato atual: comparacao direta somente em DuckDB para o caminho rapido
+  - Validacoes de payload de compare:
+    - rejeita `change_types` vazio/invalido
+    - rejeita colunas duplicadas em `key_columns` e `compare_columns`
+    - rejeita filtros/chaves inconsistentes
   - Busca principal `/api/search`:
     - Com `.duckdb`: usa `_fulltext` e ranking `RapidFuzz` (mais rápido e tolerante).
+    - Com `.sqlite/.sqlite3/.db` compatíveis com SQLite: busca textual leve sem `_fulltext`.
     - Com `.mdb/.accdb`: fallback via `pyodbc` (se instalado), faz LIKE e ranking em Python.
+    - Resposta inclui marcador de engine (`db_engine`) para feedback de UI.
   - Lê/atualiza `config.json` com `db_path`, `priority_tables` e `auto_index_after_convert`.
 
 - `create_fulltext.py`: Indexador seguro de `_fulltext`.
@@ -38,6 +59,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 - UI (`static/index.html`) → chama endpoints do `app_flask_local_search.py`:
   - Estado inicial: `/admin/list_uploads`.
+  - Estado consolidado: `/admin/status`.
   - Listar tabelas: `/api/tables`.
   - Busca: `/api/search` (usa `_fulltext` em DuckDB; fallback Access com `pyodbc`).
   - Indexação `_fulltext`: `/admin/start_index`.
@@ -49,18 +71,15 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
   - `utils.normalize_text` e `utils.serialize_value` (normalização/serialização).
   - Opcional `access_convert.convert_access_to_duckdb` para conversão.
 
-- `app_flask_search.py` é independente de `_fulltext` e de `utils.py` (usa ILIKE direto). Serve `static/index.html` como o completo, mas com menos recursos.
+- O backend simples legado foi retirado do caminho principal do produto; para consulta de historico, use o log de commits e o historico git do repositorio.
 
 ## Quando precisam estar juntos?
 
-- Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade):
-  - Necessários: `app_flask_local_search.py`, `create_fulltext.py`, `utils.py` e `static/index.html` (fora deste diretório).
+- Para a app completa (uploads, conversão, indexação `_fulltext`, prioridade, compare e rastreio):
+  - Necessarios: `app_flask_local_search.py`, `compare_dbs.py`, `find_record_across_dbs.py`, `create_fulltext.py`, `utils.py` e os assets em `static/`.
   - O `check_progress.py` é opcional (diagnóstico).
   - `access_convert.py` é opcional, porém necessário para conversão de `.mdb/.accdb` para `.duckdb` via UI.
   - `pyodbc` é opcional (apenas para fallback Access).
-
-- Para a versão simples:
-  - Basta `app_flask_search.py` e `static/index.html`, com `minha.duckdb` disponível.
 
 ## Dependências
 
@@ -70,13 +89,7 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 ## Como rodar
 
-- Versão simples:
-```
-python interface/app_flask_search.py
-```
-Acesse `http://127.0.0.1:5000/`.
-
-- Versão completa:
+- Produto principal:
 ```
 python interface/app_flask_local_search.py
 ```
@@ -86,6 +99,8 @@ Selecione um DB em "Configurar/Upload"; para `.duckdb`, a busca usa `_fulltext` 
 
 ## Observações
 
-- Após converter Access→DuckDB, a indexação automática pode ser acionada (se `auto_index_after_convert` estiver habilitado).
+- Apos converter Access->DuckDB, a indexacao automatica pode ser acionada (se `auto_index_after_convert` estiver habilitado).
+- O status de conversao inclui validacao por tabela com hashes de amostra (`sample_hash_duckdb` / `sample_hash_sqlite`) para detectar divergencias reais.
 - A prioridade de tabelas influencia a ordem de exibição dos resultados.
 - Use `check_progress.py` para verificar se `_fulltext` já cobre todas as tabelas.
+- A interface principal do produto não depende mais de um backend Flask alternativo/simplificado.

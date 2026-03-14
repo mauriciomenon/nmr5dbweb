@@ -1,0 +1,39 @@
+{
+  "table": "items",
+  "db1": "/Users/menon/git/nmr5dbweb/output/smoke/compare_a.duckdb",
+  "db2": "/Users/menon/git/nmr5dbweb/output/smoke/compare_b.duckdb",
+  "key_columns": [
+    "id"
+  ],
+  "compare_columns": [
+    "name"
+  ],
+  "row_count": 1,
+  "rows": [
+    {
+      "type": "changed",
+      "key": {
+        "id": 2
+      },
+      "a": {
+        "name": "beta-new"
+      },
+      "b": {
+        "name": "beta-old"
+      }
+    }
+  ],
+  "page": 1,
+  "page_size": 100,
+  "total_filtered_rows": 1,
+  "total_pages": 1,
+  "summary": {
+    "rows_a": 2,
+    "rows_b": 2,
+    "keys_total": 2,
+    "same_count": 1,
+    "added_count": 0,
+    "removed_count": 0,
+    "changed_count": 1
+  }
+}

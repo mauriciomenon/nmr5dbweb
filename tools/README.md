@@ -14,6 +14,43 @@ Este diretório contém utilitários para:
 
 ## Scripts
 
+### `auto_compare_report.py`
+- **O que faz**: compara 2 bancos e gera report em `HTML`, `MD` e `TXT` com foco em leitura operacional.
+- **Engines**: aceita fonte Access (`.mdb/.accdb`), DuckDB e SQLite; prepara derivados quando necessario.
+- **Saidas**:
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.html`
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.md`
+  - `documentos/reports/db_compare_<timestamp>_<a>_vs_<b>.txt`
+  - atalhos `latest_db_compare_report.*`
+- **Modo default (2 ultimos Access)**:
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py
+```
+  - no prompt `Comandos: Enter=manter | m=alterar | q=sair` e `>`, pressione `Enter` para seguir direto com o default dos 2 ultimos `.accdb`.
+- **Modo direto (sem menu)**:
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
+### `run_min_compare_report.py`
+- **O que faz**: wrapper nao interativo para gerar report minimo com 2 fontes.
+- **Regra**:
+  - se `--db1/--db2` forem passados, usa exatamente esses arquivos
+  - sem argumentos, usa sugestao automatica de 2 fontes mais recentes suportadas
+- **Saidas**:
+  - `documentos/reports/latest_db_compare_report.html`
+  - `documentos/reports/latest_db_compare_report.md`
+  - `documentos/reports/latest_db_compare_report.txt`
+- **Exemplos**:
+```bash
+PYTHONPATH=. uv run python tools/run_min_compare_report.py
+PYTHONPATH=. uv run python tools/run_min_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
 ### `analyze_single_table_by_column.py`
 - **O que faz**: para uma tabela de um arquivo de banco, calcula por coluna: nulos, distintos, top valores (CSV) e gráfico de barras (PNG).
 - **Engines**: DuckDB (`.duckdb/.db`), SQLite (`.sqlite/.db/.sqlite3`), Access (`.mdb/.accdb` via `pyodbc`).

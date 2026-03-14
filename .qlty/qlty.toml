@@ -1,0 +1,62 @@
+config_version = "0"
+
+exclude_patterns = [
+  "access_convert.py",
+  "converters/convert_jackcess.py",
+  "converters/convert_mdbtools.py",
+  "converters/convert_pyodbc.py",
+  "interface/access_parser_utils.py",
+  "interface/app_flask_local_search.py",
+  ".eslintrc.cjs",
+  "eslint.config.mjs",
+  "static/.eslintrc.json",
+]
+
+[smells]
+mode = "comment"
+
+[[source]]
+name = "default"
+default = true
+
+[[exclude]]
+plugins = ["qlty", "radarlint-python", "bandit"]
+file_patterns = [
+  "access_convert.py",
+  "converters/convert_jackcess.py",
+  "converters/convert_mdbtools.py",
+  "converters/convert_pyodbc.py",
+  "interface/access_parser_utils.py",
+  "interface/app_flask_local_search.py",
+]
+
+[[triage]]
+match.rules = [
+  "qlty:function-complexity",
+  "qlty:return-statements",
+  "qlty:function-parameters",
+  "qlty:file-complexity",
+  "qlty:similar-code",
+  "radarlint-python:python:S3776",
+  "radarlint-python:python:S1192",
+]
+match.file_patterns = [
+  "access_convert.py",
+  "converters/convert_jackcess.py",
+  "converters/convert_mdbtools.py",
+  "converters/convert_pyodbc.py",
+  "interface/access_parser_utils.py",
+  "interface/app_flask_local_search.py",
+]
+set.ignored = true
+
+[[triage]]
+match.rules = [
+  "bandit:B608",
+  "bandit:B105",
+  "bandit:B107",
+]
+match.file_patterns = [
+  "interface/app_flask_local_search.py",
+]
+set.ignored = true

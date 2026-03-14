@@ -232,6 +232,97 @@ def test_api_compare_change_types_invalid_returns_400(tmp_path):
     assert data["invalid"] == ["foo"]
 
 
+def test_api_compare_change_types_empty_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "change_types": [],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "change_types deve conter ao menos um tipo"
+
+
+def test_api_compare_key_columns_duplicadas_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id", "id"],
+            "compare_columns": ["valor"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "key_columns nao pode conter colunas duplicadas"
+
+
+def test_api_compare_compare_columns_duplicadas_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "b")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor", "valor"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "compare_columns nao pode conter colunas duplicadas"
+
+
+def test_api_compare_same_db_paths_returns_400(tmp_path):
+    client = app.test_client()
+
+    db1 = tmp_path / "db1.duckdb"
+    _make_db(db1, [(1, "a")])
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db1),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "db1_path e db2_path nao podem ser o mesmo arquivo"
+
+
 def test_api_compare_changed_column_outside_compare_columns_returns_400(tmp_path):
     client = app.test_client()
 
@@ -584,3 +675,74 @@ def test_api_compare_pagination_uses_full_diff_set(monkeypatch, tmp_path):
     assert data_page_2["page"] == 2
     assert data_page_1["rows"][0]["key"]["id"] == 2
     assert data_page_2["rows"][0]["key"]["id"] == 2
+
+
+def test_api_compare_page_invalid_returns_400(tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "page": "abc",
+        },
+    )
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "page deve ser um inteiro"
+
+
+def test_api_compare_page_size_excessivo_eh_rejeitado(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+    monkeypatch.setattr(local_search, "compare_table_duckdb_paged", lambda *_args, **_kwargs: {})
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "page_size": 5000,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "page_size deve ser no maximo" in resp.get_json()["error"]
+
+
+def test_api_compare_row_limit_muito_alto_eh_rejeitado(monkeypatch, tmp_path):
+    client = app.test_client()
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    db1.touch()
+    db2.touch()
+    monkeypatch.setattr(local_search, "compare_table_duckdb_paged", lambda *_args, **_kwargs: {})
+
+    resp = client.post(
+        "/api/compare_db_rows",
+        json={
+            "db1_path": str(db1),
+            "db2_path": str(db2),
+            "table": "T",
+            "key_columns": ["id"],
+            "compare_columns": ["valor"],
+            "row_limit": 5000,
+        },
+    )
+
+    assert resp.status_code == 400
+    assert "row_limit deve ser no maximo" in resp.get_json()["error"]

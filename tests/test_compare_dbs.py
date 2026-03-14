@@ -238,6 +238,46 @@ def test_compare_table_duckdb_rejects_missing_key_column(tmp_path):
         raise AssertionError("compare_table_duckdb deveria rejeitar key_columns ausentes")
 
 
+def test_compare_table_duckdb_rejects_duplicated_key_columns(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "a")])
+
+    try:
+        compare_table_duckdb(
+            db1,
+            db2,
+            "T",
+            key_columns=["id", "id"],
+            compare_columns=["valor"],
+        )
+    except ValueError as exc:
+        assert "key_columns duplicadas" in str(exc)
+    else:
+        raise AssertionError("compare_table_duckdb deveria rejeitar key_columns duplicadas")
+
+
+def test_compare_table_duckdb_rejects_duplicated_compare_columns(tmp_path):
+    db1 = tmp_path / "db1.duckdb"
+    db2 = tmp_path / "db2.duckdb"
+    _make_db(db1, [(1, "a")])
+    _make_db(db2, [(1, "a")])
+
+    try:
+        compare_table_duckdb(
+            db1,
+            db2,
+            "T",
+            key_columns=["id"],
+            compare_columns=["valor", "valor"],
+        )
+    except ValueError as exc:
+        assert "compare_columns duplicadas" in str(exc)
+    else:
+        raise AssertionError("compare_table_duckdb deveria rejeitar compare_columns duplicadas")
+
+
 def test_compare_table_duckdb_paged_filters_and_paginates(tmp_path):
     db1 = tmp_path / "db1.duckdb"
     db2 = tmp_path / "db2.duckdb"

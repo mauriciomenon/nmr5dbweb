@@ -1,32 +1,34 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Installing mdb2sql for Linux..."
+echo "[nmr5dbweb] Linux setup"
 
-echo "Installing mdbtools..."
-sudo apt update
-sudo apt install -y mdbtools
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv not found in PATH. Install from https://docs.astral.sh/uv/getting-started/installation/"
+  exit 1
+fi
 
-echo "Installing Java (for Jackcess)..."
-sudo apt install -y default-jdk
+if [[ ! -f "pyproject.toml" ]]; then
+  echo "ERROR: pyproject.toml not found at repository root"
+  exit 1
+fi
 
-echo "Creating Python virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
+if [[ ! -d ".venv" ]]; then
+  echo "Creating .venv with Python 3.13.12 (fallback 3.13.11)..."
+  uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
+fi
 
-echo "Installing Python dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
+if [[ ! -x ".venv/bin/python" ]]; then
+  echo "ERROR: failed to create .venv with Python 3.13.12/3.13.11"
+  exit 1
+fi
 
-echo "Downloading Jackcess JARs..."
-mkdir -p temp
-curl -L -o temp/jackcess-4.0.5.jar https://sourceforge.net/projects/jackcess/files/jackcess/4.0.5/jackcess-4.0.5.jar/download
-curl -L -o temp/commons-lang3-3.14.0.jar https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
-curl -L -o temp/commons-logging-1.3.0.jar https://repo1.maven.org/maven2/commons-logging/commons-logging/1.3.0/commons-logging-1.3.0.jar
+echo "Syncing dependencies from pyproject.toml ..."
+uv sync --python .venv/bin/python --all-groups
 
-echo ""
-echo "Installation complete!"
-echo ""
-echo "Usage:"
-echo "  source venv/bin/activate"
-echo "  python convert_mdbtools.py --input file.mdb --output database.duckdb"
-echo "  python convert_jackcess.py --input file.mdb --output database.duckdb"
+echo
+echo "Setup complete."
+echo "Activate with: source .venv/bin/activate"
+echo "Run app with:  python main.py"
+echo
+echo "Optional for .mdb conversion: install mdbtools from your distro packages."

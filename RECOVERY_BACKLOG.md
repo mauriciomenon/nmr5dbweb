@@ -20,12 +20,59 @@ Track real product debt that should not be fixed in the current slice.
 9. Expand compare endpoint validation for non-string payload fields if external callers are sending mixed JSON types in practice.
 10. Continue reducing the remaining page-specific CSS duplication now that `static/index.html`, `static/track_record.html`, and `static/admin.html` all use the shared shell/component layer.
 11. Continue shrinking the compare frontend modules (`static/compare_dbs.js`, `static/compare_dbs_render.js`) after the current operator flow stabilizes.
-12. Turn the manual Playwright browser pass into a repeatable regression check once the desired coverage and artifact policy are defined.
-13. Consider adding focused frontend regression checks for the invalid-state flows now validated manually:
-   - search without active DB
-   - admin index start without DB
-   - compare without A/B paths
-   - tracking without required filters
+12. Keep expanding browser regression on top of the now broader full-UI suite:
+   - admin drag-and-drop priority reorder assertions
+   - compare export assertions by isolated change-type modes
+   - track directory modal upward-navigation assertions
+   - environment strategy for Playwright browser bootstrap
+13. Keep hardening the SQLite contract across the main Flask UI/backend flow:
+   - explicit status messaging in the UI
+   - predictable table browsing behavior
+   - no accidental DuckDB fallback when the active file is really SQLite
+   - evaluate whether SQLite search should gain its own lighter index path later
+14. Add a richer report layer for database differences, based on real anomaly-reading needs, while preserving the current fast keyed compare path unchanged.
+15. Review whether the browser regression should manage its own Playwright browser bootstrap or stay environment-driven.
+16. Continue reducing the backend global-state concentration in `interface/app_flask_local_search.py` now that startup/runtime DB handling and active-DB resolution are safer.
+17. Review whether the JS lint baseline should be tightened in phases after the current legacy global-script model is reduced.
+18. Continue cleanup by proof of use only:
+   - review old docs and references before removal
+   - keep backups in `bkp_limpeza/` until explicitly discarded
+19. Continue breaking down `interface/app_flask_local_search.py` by functional islands after the admin upload block:
+   - search/table browsing
+   - record tracking flow
+   - startup/config persistence boundaries
+20. Continue reducing duplication inside the actual browse/search implementations in `interface/app_flask_local_search.py` after the current helper extraction:
+   - keep the DuckDB fast path intact
+   - avoid broad engine abstraction layers
+   - keep row serialization and result ordering behavior stable
+21. If `output/` grows further, define retention rules so the local validation area does not become an unbounded dump of operator samples.
+22. Reassess the legacy `.eslintrc.cjs` fallback only after external analyzers stop depending on old `ESLint 8.x` behavior.
+23. If the real operator datasets keep exposing the same column families, consider making the frontend column-priority list configurable instead of hard-coded.
+24. Reassess whether the operator preview cards in the search screen should become collapsible when datasets with many short tables dominate usage.
+25. Access `.accdb` conversion still depends on local driver/runtime setup in this environment:
+   - `pyodbc` package in uv env
+   - compatible Access ODBC driver
+   - optional `mdbtools` path for `.mdb`
+26. Decide if `artifacts/validation/derived/` should stay local-only forever or gain a curated tiny committed fixture subset for CI.
+27. Add a dedicated compare-browser smoke for report export payload quality per filter mode (`changed`, `added`, `removed`), not only combined mode.
+28. Add a lightweight regression check for `tools/auto_compare_report.py` interactive controls (`contains`/`not_contains`, sort asc/desc, clear) to reduce future UI drift in exported HTML.
+29. Review whether `tools/auto_compare_report.py` should support an optional machine-readable JSON output for downstream automation while keeping current HTML/MD/TXT outputs stable.
+30. Revisit forced-columns policy per table (for example SOSTAT/SOANLG) to keep operator readability without hiding real changed columns.
+31. Keep conversion validation visibility coherent between runtime `/admin/status` and generated validation artifacts to avoid contradictory operator signals.
+32. Add a short release checklist item to always sync control docs (`ROUND_STATUS.md`, `HANDOFF.md`, `PROJECT_STRUCTURE.md`, `interface/README.md`) after each completed feature slice.
+33. Keep triaging PR bot comments by impact and scope, separating:
+   - short-slice reliability/security fixes (do now)
+   - broad complexity/style debt in large modules (defer unless explicit scope)
+34. Re-check compare upload error handling when backend/proxy returns HTML or empty body, and keep frontend behavior stable for operators.
+35. Re-check Windows smoke temporary artifact cleanup in future runs where conversion fails before table listing.
+36. Decide whether `tools/windows_access_smoke.py` should auto-delete temporary output after successful conversion when `--output` is omitted.
+37. Decide whether compare upload should treat empty success payload as hard error (`/admin/upload` response without usable path fields).
+38. Keep triaging `DeepScan` "2 new" findings and classify real bug vs analyzer limitation before broad refactor.
+39. Keep permanent docs free of transient PR/branch references to avoid stale operational guidance.
+40. `access_convert.py`: plan a dedicated decomposition slice for `convert_access_to_duckdb` (current large nested backend strategies) after PR-hardening phase, with behavior-lock tests first and no mixed feature work in the same round.
+41. Reconcile upload non-2xx handling contract in `static/app_bootstrap_actions.js` (transport failure handling vs structured backend validation message path) with one explicit product decision and tests.
+42. Add focused regression for converter table-name uniqueness policy in `converters/convert_jackcess.py` to lock collision behavior for sanitized names.
+43. `converters/convert_pyaccess_parser.py`: split `convert_mdb_to_duckdb` into smaller units (file checks, table schema, row migration, metadata write) only in a dedicated maintenance slice with behavior-lock tests first.
 
 ## Do Not Pull Into Slice 1
 

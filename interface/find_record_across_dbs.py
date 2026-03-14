@@ -23,20 +23,45 @@ import csv
 import datetime
 import re
 import sqlite3
+from interface.access_parser_utils import (
+    load_access_parser_module,
+    list_access_tables_from_parser,
+    normalize_access_parser_rows,
+)
 
 try:  # opcionais
-    import duckdb  # type: ignore
+    import duckdb
 except Exception:  # pragma: no cover
     duckdb = None  # type: ignore
 
 try:
-    import pyodbc  # type: ignore
+    import pyodbc
 except Exception:  # pragma: no cover
     pyodbc = None  # type: ignore
 
 
 SUPPORTED_EXTS = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
 DATE_RE = re.compile(r"(?P<y>\d{4})[-_]? ?(?P<m>\d{2})[-_]? ?(?P<d>\d{2})")
+
+
+def values_equal(left: Any, right: Any) -> bool:
+    if left is None and right is None:
+        return True
+    if right is None:
+        return left is None
+    if isinstance(right, bool):
+        return bool(left) == right
+    if isinstance(right, int) and not isinstance(right, bool):
+        try:
+            return int(left) == right
+        except Exception:
+            return str(left) == str(right)
+    if isinstance(right, float):
+        try:
+            return float(left) == right
+        except Exception:
+            return str(left) == str(right)
+    return str(left) == str(right)
 
 
 def parse_filters_string(s: str) -> List[Tuple[str, Any]]:
@@ -112,10 +137,20 @@ def detect_engine(path: Path) -> str:
     if sfx == ".duckdb":
         return "duckdb"
     if sfx in (".sqlite", ".sqlite3", ".db"):
+        if sfx == ".db":
+            return "sqlite" if looks_like_sqlite_file(path) else "duckdb"
         return "sqlite"
     if sfx in (".mdb", ".accdb"):
         return "access"
     return "sqlite"
+
+
+def looks_like_sqlite_file(path: Path) -> bool:
+    try:
+        with Path(path).open("rb") as handle:
+            return handle.read(16) == b"SQLite format 3\x00"
+    except OSError:
+        return False
 
 
 def list_tables_sqlite(path: Path) -> List[str]:
@@ -161,82 +196,208 @@ def list_columns_duckdb(path: Path, table: str) -> List[str]:
 
 
 def list_tables_access(path: Path) -> List[str]:
-    if pyodbc is None:
-        raise RuntimeError("pyodbc nao esta instalado")
-    conn = None
-    conn_strs = [
-        rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-        rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
-    ]
-    last_err: Optional[Exception] = None
-    for cs in conn_strs:
+    odbc_error = None
+    if pyodbc is not None:
         try:
-            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-            break
-        except Exception as exc:  # pragma: no cover
-            last_err = exc
-            conn = None
-    if conn is None:
-        if last_err is not None:
-            raise last_err
-        raise RuntimeError("Falha ao conectar via ODBC")
-    try:
-        cur = conn.cursor()
-        tables: List[str] = []
-        for r in cur.tables():
+            conn = connect_access(path)
             try:
-                name = getattr(r, "table_name", None) or (r[2] if len(r) > 2 else None)
-            except Exception:
-                name = None
-            if name and not str(name).startswith("MSys"):
-                tables.append(name)
+                cur = conn.cursor()
+                tables: List[str] = []
+                for r in cur.tables():
+                    try:
+                        name = getattr(r, "table_name", None) or (r[2] if len(r) > 2 else None)
+                    except Exception:
+                        name = None
+                    if name and not str(name).startswith("MSys"):
+                        tables.append(name)
+                return tables
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            odbc_error = str(exc)
+
+    tables, parser_err = list_tables_access_parser(path)
+    if tables:
         return tables
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+    if odbc_error and parser_err:
+        raise RuntimeError(f"falha ODBC: {odbc_error}; falha access-parser: {parser_err}")
+    if odbc_error:
+        raise RuntimeError(f"falha ODBC: {odbc_error}")
+    if parser_err:
+        raise RuntimeError(f"falha access-parser: {parser_err}")
+    return []
 
 
 def list_columns_access(path: Path, table: str) -> List[str]:
+    odbc_error = None
+    if pyodbc is not None:
+        try:
+            conn = connect_access(path)
+            try:
+                cols: List[str] = []
+                cur = conn.cursor()
+                try:
+                    for c in cur.columns(table=table):
+                        name = getattr(c, "column_name", None) or (c[3] if len(c) > 3 else None)
+                        if name:
+                            cols.append(name)
+                except Exception:
+                    cur = conn.cursor()
+                    cur.execute(f"SELECT TOP 0 * FROM [{table}]")
+                    cols = [d[0] for d in cur.description]
+                return cols
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            odbc_error = str(exc)
+
+    cols, parser_err = list_columns_access_parser(path, table)
+    if cols:
+        return cols
+    if odbc_error and parser_err:
+        raise RuntimeError(f"falha ODBC: {odbc_error}; falha access-parser: {parser_err}")
+    if odbc_error:
+        raise RuntimeError(f"falha ODBC: {odbc_error}")
+    if parser_err:
+        raise RuntimeError(f"falha access-parser: {parser_err}")
+    return []
+
+
+def connect_access(path: Path):
     if pyodbc is None:
         raise RuntimeError("pyodbc nao esta instalado")
     conn = None
+    last_err: Optional[Exception] = None
+    errors: List[str] = []
     conn_strs = [
         rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
         rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
     ]
-    last_err: Optional[Exception] = None
     for cs in conn_strs:
         try:
             conn = pyodbc.connect(cs, autocommit=True, timeout=30)
             break
         except Exception as exc:  # pragma: no cover
             last_err = exc
+            errors.append(str(exc))
             conn = None
     if conn is None:
+        if errors:
+            raise RuntimeError("Falha ao conectar via ODBC: " + "; ".join(errors)) from last_err
         if last_err is not None:
             raise last_err
         raise RuntimeError("Falha ao conectar via ODBC")
+    return conn
+
+
+def list_tables_access_parser(path: Path) -> Tuple[List[str], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return [], f"modulo access-parser indisponivel: {err}"
     try:
-        cols: List[str] = []
-        cur = conn.cursor()
-        try:
-            for c in cur.columns(table=table):
-                name = getattr(c, "column_name", None) or (c[3] if len(c) > 3 else None)
-                if name:
-                    cols.append(name)
-        except Exception:
-            # fallback: SELECT * LIMIT 0
-            cur = conn.cursor()
-            cur.execute(f"SELECT TOP 0 * FROM [{table}]")
-            cols = [d[0] for d in cur.description]
-        return cols
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        parser = module.AccessParser(str(path))
+    except Exception as exc:
+        return [], str(exc)
+    try:
+        return list_access_tables_from_parser(parser), None
+    except Exception as exc:
+        return [], str(exc)
+
+
+def list_columns_access_parser(path: Path, table: str) -> Tuple[List[str], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return [], f"modulo access-parser indisponivel: {err}"
+    try:
+        parser = module.AccessParser(str(path))
+        rows = normalize_access_parser_rows(parser.parse_table(table))
+    except Exception as exc:
+        return [], str(exc)
+    if not rows:
+        return [], None
+    columns = [str(col) for col in rows[0].keys()]
+    return columns, None
+
+
+def search_in_table_access_parser(path: Path, table: str, filters: List[Tuple[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+    module, err = load_access_parser_module()
+    if module is None:
+        return False, None, f"modulo access-parser indisponivel: {err}"
+    try:
+        parser = module.AccessParser(str(path))
+        rows = normalize_access_parser_rows(parser.parse_table(table))
+    except Exception as exc:
+        return False, None, f"erro access-parser: {exc}"
+    if not rows:
+        return False, None, None
+
+    first = rows[0]
+    lookup = {str(col).lower(): str(col) for col in first.keys()}
+    for col, _val in filters:
+        if str(col).lower() not in lookup:
+            return False, None, f"coluna '{col}' nao encontrada na tabela {table}"
+
+    for row in rows:
+        matched = True
+        for col, expected in filters:
+            real_col = lookup[str(col).lower()]
+            if not values_equal(row.get(real_col), expected):
+                matched = False
+                break
+        if not matched:
+            continue
+        row_dict: Dict[str, Any] = {}
+        for cname, value in row.items():
+            if isinstance(value, (datetime.date, datetime.datetime)):
+                row_dict[str(cname)] = value.isoformat()
+            else:
+                row_dict[str(cname)] = value
+        return True, row_dict, None
+    return False, None, None
+
+
+def list_tables_for_engine(engine: str, path: Path) -> List[str]:
+    if engine == "sqlite":
+        return list_tables_sqlite(path)
+    if engine == "duckdb":
+        return list_tables_duckdb(path)
+    if engine == "access":
+        return list_tables_access(path)
+    raise RuntimeError(f"engine nao suportada: {engine}")
+
+
+def list_columns_for_engine(engine: str, path: Path, table: str) -> List[str]:
+    if engine == "sqlite":
+        return list_columns_sqlite(path, table)
+    if engine == "duckdb":
+        return list_columns_duckdb(path, table)
+    if engine == "access":
+        return list_columns_access(path, table)
+    raise RuntimeError(f"engine nao suportada: {engine}")
+
+
+def build_engine_where_parts(engine: str, filters: List[Tuple[str, Any]], columns: List[str], table: str):
+    column_lookup = {column.lower(): column for column in columns}
+    where_parts: List[str] = []
+    params: List[Any] = []
+    for col, val in filters:
+        real = column_lookup.get(col.lower())
+        if not real:
+            raise ValueError(f"coluna '{col}' nao encontrada na tabela {table}")
+        if engine in ("sqlite", "duckdb"):
+            where_parts.append(f'"{real}" = ?')
+        else:
+            where_parts.append(f"[{real}] = ?")
+        params.append(val)
+    if not where_parts:
+        raise ValueError("nenhum filtro informado")
+    return where_parts, params
 
 
 def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
@@ -246,33 +407,19 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
     - sample_row_dict: dicionário simples com alguns campos da linha encontrada
     - error: mensagem de erro (se algo deu errado ao acessar o arquivo/tabela)
     """
+    if engine == "access" and pyodbc is None:
+        # Fast path on non-Windows without ODBC: parse table once.
+        return search_in_table_access_parser(path, table, filters)
+
     try:
-        if engine == "sqlite":
-            cols = list_columns_sqlite(path, table)
-        elif engine == "duckdb":
-            cols = list_columns_duckdb(path, table)
-        elif engine == "access":
-            cols = list_columns_access(path, table)
-        else:
-            return False, None, f"engine nao suportada: {engine}"
+        cols = list_columns_for_engine(engine, path, table)
     except Exception as exc:
         return False, None, f"erro ao listar colunas: {exc}"
 
-    # garante que todas as colunas do filtro existem
-    col_lower = {c.lower(): c for c in cols}
-    where_parts: List[str] = []
-    params: List[Any] = []
-    for col, val in filters:
-        real = col_lower.get(col.lower())
-        if not real:
-            return False, None, f"coluna '{col}' nao encontrada na tabela {table}"
-        if engine in ("sqlite", "duckdb"):
-            where_parts.append(f'"{real}" = ?')
-        else:  # access / ODBC
-            where_parts.append(f"[{real}] = ?")
-        params.append(val)
-    if not where_parts:
-        return False, None, "nenhum filtro informado"
+    try:
+        where_parts, params = build_engine_where_parts(engine, filters, cols, table)
+    except ValueError as exc:
+        return False, None, str(exc)
 
     if engine == "sqlite":
         conn = sqlite3.connect(str(path))
@@ -300,39 +447,31 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
             desc = [c[0] for c in cur.description]
         finally:
             conn.close()
-    else:  # access via pyodbc
+    else:  # access via pyodbc, com fallback access-parser
         if pyodbc is None:
-            return False, None, "pyodbc nao instalado"
-        conn = None
-        conn_strs = [
-            rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
-            rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
-        ]
-        last_err: Optional[Exception] = None
-        for cs in conn_strs:
-            try:
-                conn = pyodbc.connect(cs, autocommit=True, timeout=30)
-                break
-            except Exception as exc:  # pragma: no cover
-                last_err = exc
-                conn = None
-        if conn is None:
-            return False, None, f"falha ao conectar via ODBC: {last_err}"
+            return search_in_table_access_parser(path, table, filters)
         try:
-            cur = conn.cursor()
-            sql = (
-                "SELECT TOP 1 * FROM [" + table + "] WHERE " + " AND ".join(where_parts)
-            )
-            cur.execute(sql, params)
-            row = cur.fetchone()
-            if not row:
-                return False, None, None
-            desc = [d[0] for d in cur.description]
-        finally:
+            conn = connect_access(path)
             try:
-                conn.close()
-            except Exception:
-                pass
+                cur = conn.cursor()
+                sql = (
+                    "SELECT TOP 1 * FROM [" + table + "] WHERE " + " AND ".join(where_parts)
+                )
+                cur.execute(sql, params)
+                row = cur.fetchone()
+                if not row:
+                    return False, None, None
+                desc = [d[0] for d in cur.description]
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception as exc:
+            found, sample, parser_err = search_in_table_access_parser(path, table, filters)
+            if parser_err is not None:
+                return False, None, f"falha ODBC: {exc}; falha access-parser: {parser_err}"
+            return found, sample, None
 
     # converte linha em dict simples, mas limitando a alguns campos mais úteis
     row_dict: Dict[str, Any] = {}
@@ -414,26 +553,24 @@ def find_record_across_dbs(
             if table:
                 tables = [table]
             else:
-                if engine == "sqlite":
-                    tables = list_tables_sqlite(f)
-                elif engine == "duckdb":
-                    tables = list_tables_duckdb(f)
-                elif engine == "access":
-                    tables = list_tables_access(f)
-                else:
-                    raise RuntimeError(f"engine nao suportada: {engine}")
+                tables = list_tables_for_engine(engine, f)
 
+            table_errors: List[str] = []
             for t in tables:
                 found, sample, err = search_in_table(engine, f, t, filters)
                 if err is not None:
-                    # erro específico de tabela/arquivo; registra e para este arquivo
-                    info["error"] = err
-                    break
+                    # erro especifico de tabela; registra e segue para as demais
+                    if len(table_errors) < 3:
+                        table_errors.append(f"{t}: {err}")
+                    continue
                 if found:
                     info["found"] = True
                     info["table"] = t
                     info["sample"] = sample
+                    info["error"] = None
                     break
+            if not info["found"] and table_errors:
+                info["error"] = "; ".join(table_errors)
         except Exception as exc:
             info["error"] = str(exc)
         results.append(info)

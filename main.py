@@ -9,19 +9,85 @@ Ultima modificacao: 2025-12-29T14:30:00
 import os
 import sys
 import argparse
+import errno
 import socket
+import subprocess
 from pathlib import Path
 from datetime import datetime
 
 
 def verificar_porta_disponivel(host, porta):
-    """Verifica se a porta está disponível para uso."""
+    """Verifica se a porta esta disponivel para uso."""
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            resultado = s.connect_ex((host, porta))
-            return resultado != 0
-    except socket.error:
+        family = socket.AF_INET6 if ":" in str(host) else socket.AF_INET
+        with socket.socket(family, socket.SOCK_STREAM) as s:
+            s.bind((host, porta))
+        return True
+    except OSError:
         return False
+
+
+def obter_processo_na_porta(porta):
+    """Retorna informacoes basicas do processo que esta escutando na porta."""
+    try:
+        import psutil
+    except Exception:
+        return None
+
+    try:
+        for conn in psutil.net_connections(kind="tcp"):
+            if conn.status != psutil.CONN_LISTEN:
+                continue
+            if not conn.laddr:
+                continue
+            if int(conn.laddr.port) != int(porta):
+                continue
+            pid = conn.pid
+            nome = ""
+            if pid:
+                try:
+                    nome = psutil.Process(pid).name()
+                except Exception:
+                    nome = ""
+            return {"pid": pid, "name": nome}
+    except Exception:
+        pass
+
+    # Fallback para sistemas Unix quando psutil nao encontrar.
+    if os.name != "nt":
+        try:
+            cmd = ["lsof", "-nP", f"-iTCP:{porta}", "-sTCP:LISTEN"]
+            result = subprocess.run(cmd, check=False, capture_output=True, text=True)
+            lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+            if len(lines) >= 2:
+                parts = lines[1].split()
+                if len(parts) >= 2:
+                    return {"pid": parts[1], "name": parts[0]}
+        except Exception:
+            pass
+    return None
+
+
+def encontrar_proxima_porta_livre(host, porta_inicial, max_tentativas=30):
+    """Procura a proxima porta livre a partir de porta_inicial + 1."""
+    porta = int(porta_inicial)
+    for _ in range(max_tentativas):
+        porta += 1
+        if porta > 65535:
+            break
+        if verificar_porta_disponivel(host, porta):
+            return porta
+    return None
+
+
+def is_bind_address_in_use_error(exc: OSError) -> bool:
+    """Detecta erro especifico de bind por porta em uso."""
+    if getattr(exc, "errno", None) == errno.EADDRINUSE:
+        return True
+    if getattr(exc, "winerror", None) == 10048:  # WSAEADDRINUSE
+        return True
+    msg = str(exc).lower()
+    return ("address already in use" in msg) or ("porta" in msg and "uso" in msg)
 
 
 def validar_configuracao(args):
@@ -61,6 +127,7 @@ def configurar_logging():
 
 
 def main():
+    default_upload_dir = str((Path(__file__).parent / "documentos").resolve())
     parser = argparse.ArgumentParser(
         description="MDB2SQL - Interface Web Flask",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -83,7 +150,7 @@ Exemplos de uso:
     )
     parser.add_argument("--debug", action="store_true", help="Ativar modo debug")
     parser.add_argument(
-        "--upload-folder", help="Pasta para uploads (padrao: interface/uploads)"
+        "--upload-folder", help=f"Pasta para uploads/documentos (padrao: {default_upload_dir})"
     )
     parser.add_argument(
         "--max-content-length",
@@ -97,8 +164,18 @@ Exemplos de uso:
         default=True,
         help="Usar threads para melhor desempenho (padrao: ativado)",
     )
+    parser.add_argument(
+        "--no-port-fallback",
+        action="store_true",
+        help="Nao tenta porta alternativa quando a porta informada estiver ocupada",
+    )
 
     args = parser.parse_args()
+    if args.upload_folder:
+        resolved_upload_folder = str(Path(args.upload_folder).expanduser())
+    else:
+        resolved_upload_folder = os.environ.get("UPLOAD_FOLDER") or default_upload_dir
+    args.upload_folder = resolved_upload_folder
 
     # Gerar timestamp unico para esta execucao
     timestamp_exec = datetime.now().isoformat()
@@ -112,19 +189,36 @@ Exemplos de uso:
             print(f"  - {erro}")
         sys.exit(1)
 
-    # Verificar se a porta está disponivel
+    # Verificar se a porta esta disponivel
     if not verificar_porta_disponivel(args.host, args.port):
+        proc = obter_processo_na_porta(args.port)
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
-        print(f"Erro: Porta {args.port} ja esta em uso no host {args.host}")
-        sys.exit(1)
+        print(f"Aviso: Porta {args.port} ja esta em uso no host {args.host}")
+        if proc:
+            pid = proc.get("pid")
+            nome = proc.get("name") or "processo_desconhecido"
+            print(f"Processo detectado na porta: pid={pid} nome={nome}")
+        else:
+            print("Processo na porta nao identificado")
+
+        if args.no_port_fallback:
+            print("Fallback de porta desativado por --no-port-fallback")
+            sys.exit(1)
+
+        nova_porta = encontrar_proxima_porta_livre(args.host, args.port, max_tentativas=50)
+        if nova_porta is None:
+            print("Erro: nao foi encontrada porta livre nas proximas 50 tentativas")
+            sys.exit(1)
+        print(f"Usando porta alternativa automaticamente: {nova_porta}")
+        args.port = nova_porta
 
     # Configurar variaveis de ambiente
+    upload_folder_effective = args.upload_folder or default_upload_dir
     os.environ["FLASK_HOST"] = args.host
     os.environ["FLASK_PORT"] = str(args.port)
     os.environ["FLASK_DEBUG"] = str(args.debug)
 
-    if args.upload_folder:
-        os.environ["UPLOAD_FOLDER"] = args.upload_folder
+    os.environ["UPLOAD_FOLDER"] = upload_folder_effective
 
     os.environ["MAX_CONTENT_LENGTH"] = str(args.max_content_length)
 
@@ -140,8 +234,8 @@ Exemplos de uso:
         from interface.app_flask_local_search import app
 
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
-        print(f"Iniciando servidor Flask")
-        print(f"Pasta de uploads: {args.upload_folder or 'interface/uploads'}")
+        print("Iniciando servidor Flask")
+        print(f"Pasta de uploads: {upload_folder_effective}")
         print(f"Servidor: http://{args.host}:{args.port}")
         print(f"Debug: {'Ativado' if args.debug else 'Desativado'}")
         print(f"Modo threaded: {'Ativado' if args.threaded else 'Desativado'}")
@@ -163,7 +257,7 @@ Exemplos de uso:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print(f"Erro ao importar o modulo Flask: {e}")
         print("Verifique se as dependencias estao instaladas:")
-        print("   pip install -r requirements.txt")
+        print("   uv sync --all-groups")
         sys.exit(1)
     except KeyboardInterrupt:
         print(f"\n{timestamp_exec} - MDB2SQL - Interface Principal")
@@ -172,8 +266,10 @@ Exemplos de uso:
     except OSError as e:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print(f"Erro de sistema operacional: {e}")
-        if "Address already in use" in str(e):
+        if is_bind_address_in_use_error(e):
             print("A porta ja esta em uso por outro processo")
+        else:
+            print("Falha de sistema operacional durante inicializacao")
         sys.exit(1)
     except Exception as e:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")

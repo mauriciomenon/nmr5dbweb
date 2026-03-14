@@ -1,32 +1,31 @@
 @echo off
+setlocal
 
-echo Installing mdb2sql for Windows...
+echo [nmr5dbweb] Windows setup
+echo.
+
+where uv >nul 2>nul
+if errorlevel 1 (
+  echo ERROR: uv not found in PATH.
+  exit /b 1
+)
+
+if not exist tools\windows_access_setup.ps1 (
+  echo ERROR: tools\windows_access_setup.ps1 not found.
+  exit /b 1
+)
+
+echo Running PowerShell setup (venv + requirements-dev + pyodbc/driver check)...
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\windows_access_setup.ps1
+if errorlevel 1 (
+  echo ERROR: setup failed.
+  exit /b 1
+)
 
 echo.
-echo Installing Python dependencies...
-python -m venv venv
-call venv\Scripts\activate.bat
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+echo Setup complete.
+echo If you have an ACCDB sample, run:
+echo   powershell -ExecutionPolicy Bypass -File tools\windows_access_setup.ps1 -SmokeAccdb C:\path\sample.accdb
 
-echo.
-echo Downloading Jackcess JARs...
-if not exist temp mkdir temp
-curl -L -o temp\jackcess-4.0.5.jar https://sourceforge.net/projects/jackcess/files/jackcess/4.0.5/jackcess-4.0.5.jar/download
-curl -L -o temp\commons-lang3-3.14.0.jar https://repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.14.0/commons-lang3-3.14.0.jar
-curl -L -o temp\commons-logging-1.3.0.jar https://repo1.maven.org/maven2/commons-logging/commons-logging/1.3.0/commons-logging-1.3.0.jar
+exit /b 0
 
-echo.
-echo Installation complete!
-echo.
-echo For ODBC support (convert_pyodbc.py):
-echo   Download and install Microsoft Access Database Engine:
-echo   https://www.microsoft.com/en-us/download/details.aspx?id=54920
-echo.
-echo For Jackcess support (convert_jackcess.py):
-echo   Install Java JDK from https://adoptium.net/
-echo.
-echo Usage:
-echo   venv\Scripts\activate
-echo   python convert_pyodbc.py --input file.mdb --output database.duckdb
-echo   python convert_jackcess.py --input file.mdb --output database.duckdb

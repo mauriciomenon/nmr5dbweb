@@ -1,661 +1,140 @@
-// === Funcoes utilitarias exportadas para HTML / inline_handlers ===
+(function () {
+  if (window.__appSearchFlowDelegated) return;
+  window.__appSearchFlowDelegated = true;
 
-function setBusyButton(btn, busyText, idleText) {
-  if (!btn) return () => {};
-  const original = idleText || btn.textContent;
-  btn.disabled = true;
-  btn.textContent = busyText;
-  return () => {
-    btn.disabled = false;
-    btn.textContent = original;
+  var missing = function (name, fallback) {
+    if (typeof window[name] === 'function') return;
+    window[name] = fallback;
   };
-}
 
-function setSearchMeta(text, level) {
-  const el = $('searchMeta');
-  if (!el) return;
-  el.textContent = text || '';
-  el.classList.remove('warn', 'error');
-  if (level === 'warn' || level === 'error') {
-    el.classList.add(level);
-  }
-}
-
-function setPriorityStatus(text, level) {
-  const el = $('priorityMsg');
-  if (!el) return;
-  el.textContent = text || '';
-  el.classList.remove('warn', 'error');
-  if (level === 'warn' || level === 'error') {
-    el.classList.add(level);
-  }
-}
-
-function onSelectRowClick(ev, nameEnc) {
-  if (ev && ev.target && ev.target.closest && ev.target.closest('.file-actions')) return;
-  selectUpload(nameEnc, null);
-}
-
-async function deleteUpload(nameEnc, btn) {
-  if (!confirm('Deseja realmente excluir este arquivo?')) return;
-  const name = decodeURIComponent(nameEnc);
-  const msg = $('uploadMsg');
-  const restoreBtn = setBusyButton(btn, 'Excluindo...', btn ? btn.textContent : 'Excluir');
-  if (msg) msg.textContent = 'Excluindo: ' + name;
-  try {
-    const j = await apiJSON('/admin/delete', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
-    });
-    if (j && j.ok) {
-      if (msg) msg.textContent = 'Arquivo excluido: ' + name;
-      setFlowBanner('', '');
-      await refreshUiState();
-    } else {
-      const err = (j && j.error) || 'falha ao excluir';
-      if (msg) msg.textContent = 'Erro ao excluir: ' + err;
-      setFlowBanner('Nao foi possivel excluir. Verifique se o arquivo esta em uso.', 'warn');
-    }
-  } catch (e) {
-    if (msg) msg.textContent = 'Erro ao excluir';
-    setFlowBanner('Erro ao excluir. Tente novamente.', 'error');
-    logUi('ERROR', 'delete falhou');
-  } finally {
-    restoreBtn();
-  }
-}
-
-async function selectUpload(nameEnc, btn) {
-  const name = decodeURIComponent(nameEnc);
-  const msg = $('uploadMsg');
-  const restoreBtn = setBusyButton(btn, 'Selecionando...', btn ? btn.textContent : 'Selecionar');
-  if (msg) msg.textContent = 'Selecionando: ' + name;
-  try {
-    const j = await apiJSON('/admin/select', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
-    });
-    if (j && j.ok) {
-      if (msg) msg.textContent = 'DB selecionado: ' + name;
-      manualFlowOverride = '';
-      setFlowBanner('', '');
-      await refreshUiState();
-      closeModal();
-    } else {
-      const err = (j && j.error) || 'falha ao selecionar';
-      if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-      setFlowBanner('Nao foi possivel selecionar o arquivo. Tente novamente.', 'error');
-      logUi('ERROR', 'select db falhou');
-    }
-  } catch (e) {
-    if (msg) msg.textContent = 'Erro ao selecionar DB';
-      setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-      logUi('ERROR', 'select db falhou');
-  } finally {
-    restoreBtn();
-  }
-}
-
-async function selectDbFromTab(nameEnc) {
-  const name = decodeURIComponent(nameEnc);
-  const msg = $('uploadMsg');
-  if (msg) msg.textContent = 'Selecionando: ' + name;
-  try {
-    const j = await apiJSON('/admin/select', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: name })
-    });
-    if (j && j.ok) {
-      if (msg) msg.textContent = 'DB selecionado: ' + name;
-      manualFlowOverride = '';
-      setFlowBanner('', '');
-      await refreshUiState();
-    } else {
-      const err = (j && j.error) || 'falha ao selecionar';
-      if (msg) msg.textContent = 'Erro ao selecionar: ' + err;
-      setFlowBanner('Nao foi possivel selecionar o arquivo. Tente novamente.', 'error');
-      logUi('ERROR', 'select db falhou');
-    }
-  } catch (e) {
-    if (msg) msg.textContent = 'Erro ao selecionar DB';
-    setFlowBanner('Erro ao selecionar DB. Verifique o servidor.', 'error');
-    logUi('ERROR', 'select db falhou');
-  }
-}
-
-async function loadPriorityModal() {
-  const allEl = $('allTablesList');
-  const selEl = $('priorityListModal');
-  if (!allEl || !selEl) return;
-  if (!hasDbSelected()) {
-    allEl.innerHTML = '<li class="muted">Nenhum DB selecionado</li>';
-    selEl.innerHTML = '';
-    setPriorityStatus('Nenhum DB selecionado', 'warn');
-    setModalBanner('priorityModalBanner', 'Selecione um DB antes de editar a ordem das tabelas.', 'warn');
-    return;
-  }
-  allEl.innerHTML = '';
-  selEl.innerHTML = '';
-  setPriorityStatus('Carregando...', '');
-  setModalBanner('priorityModalBanner', 'Carregando tabelas do DB ativo...', 'info');
-  try {
-    const t = await apiJSON('/api/tables');
-    if (t.error) {
-      allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-      selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-      setPriorityStatus('Erro ao listar tabelas.', 'error');
-      setModalBanner('priorityModalBanner', 'Nao foi possivel listar as tabelas do DB ativo.', 'error');
-      logUi('ERROR', 'priority tabelas ' + t.error);
-      return;
-    }
-    const tables = t.tables || [];
-    const visible = tables.filter(n => !/^MSys/i.test(n));
-    const st = await apiJSON('/admin/list_uploads');
-    const saved = st.priority_tables || [];
-    const remaining = visible.filter(x => !saved.includes(x));
-    remaining.forEach(name => {
-      const li = document.createElement('li');
-      li.dataset.table = name;
-      li.innerHTML = `<label style="display:flex;align-items:center;gap:8px;width:100%"><input type="checkbox" data-name="${encodeURIComponent(
-        name
-      )}" onchange="onTableCheckboxChange(this)"> <span style="flex:1">${escapeHtml(
-        name
-      )}</span></label>`;
-      allEl.appendChild(li);
-    });
-    saved.forEach(name => {
-      const li = document.createElement('li');
-      li.draggable = true;
-      li.dataset.table = name;
-      li.innerHTML = `<div style="flex:1">${escapeHtml(
-        name
-      )}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)" title="Mover para cima">Up</button><button class="btn ghost" onclick="prioMoveDown(this)" title="Mover para baixo">Down</button><button class="btn ghost" onclick="prioRemove(this)" title="Remover">X</button></div>`;
-      selEl.appendChild(li);
-    });
-    enableDragAndDrop(selEl);
-    setPriorityStatus(`Tabelas carregadas: ${visible.length}. Prioritarias: ${saved.length}.`, '');
-    setModalBanner('priorityModalBanner', 'Ajuste a ordem e salve quando terminar.', 'info');
-  } catch (e) {
-    allEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-    selEl.innerHTML = '<li class="muted">Erro ao listar tabelas</li>';
-    setPriorityStatus('Erro ao listar tabelas.', 'error');
-    setModalBanner('priorityModalBanner', 'Falha ao carregar as tabelas prioritarias.', 'error');
-    logUi('ERROR', 'priority modal falhou');
-  }
-}
-
-function onTableCheckboxChange(chk) {
-  const raw = chk.getAttribute('data-name') || '';
-  const name = decodeURIComponent(raw);
-  if (chk.checked) {
-    const selEl = $('priorityListModal');
-    const li = document.createElement('li');
-    li.draggable = true;
-    li.dataset.table = name;
-    li.innerHTML = `<div style="flex:1">${escapeHtml(
-      name
-    )}</div><div style="display:flex;gap:6px"><button class="btn ghost" onclick="prioMoveUp(this)" title="Mover para cima">Up</button><button class="btn ghost" onclick="prioMoveDown(this)" title="Mover para baixo">Down</button><button class="btn ghost" onclick="prioRemove(this)" title="Remover">X</button></div>`;
-    selEl.appendChild(li);
-    enableDragAndDrop(selEl);
-  } else {
-    const selEl = $('priorityListModal');
-    const it = Array.from(selEl.children).find(li => li.dataset.table === name);
-    if (it) selEl.removeChild(it);
-  }
-}
-
-function enableDragAndDrop(listEl) {
-  let dragSrc = null;
-  Array.from(listEl.children).forEach(li => {
-    li.addEventListener('dragstart', e => {
-      dragSrc = li;
-      li.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    li.addEventListener('dragend', () => {
-      li.classList.remove('dragging');
-    });
-    li.addEventListener('dragover', e => {
-      e.preventDefault();
-      const target = e.currentTarget;
-      if (target === dragSrc) return;
-      const rect = target.getBoundingClientRect();
-      const next = e.clientY - rect.top > rect.height / 2;
-      if (next) target.parentNode.insertBefore(dragSrc, target.nextSibling);
-      else target.parentNode.insertBefore(dragSrc, target);
-    });
-    li.addEventListener('drop', e => {
-      e.preventDefault();
-    });
+  missing('setBusyButton', function (btn, busyText, idleText) {
+    if (!btn) return function () {};
+    var original = typeof idleText === 'string' ? idleText : btn.textContent;
+    btn.disabled = true;
+    btn.textContent = busyText || 'Aguarde...';
+    return function () {
+      btn.disabled = false;
+      btn.textContent = original;
+    };
   });
-}
 
-function prioMoveUp(btn) {
-  const li = btn.closest('li');
-  const prev = li.previousElementSibling;
-  if (prev) li.parentNode.insertBefore(li, prev);
-}
-
-function prioMoveDown(btn) {
-  const li = btn.closest('li');
-  const next = li.nextElementSibling;
-  if (next) li.parentNode.insertBefore(li, next.nextElementSibling);
-}
-
-function prioRemove(btn) {
-  const li = btn.closest('li');
-  const name = li.dataset.table;
-  li.parentNode.removeChild(li);
-  const leftChk = Array.from(
-    document.querySelectorAll('#allTablesList input[type=checkbox]')
-  ).find(c => c.getAttribute('data-name') === encodeURIComponent(name));
-  if (leftChk) leftChk.checked = false;
-}
-
-async function savePriority() {
-  const listEl = $('priorityListModal');
-  const tables = Array.from(listEl.querySelectorAll('li')).map(li => li.dataset.table);
-  setPriorityStatus('Salvando prioridades...', '');
-  setModalBanner('priorityModalBanner', 'Salvando a nova ordem das tabelas...', 'info');
-  try {
-    const res = await fetch('/admin/set_priority', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ tables })
-    });
-    const j = await res.json();
-    if (j && j.ok) {
-      setPriorityStatus('Prioridades salvas: ' + tables.length, '');
-      setModalBanner('priorityModalBanner', 'Ordem salva com sucesso.', 'info');
-    } else {
-      setPriorityStatus('Erro ao salvar prioridades.', 'error');
-      setModalBanner('priorityModalBanner', 'Nao foi possivel salvar a ordem das tabelas.', 'error');
+  missing('setSearchMeta', function (text, level) {
+    var el = document.getElementById('searchMeta');
+    if (!el) return;
+    el.textContent = text || '';
+    el.classList.remove('warn', 'error');
+    if (level === 'warn' || level === 'error') {
+      el.classList.add(level);
     }
-    await refreshUiState();
-  } catch (e) {
-    setPriorityStatus('Erro ao salvar prioridades.', 'error');
-    setModalBanner('priorityModalBanner', 'Falha de rede ao salvar prioridades.', 'error');
-  }
-}
+  });
 
-async function doSearch(opts) {
-  const q = $('q').value.trim();
-  if (!q) {
-    setSearchMeta('Digite um termo para pesquisar.', 'warn');
-    setFlowBanner('Digite um termo antes de iniciar a busca.', 'warn');
-    if ($('q')) $('q').focus();
-    return;
-  }
-  if (!hasDbSelected()) {
-    setNoDbState({ showHint: true });
-    logUi('WARN', 'acao exige DB');
-    setSearchMeta('Selecione um DB antes de pesquisar.', 'warn');
-    setFlowBanner('Selecione um DB ativo antes de abrir a busca.', 'warn');
-    return;
-  }
-  const btn = $('searchBtn');
-  if (btn.disabled) return;
-  const exportBtn = $('exportAllBtn');
-  if (exportBtn) exportBtn.disabled = true;
-  try {
-    if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
-      setSearchMeta('Busca bloqueada: conversao em andamento.', 'warn');
-      setFlowBanner('Aguarde a conversao do banco terminar antes de pesquisar.', 'warn');
-      return;
-    }
-    if (lastStatus && lastStatus.indexing) {
-      setSearchMeta('Busca bloqueada: indexacao em andamento.', 'warn');
-      setFlowBanner('Aguarde a indexacao (_fulltext) terminar antes de pesquisar.', 'warn');
-      return;
-    }
+  missing('onSelectRowClick', function (ev, nameEnc) {
     if (
-      lastStatus &&
-      lastStatus.db &&
-      lastStatus.db.toLowerCase().endsWith('.duckdb') &&
-      !lastStatus.fulltext_count
+      ev &&
+      ev.target &&
+      ev.target.closest &&
+      ev.target.closest('.file-actions')
+    )
+      return;
+    if (!window.selectUpload) return;
+    window.selectUpload(nameEnc, null);
+  });
+
+  missing('deleteUpload', async function (nameEnc, btn) {
+    if (
+      !window.confirm ||
+      !window.confirm('Deseja realmente excluir este arquivo?')
     ) {
-      setSearchMeta('Busca bloqueada: indice _fulltext ausente.', 'warn');
-      setFlowBanner('Este banco DuckDB ainda nao possui indice _fulltext. Inicie a indexacao antes de pesquisar.', 'warn');
       return;
     }
-  } catch (e) {
-    logUi('WARN', 'falha ao validar status antes da busca');
-  }
-  const per_table = parseInt($('per_table').value, 10) || 10;
-  const candidate_limit = parseInt($('candidate_limit').value, 10) || 1000;
-  const total_limit = parseInt($('total_limit').value, 10) || 500;
-  const token_mode = $('token_mode').value;
-  const min_score = parseInt($('min_score').value, 10) || null;
-  lastQuery = q;
-  setSearchMeta(`Buscando: "${q}" ...`, '');
-  setFlowBanner('Busca em andamento. Aguarde os resultados.', 'info');
-  const tablesSel = $('tablesFilter');
-  let tablesParam = '';
-  let selectedTables = [];
-  if (tablesSel) {
-    selectedTables = Array.from(tablesSel.selectedOptions)
-      .map(o => o.value)
-      .filter(Boolean);
-    if (selectedTables.length) {
-      tablesParam = `&tables=${encodeURIComponent(selectedTables.join(','))}`;
-    }
-  }
-  const url =
-    `/api/search?q=${encodeURIComponent(q)}&per_table=${per_table}&candidate_limit=${candidate_limit}&total_limit=${total_limit}&token_mode=${token_mode}` +
-    (min_score ? `&min_score=${min_score}` : '') +
-    tablesParam;
-  btn.disabled = true;
-  btn.textContent = 'Buscando...';
-  try {
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.error) {
-      setSearchMeta('Erro: ' + data.error, 'error');
-      $('resultsArea').innerHTML = '<div class="card small">Nao foi possivel concluir a busca.</div>';
-      setFlowBanner('A busca retornou erro. Revise o termo ou o estado do DB.', 'error');
-      logUi('ERROR', 'search ' + data.error);
-      return;
-    }
-    lastResults = data;
-    if (!opts || !opts.skipHistory) {
-      const state = buildSearchState();
-      try {
-        history.pushState(state, '', window.location.pathname);
-      } catch (e) {
-        // ignore
-      }
-    }
-    if (!data.returned_count) {
-      setSearchMeta(`Nenhum resultado para "${q}". Candidatos avaliados: ${data.candidate_count || 0}.`, 'warn');
-      setFlowBanner('Nenhum resultado encontrado. Ajuste o termo, a pontuacao minima ou as tabelas selecionadas.', 'warn');
-    } else {
-      setSearchMeta(`Resultados: ${data.returned_count} (candidatos: ${data.candidate_count})`, '');
-      setFlowBanner(`Busca concluida. ${data.returned_count} resultado(s) retornado(s).`, 'info');
-    }
-    if (exportBtn) exportBtn.disabled = !(data && data.returned_count);
-    renderResults(q, data.results || {}, per_table);
-  } catch (e) {
-    setSearchMeta('Erro na busca.', 'error');
-    $('resultsArea').innerHTML = '<div class="card small">Erro de rede ou servidor ao executar a busca.</div>';
-    setFlowBanner('Erro na busca. Verifique o servidor e tente novamente.', 'error');
-    logUi('ERROR', 'search falhou');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Pesquisar';
-  }
-}
-
-function tableTagId(name) {
-  return 'tag-' + encodeURIComponent(name);
-}
-
-function escapeHtml(s) {
-  return (s + '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function escapeRegExp(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function highlightText(text, tokens) {
-  if (!text) return '';
-  if (!tokens || !tokens.length) return text;
-  try {
-    const parts = tokens.map(t => escapeRegExp(t)).filter(Boolean);
-    if (!parts.length) return text;
-    const re = new RegExp('(' + parts.join('|') + ')', 'ig');
-    return text.replace(re, m => `<mark>${m}</mark>`);
-  } catch (e) {
-    return text;
-  }
-}
-
-function renderResults(q, results, per_table) {
-  const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
-  const root = $('resultsArea');
-  root.innerHTML = '';
-  const exportBtn = $('exportAllBtn');
-  if (exportBtn) exportBtn.disabled = true;
-  let keys = Object.keys(results);
-  if (priorityTables && priorityTables.length) {
-    const set = new Set(priorityTables);
-    const pri = priorityTables.filter(t => keys.includes(t));
-    const others = keys.filter(k => !set.has(k));
-    keys = pri.concat(others);
-  }
-  if (!keys.length) {
-    root.innerHTML = '<div class="card small">Nenhum resultado encontrado.</div>';
-    return;
-  }
-  if (exportBtn) exportBtn.disabled = false;
-  keys.forEach(tbl => {
-    const block = document.createElement('div');
-    block.className = 'card';
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    const tagId = tableTagId(tbl);
-    header.innerHTML = `
-      <div>
-        <span id="${tagId}" style="display:none;background:#eef7ff;color:var(--primary);padding:4px 8px;border-radius:999px;margin-right:8px;font-size:12px">PRIORITARIO</span>
-        <strong>${escapeHtml(tbl)}</strong> <span class="muted">(${results[tbl].length})</span>
-      </div>
-      <div>
-        <button class="btn ghost" onclick="openTable(event,'${encodeURIComponent(
-          tbl
-        )}')">Abrir</button>
-        <button class="btn ghost" onclick="exportTableCsv('${encodeURIComponent(
-          tbl
-        )}')">Export CSV</button>
-      </div>`;
-    block.appendChild(header);
-    const rows = results[tbl];
-    const colsSet = new Set();
-    const rowObjs = [];
-    rows.forEach(it => {
-      const r = it.row || (it.row_json ? JSON.parse(it.row_json || '{}') : {});
-      rowObjs.push({ score: it.score, row: r });
-      if (r && typeof r === 'object') Object.keys(r).forEach(c => colsSet.add(c));
-    });
-    const cols = Array.from(colsSet).slice(0, 200);
-    if (!cols.length) {
-      const pre = document.createElement('pre');
-      pre.textContent = JSON.stringify(rowObjs, null, 2);
-      block.appendChild(pre);
-    } else {
-      const table = document.createElement('table');
-      table.className = 'results';
-      const thead = document.createElement('thead');
-      thead.innerHTML =
-        '<tr><th style="width:90px">pontuacao</th>' +
-        cols.map(c => `<th>${escapeHtml(c)}</th>`).join('') +
-        '</tr>';
-      table.appendChild(thead);
-      const tbody = document.createElement('tbody');
-      rowObjs.slice(0, per_table).forEach(r => {
-        const tr = document.createElement('tr');
-        tr.innerHTML =
-          `<td>${r.score == null ? '' : r.score}</td>` +
-          cols
-            .map(c => {
-              let v = r.row && Object.prototype.hasOwnProperty.call(r.row, c)
-                ? r.row[c]
-                : '';
-              if (v === null || v === undefined) v = '';
-              if (typeof v === 'object') {
-                return `<td><pre style="font-size:12px">${escapeHtml(
-                  JSON.stringify(v, null, 2)
-                )}</pre></td>`;
-              }
-              return `<td>${highlightText(escapeHtml(String(v)), tokens)}</td>`;
-            })
-            .join('');
-        tbody.appendChild(tr);
+    if (!window.selectUpload) return;
+    var restoreBtn = window.setBusyButton
+      ? window.setBusyButton(btn, 'Excluindo...', 'Excluir')
+      : null;
+    try {
+      var name = decodeURIComponent(nameEnc);
+      var j = await window.apiJSON('/admin/delete', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: name }),
       });
-      table.appendChild(tbody);
-      block.appendChild(table);
-    }
-    root.appendChild(block);
-  });
-  try {
-    (priorityTables || []).forEach(p => {
-      const el = document.getElementById(tableTagId(p));
-      if (el) el.style.display = 'inline-block';
-    });
-  } catch (e) {
-    // ignore
-  }
-}
-
-async function openTable(ev, tableEnc) {
-  if (ev) ev.stopPropagation();
-  const table = decodeURIComponent(tableEnc);
-  const limit = 100;
-  const offset = 0;
-  try {
-    const data = await apiJSON(
-      `/api/table?name=${encodeURIComponent(table)}&limit=${limit}&offset=${offset}`
-    );
-    if (data.error) {
-      alert('Erro ao abrir tabela: ' + data.error);
-      return;
-    }
-    const area = $('resultsArea');
-    area.innerHTML = `<div class="card"><h3>Tabela: ${escapeHtml(
-      table
-    )} <span class="muted">linhas: ${data.total}</span></h3></div>`;
-    if (!data.rows || !data.rows.length) {
-      const empty = document.createElement('div');
-      empty.className = 'card small';
-      empty.textContent = 'Sem linhas para mostrar.';
-      area.appendChild(empty);
-      return;
-    }
-    const hdr = document.createElement('div');
-    hdr.className = 'card';
-    const tableEl = document.createElement('table');
-    tableEl.className = 'results';
-    const thead = document.createElement('thead');
-    thead.innerHTML =
-      '<tr>' + (data.columns || []).map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
-    tableEl.appendChild(thead);
-    const tbody = document.createElement('tbody');
-    data.rows.forEach(row => {
-      const tr = document.createElement('tr');
-      row.forEach(cell => {
-        tr.innerHTML += `<td>${escapeHtml(cell === null ? '' : String(cell))}</td>`;
-      });
-      tbody.appendChild(tr);
-    });
-    tableEl.appendChild(tbody);
-    hdr.appendChild(tableEl);
-    const pager = document.createElement('div');
-    pager.className = 'controls-footer';
-    pager.innerHTML = '<button class="btn ghost" onclick="backToResults()">Voltar</button>';
-    hdr.appendChild(pager);
-    area.appendChild(hdr);
-  } catch (e) {
-    logUi('ERROR', 'abrir tabela falhou');
-    alert('Erro ao abrir tabela');
-  }
-}
-
-async function exportTableCsv(tableEnc) {
-  const table = decodeURIComponent(tableEnc);
-  try {
-    const res = await fetch(
-      `/api/table?name=${encodeURIComponent(table)}&limit=1000&offset=0`
-    );
-    if (!res.ok) {
-      alert('Erro ao exportar: http ' + res.status);
-      return;
-    }
-    const data = await res.json();
-    if (data.error) {
-      alert('Erro ao exportar: ' + data.error);
-      return;
-    }
-    const cols = data.columns;
-    const rows = data.rows;
-    const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
-    const header = cols.map(esc).join(',') + '\n';
-    const body = rows.map(r => r.map(esc).join(',')).join('\n');
-    const blob = new Blob([header + body], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${table}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    alert('Erro ao exportar: falha na requisicao');
-    logUi('ERROR', 'export csv falhou');
-  }
-}
-
-function exportResultsCsv() {
-  if (!lastResults || !lastResults.results) {
-    alert('Sem resultados para exportar');
-    return;
-  }
-  const results = lastResults.results || {};
-  const colsSet = new Set(['table', 'score']);
-  const rowsOut = [];
-  Object.keys(results).forEach(tbl => {
-    (results[tbl] || []).forEach(item => {
-      let rowObj = item && item.row ? item.row : null;
-      if (!rowObj && item && item.row_json) {
-        try {
-          rowObj = JSON.parse(item.row_json || '{}');
-        } catch (e) {
-          rowObj = {};
-        }
+      if (j && j.ok && window.refreshUiState) {
+        window.refreshUiState();
+      } else if (window.setSearchMeta) {
+        window.setSearchMeta(
+          'Erro ao excluir: ' + ((j && j.error) || 'falha'),
+          'error'
+        );
       }
-      if (!rowObj || typeof rowObj !== 'object') rowObj = {};
-      Object.keys(rowObj).forEach(k => colsSet.add(k));
-      rowsOut.push({ table: tbl, score: item && item.score != null ? item.score : '', row: rowObj });
-    });
+    } catch (e) {
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao excluir: ' + errMsg, 'error');
+      if (window.logUi) window.logUi('ERROR', 'delete falhou: ' + errMsg);
+    } finally {
+      if (restoreBtn) restoreBtn();
+    }
   });
-  const cols = Array.from(colsSet);
-  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const lines = [cols.map(esc).join(',')];
-  rowsOut.forEach(r => {
-    const line = cols.map(c => {
-      if (c === 'table') return r.table;
-      if (c === 'score') return r.score;
-      const v = r.row && Object.prototype.hasOwnProperty.call(r.row, c) ? r.row[c] : '';
-      return v && typeof v === 'object' ? JSON.stringify(v) : v;
-    });
-    lines.push(line.map(esc).join(','));
-  });
-  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'resultados.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
-function backToResults() {
-  if (lastResults && lastResults.results) {
-    const perTable = parseInt($('per_table').value, 10) || 10;
-    $('searchMeta').textContent = `Resultados: ${lastResults.returned_count || 0} (candidatos: ${
-      lastResults.candidate_count || 0
-    })`;
-    renderResults(
-      lastQuery || ($('q') ? $('q').value.trim() : ''),
-      lastResults.results || {},
-      perTable
-    );
-  } else {
-    refreshUiState();
-  }
-}
+  missing('selectUpload', async function (nameEnc, btn) {
+    var name = decodeURIComponent(nameEnc);
+    var msg = document.getElementById('uploadMsg');
+    var restoreBtn = window.setBusyButton
+      ? window.setBusyButton(btn, 'Selecionando...', 'Selecionar')
+      : null;
+    if (msg) msg.textContent = 'Selecionando: ' + name;
+    try {
+      var j = await window.apiJSON('/admin/select', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: name }),
+      });
+      if (j && j.ok) {
+        if (msg) msg.textContent = 'DB selecionado: ' + name;
+        if (window.refreshUiState) await window.refreshUiState();
+        if (window.closeModal) window.closeModal();
+      } else if (msg) {
+        msg.textContent = 'Erro ao selecionar: ' + ((j && j.error) || 'falha');
+      }
+    } catch (e) {
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
+    } finally {
+      if (restoreBtn) restoreBtn();
+    }
+  });
+
+  missing('selectDbFromTab', async function (nameEnc) {
+    var name = decodeURIComponent(nameEnc);
+    var msg = document.getElementById('uploadMsg');
+    if (msg) msg.textContent = 'Selecionando: ' + name;
+    try {
+      var j = await window.apiJSON('/admin/select', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: name }),
+      });
+      if (j && j.ok) {
+        if (msg) msg.textContent = 'DB selecionado: ' + name;
+        if (window.refreshUiState) await window.refreshUiState();
+      } else if (msg) {
+        msg.textContent = 'Erro ao selecionar: ' + ((j && j.error) || 'falha');
+      }
+    } catch (e) {
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
+    }
+  });
+
+  missing('tableTagId', function (name) {
+    return 'tag-' + encodeURIComponent(name);
+  });
+
+  missing('doSearch', function () {
+    alert('Fluxo de busca temporariamente indisponivel. Recarregue o sistema.');
+  });
+})();

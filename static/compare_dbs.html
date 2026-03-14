@@ -216,6 +216,32 @@
       margin-top: 4px;
     }
     .result-col-diff { margin-top: 4px; }
+    .report-review-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .report-review-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.32);
+      font-size: 12px;
+    }
+    .report-review-item span {
+      color: #cbd5e1;
+      text-align: right;
+    }
+    html[data-theme="light"] .report-review-item {
+      background: rgba(255, 255, 255, 0.9);
+      border-color: rgba(148, 163, 184, 0.25);
+    }
+    html[data-theme="light"] .report-review-item span {
+      color: #475569;
+    }
     .diff-sections { display: flex; flex-direction: column; gap: 8px; }
     .diff-section {
       border-radius: 12px;
@@ -626,6 +652,22 @@
           <div class="help-text">
             O resumo geral mostra o impacto total da tabela. Os filtros abaixo apenas controlam a visualizacao detalhada e a exportacao.
           </div>
+          <div class="help-text">
+            <strong>Como a comparacao funciona hoje:</strong><br/>
+            • Compara DuckDB A vs B com SQL tipado (FULL OUTER JOIN por chave K).<br/>
+            • Diferencas sao classificadas em: nova em A, removida em B, alterada em A/B.<br/>
+            • Nao usa _fulltext/texto puro para comparar colunas; _fulltext e so para busca textual.
+          </div>
+          <div class="help-text">
+            <strong>Leitura recomendada:</strong><br/>
+            • Veja primeiro o resumo (impacto total), depois filtre o detalhe por tipo/coluna.<br/>
+            • Use o export de report para registrar evidencia e revisao por lote.
+          </div>
+          <div class="help-text">
+            <strong>Sobre Access (.accdb/.mdb):</strong><br/>
+            • Esta tela espera DuckDB para comparar rapido e consistente.<br/>
+            • Em qualquer SO, converta Access para DuckDB antes de usar esta tela.
+          </div>
         </div>
 
         <div class="card step-card" id="step1Card" style="--stagger:0;">
@@ -797,6 +839,7 @@ Ex: COL1,COL2,COL3"></textarea>
           <span style="display:flex; gap:6px; flex-wrap:wrap;">
             <button type="button" class="secondary" id="btnTablesOverview" onclick="toggleTablesOverview()">Mapa geral das tabelas</button>
             <button type="button" class="secondary" id="btnExportComparison" onclick="exportComparison()">Exportar CSV</button>
+            <button type="button" class="secondary" id="btnExportReportJson" onclick="exportComparisonReport()">Exportar relatorio JSON</button>
           </span>
         </div>
         <div class="compare-results-stack">
@@ -815,6 +858,9 @@ Ex: COL1,COL2,COL3"></textarea>
 
   <script src="/shell.js"></script>
   <script src="/compare_dbs.js"></script>
+  <script src="/compare_dbs_upload.js"></script>
+  <script src="/compare_dbs_actions.js"></script>
+  <script src="/compare_dbs_diff_helpers.js"></script>
   <script src="/compare_dbs_render.js"></script>
 </body>
 </html>

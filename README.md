@@ -1,419 +1,198 @@
-# MDB2SQL – Toolkit para Access/ACCDB → DuckDB
+# nmr5dbweb
 
-Converte arquivos de banco de dados Microsoft Access (MDB/ACCDB) para DuckDB e
-fornece uma interface web para busca e comparação de dados.
+Ferramenta web para trabalhar com bases Access (`.accdb`/`.mdb`) com foco em uso pratico:
+- converter para DuckDB
+- gerar SQLite derivado
+- validar conversao
+- buscar dados
+- comparar versoes
 
-Pensado para cenários de auditoria, análise histórica e migração de bases.
+## Objetivo
 
-## Requisitos
+Este repo e produto, nao POC.
+Fluxo principal:
+1. entrada Access
+2. saida DuckDB + SQLite
+3. validacao obrigatoria
+4. uso na UI (busca/comparacao)
 
-- Python **3.12.8** (recomendado; testado em 3.12.x)
-- `uv` para criar o ambiente e sincronizar dependências
-- Acesso à internet para baixar dependências Python e, opcionalmente, JARs/SDKs
-![alt text](image.png)
+## Setup rapido
 
-## Funcionalidades principais
-
-- Extrai automaticamente a data a partir do nome do arquivo
-- Preserva a estrutura das tabelas
-- Cria tabelas “carimbadas” com data (histórico por dia/mês/ano)
-- Mantém tabela de metadados com todos os imports
-- Suporta processamento em lote (vários arquivos de uma vez)
-- Interface web para busca e comparação em DuckDB
-- Quatro estratégias de conversão (scripts de linha de comando em `converters/`)
-
----
-
-## Visão geral da estrutura do projeto
-
-- `main.py` – ponto de entrada da **interface web** (Flask)
-- `interface/` – backend Flask (upload, conversão, busca, índice `_fulltext`)
-- `static/` – arquivos estáticos da interface (HTML/JS/CSS)
-- `access_convert.py` – conversão Access → DuckDB usada pela interface
-- `converters/` – **conversores de linha de comando** (uso direto no terminal)
-- `artifacts/` – arquivos gerados em tempo de execução (bancos `.duckdb`, logs, JSONs)
-- `tools/` – scripts auxiliares (análises, organização de artefatos etc.)
-- `tests/` – testes automatizados
-
-Os conversores de CLI ficam em `converters/` para manter a raiz focada na
-aplicação web e na documentação principal.
-
----
-
-## Interface web (busca e comparação)
-
-### Início rápido – interface web
-
-No diretório do projeto (primeira vez):
+Requisito:
+- Python 3.13.12 (fallback 3.13.11)
+- `uv`
 
 ```bash
-# 1) criar ambiente virtual (recomendado)
-uv venv --python 3.12.8 .venv
-
-# 2) ativar o ambiente virtual
-# Windows (PowerShell)
-./.venv/Scripts/Activate.ps1
-# Windows (Prompt de Comando)
-./.venv/Scripts/activate.bat
-# macOS / Linux
-source .venv/bin/activate
-
-# 3) instalar dependências de runtime
-uv pip sync requirements.txt
-
-# 4) iniciar a interface Flask
-python main.py
+uv venv --python 3.13.12 .venv || uv venv --python 3.13.11 .venv
+source .venv/bin/activate            # mac/linux
+# .venv\Scripts\Activate.ps1         # windows powershell
+uv sync --all-groups
 ```
 
-Nas execuções seguintes, basta reativar o ambiente virtual e rodar o `main.py`:
+## Rodar a aplicacao
 
 ```bash
-./.venv/Scripts/Activate.ps1  # ou equivalente para seu sistema
-python main.py
+uv run python main.py
 ```
 
-Depois acesse no navegador:
+Atalho de duplo clique:
+- veja `launchers/README.md`
+- launchers web para mac/linux/debian/windows
+- launchers report minimo para mac/linux/debian/windows
 
-- http://127.0.0.1:5000/
+Servidor padrao:
+- `http://127.0.0.1:5000`
 
-Fluxo típico na interface:
-
-- Fazer upload de um banco (`.mdb`, `.accdb` ou `.duckdb`)
-- Se for Access, o sistema converte para DuckDB
-- O índice `_fulltext` é criado/atualizado
-- Você pode buscar termos, ver contagens por tabela e comparar bases
-
-Os detalhes da interface estão descritos em mais profundidade em
-`interface/README.md`.
-
----
-
-## Conversores de linha de comando (`converters/`)
-
-Todos os conversores de linha de comando ficam em `converters/`.
-Eles **não** dependem da interface web: são scripts que você pode chamar
-diretamente no terminal.
-
-### 1. converters/convert_mdbtools.py (recomendado em Linux/macOS)
-
-Usa o utilitário de linha de comando **mdbtools**.
-
-**Vantagens:**
-- Instalação simples
-- Funciona bem em Linux/macOS
-- Não precisa de Java
-
-**Desvantagens:**
-- Usa CSV intermediário (texto)
-- Pode ter problemas de codificação em alguns arquivos
-- Pode ser mais lento em bases muito grandes
-
-**Instalação:**
-```bash
-# macOS
-brew install mdbtools
-
-# Linux
-sudo apt install mdbtools
-```
-
-### 2. converters/convert_jackcess.py (recomendado pela robustez)
-
-Usa a biblioteca Java **Jackcess**.
-
-**Vantagens:**
-- Mais robusto (melhor compatibilidade em muitos casos)
-- Leitura binária direta do arquivo Access
-- Lida melhor com questões de encoding
-- Funciona em múltiplas plataformas
-
-**Desvantagens:**
-- Requer Java (JDK)
-- Setup um pouco mais trabalhoso
-
-**Instalação:**
-```bash
-# Requer Java JDK
-# macOS
-brew install openjdk
-
-# Linux
-sudo apt install default-jdk
-
-# Os JARs são baixados automaticamente para a pasta temp/
-```
-
-### 3. converters/convert_pyaccess_parser.py (100% Python)
-
-Usa a biblioteca **access-parser** (implementação pura em Python).
-
-**Vantagens:**
-- Sem dependências nativas externas
-- 100% Python
-- Instalação simples via pip
-- Portável entre sistemas
-
-**Desvantagens:**
-- Mais lento do que implementações nativas
-- Pode ter incompatibilidades com alguns formatos de MDB/ACCDB
-
-**Instalação:**
-```bash
-pip install access-parser
-```
-
-### 4. converters/convert_pyodbc.py (Windows somente)
-
-Usa **pypyodbc** + driver ODBC do Microsoft Access.
-
-**Vantagens:**
-- Nativo no Windows
-- Em geral é rápido quando o driver está bem instalado
-
-**Desvantagens:**
-- Depende do **Microsoft Access Database Engine**
-- Restrito a Windows (ou Wine em Linux/macOS)
-- Setup complicado fora do Windows
-
-**Instalação (Windows):**
-1. Instalar Microsoft Access Database Engine:
-     https://www.microsoft.com/en-us/download/details.aspx?id=54920
-2. Instalar o pacote Python:
-     ```bash
-     pip install pypyodbc
-     ```
-
----
-
-## Comparativo de desempenho (benchmarks)
-
-Baseado em testes com 5 arquivos (~90 MB cada) em macOS:
-
-| Implementação        | Sucesso | Tempo médio/arquivo | Tempo total | Observações       |
-|----------------------|---------|---------------------|------------|-------------------|
-| **mdbtools**         | 100%    | 53,80s              | 268,98s    | Mais rápida       |
-| **pyaccess_parser**  | 100%    | 165,08s             | 825,41s    | Puro Python       |
-| **jackcess**         | 100%    | 252,80s             | 1264,01s   | Mais robusta      |
-| **pypyodbc**         | 0%      | N/A                 | N/A        | Windows‑only      |
-
-**Recomendações gerais:**
-- **macOS / Linux:**
-    - Preferir `convert_mdbtools.py` (mais rápido) ou
-    - `convert_pyaccess_parser.py` (100% Python, sem binários externos)
-- **Windows:**
-    - Preferir `convert_pyodbc.py` (nativo) ou
-    - `convert_jackcess.py` (multiplataforma com Java)
-- **Máxima robustez:**
-    - `convert_jackcess.py` (funciona em vários cenários com menor chance de erro)
-
----
-
-## Início rápido – conversores (CLI)
-
-```bash
-# Clonar repositório
-git clone <repository-url>
-cd nmr5dbweb
-
-# Criar ambiente virtual (recomendado) – usar Python 3.12.x
-uv venv --python 3.12.8 .venv
-
-# Ativar ambiente virtual
-# macOS/Linux:
-source .venv/bin/activate
-# Windows (PowerShell ou Prompt):
-.venv\Scripts\activate
-
-# Instalar dependências Python
-uv pip sync requirements.txt
-
-# Instalar dependências de sistema (escolha a que você for usar)
-brew install mdbtools            # Para convert_mdbtools.py (macOS)
-brew install openjdk             # Para convert_jackcess.py (macOS)
-# Ou instale o Access Engine     # Para convert_pyodbc.py no Windows
-```
-
----
-
-## Uso (CLI)
-
-### Arquivo único
-
-```bash
-# Usando mdbtools
-python converters/convert_mdbtools.py --input file.mdb --output database.duckdb
-
-# Usando Jackcess
-python converters/convert_jackcess.py --input file.mdb --output database.duckdb
-
-# Usando pyaccess_parser
-python converters/convert_pyaccess_parser.py --input file.mdb --output database.duckdb
-
-# Usando pypyodbc (Windows)
-python converters/convert_pyodbc.py --input file.mdb --output database.duckdb
-```
-
-### Processamento em lote
-
-```bash
-# Processar todos os arquivos MDB/ACCDB de um diretório
-python converters/convert_mdbtools.py --input import_folder --output database.duckdb --batch
-```
-
----
-
-## Convenção de nomes de arquivos
-
-Os arquivos devem conter uma data em algum destes formatos:
-- `DD_MM_YYYY` ou `DD-MM-YYYY`
-- `YYYY_MM_DD` ou `YYYY-MM-DD`
-- `DDMMYYYY`
-- `YYYYMMDD`
-
-Exemplos:
-- `DB3_04_09_2013.mdb` → `2013-09-04`
-- `database_20190801.accdb` → `2019-08-01`
-
----
-
-## Estrutura do banco DuckDB gerado
-
-### Tabelas de dados
-
-Cada tabela importada recebe o nome: `{nome_original}_{YYYYMMDD}`
+Se a porta estiver ocupada:
+- por padrao o app tenta a proxima porta livre automaticamente
+- para desativar fallback: `--no-port-fallback`
 
 Exemplo:
-- Original: `RANGER_SOACCU`
-- Importada: `RANGER_SOACCU_20130904`
-
-### Tabela de metadados
-
-```sql
-CREATE TABLE _metadata (
-        import_id INTEGER PRIMARY KEY,
-        source_file VARCHAR,
-        file_date DATE,
-        import_timestamp TIMESTAMP,
-        table_name VARCHAR,
-        row_count INTEGER
-);
+```bash
+uv run python main.py --port 5000
 ```
 
-### Exemplos de consultas
+## Fluxo de uso na UI
 
-```sql
--- Ver todos os imports
-SELECT * FROM _metadata ORDER BY import_timestamp DESC;
+1. abrir `http://127.0.0.1:5000`
+2. enviar `.accdb` ou `.mdb`
+3. sistema converte para `.duckdb`
+4. sistema gera `.sqlite`
+5. sistema valida conversao (obrigatorio):
+- estrutura (tabelas/colunas)
+- contagem por tabela
+- amostragem de conteudo
+6. se validar, DB fica ativo para busca/comparacao
+7. se falhar, conversao fica como erro e nao ativa DB
 
--- Encontrar tabelas de uma data específica
-SELECT * FROM _metadata WHERE file_date = '2013-09-04';
+## Onde ficam os arquivos
 
--- Listar versões de cada tabela
-SELECT 
-        SUBSTRING(table_name, 1, POSITION('_2' IN table_name)-1) AS base_table,
-        file_date,
-        row_count
-FROM _metadata
-ORDER BY base_table, file_date;
+Diretorio principal de dados:
+- `documentos/`
 
--- Consultar uma versão específica da tabela
-SELECT * FROM RANGER_SOACCU_20130904 LIMIT 10;
-```
+Arquivos esperados por base:
+- `NOME.accdb` ou `NOME.mdb`
+- `NOME.duckdb`
+- `NOME.sqlite`
 
----
+Relatorios:
+- `documentos/reports/latest_conversion_report.md`
+- `documentos/reports/latest_conversion_report.json`
+- `documentos/reports/latest_conversion_validation.json`
+- `documentos/reports/latest_db_compare_report.html`
+- `documentos/reports/latest_db_compare_report.md`
+- `documentos/reports/latest_db_compare_report.txt`
 
-## Pasta artifacts/ (artefatos gerados)
+## Formatos e quando usar
 
-A pasta `artifacts/` é o local padrão para arquivos **gerados** em tempo de
-execução, por exemplo:
+- `accdb` / `mdb`:
+  formato de origem
+- `duckdb`:
+  formato principal de operacao na ferramenta (busca e comparacao)
+- `sqlite`:
+  formato derivado para validacao cruzada e interoperabilidade
 
-- Bancos DuckDB criados por conversões ou pela interface (`*.duckdb`)
-- Resultados de benchmark (`benchmark_results_*.json`)
-- Logs de benchmark (`benchmark_run*.log`)
+Regra pratica:
+- para usar a ferramenta no dia a dia, trabalhe no `duckdb` gerado
+- mantenha `sqlite` como prova de consistencia e troca com outros sistemas
 
-Esses arquivos podem ser apagados e gerados novamente.
+## Conversao em lote (dados reais)
 
-Para mover artefatos antigos que estejam na raiz do projeto para `artifacts/`,
-você pode rodar:
+Para converter todos os Access de uma pasta para `documentos/` e gerar relatorio:
 
 ```bash
-python -m tools.organize_artifacts
+PYTHONPATH=. uv run python tools/organize_and_convert_documents.py \
+  --target-dir documentos \
+  --source-dir documentos
 ```
 
----
+## Report automatizado de diferenca (POC)
 
-## Notas específicas por plataforma
-
-### macOS
-- Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
-- mdbtools: `brew install mdbtools`
-- Java: `brew install openjdk`
-
-### Linux
-- Usar preferencialmente `convert_mdbtools.py` ou `convert_jackcess.py`
-- mdbtools: `sudo apt install mdbtools`
-- Java: `sudo apt install default-jdk`
-
-### Windows
-- Usar preferencialmente `convert_pyodbc.py`
-- Alternativa: `convert_jackcess.py` com Java instalado
-- Necessário instalar o Access Database Engine / driver ODBC de Access
-
----
-
-## Solução de problemas (troubleshooting)
-
-### Erros de encoding com mdbtools
-- Alguns arquivos podem ter problemas de codificação.
-- Tente `convert_jackcess.py` ou `convert_pyaccess_parser.py` como alternativa.
-
-### Java não encontrado
-```bash
-# macOS
-brew install openjdk
-export PATH="/usr/local/opt/openjdk/bin:$PATH"
-
-# Linux
-sudo apt install default-jdk
-```
-
-### Driver ODBC não encontrado (Windows)
-- Verifique se o **Microsoft Access Database Engine** está instalado.
-- Confira se o driver `Microsoft Access Driver (*.mdb, *.accdb)` aparece em `pyodbc.drivers()`.
-
----
-
-## Desenvolvimento
+Com menu interativo e selecao paginada (10 por tela), sugerindo os 2 ultimos `.accdb`:
 
 ```bash
-# Criar/atualizar ambiente de desenvolvimento
-uv venv --python 3.12.8 .venv
-
-# Ativar o ambiente
-source .venv/bin/activate
-
-# Instalar dependências de runtime + ferramentas de validacao
-uv pip sync requirements-dev.txt
-
-# Validacoes principais
-python -m py_compile $(find . -name "*.py" -type f)
-ruff check .
-ty check .
-pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py
-
-# (Opcional) checar estilo de código para conversores
-python -m pylint converters/convert_*.py
+PYTHONPATH=. uv run python tools/auto_compare_report.py
 ```
 
----
+Modo rapido com default dos 2 ultimos `.accdb`:
+1. rode o comando acima sem `--db1` e sem `--db2`
+2. quando aparecer `Comandos: Enter=manter | m=alterar | q=sair` e o prompt `>`, pressione `Enter`
+3. o script segue direto com os 2 ultimos e gera HTML/MD/TXT em `documentos/reports/`
 
-## Licença
+Fluxo:
+1. sugere 2 arquivos Access por data no nome (`YYYY-MM-DD ...`)
+2. permite trocar A/B com lista paginada (`n/p`) e sair/voltar (`q/b`)
+3. garante derivados `.duckdb` e `.sqlite` quando faltarem
+4. compara via backend em DuckDB
+5. grava report com timestamp em:
+- `documentos/reports/*.html`
+- `documentos/reports/*.md`
+- `documentos/reports/*.txt`
 
-MIT
+Modo direto sem menu:
 
----
+```bash
+PYTHONPATH=. uv run python tools/auto_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
 
-## Histórico de versões (simplificado)
+## Comando Python separado para report minimo
 
-- v0.1.0-mdbtools: primeira versão com mdbtools
-- v0.2.0: adicionados conversores Jackcess, pyaccess_parser e pypyodbc
+Gera report usando 2 fontes mais recentes quando `--db1/--db2` nao sao informados:
+
+```bash
+PYTHONPATH=. uv run python tools/run_min_compare_report.py
+```
+
+Modo direto:
+
+```bash
+PYTHONPATH=. uv run python tools/run_min_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
+## Qualidade local (obrigatorio no ciclo)
+
+```bash
+uv run python -m py_compile main.py interface/app_flask_local_search.py access_convert.py
+uv run ruff check tools/auto_compare_report.py tests/test_auto_compare_report.py interface/app_flask_local_search.py
+PYTHONPATH=. uv run pytest -q
+pnpm exec eslint static --ext .js
+```
+
+## Estrutura minima do repo
+
+- `main.py`: bootstrap do servidor Flask
+- `interface/app_flask_local_search.py`: backend principal
+- `static/`: frontend
+- `access_convert.py`: conversao Access -> DuckDB
+- `tools/`: scripts operacionais/relatorios
+- `tests/`: testes automatizados
+- `documentos/`: dados locais e derivados
+
+## Troubleshooting rapido
+
+### Access nao converte no mac/linux
+
+No fluxo atual, a conversao usa fallback sem ODBC quando possivel.
+Se der erro em arquivo especifico:
+1. rode novamente com log
+2. valide relatorio em `documentos/reports/latest_conversion_validation.json`
+3. compare com o par `duckdb/sqlite`
+
+### Windows e ODBC
+
+No Windows, ODBC pode ser usado quando driver ACE estiver disponivel.
+Se o driver nao estiver pronto, o sistema usa fallback quando suportado.
+
+### Porta ja em uso
+
+O app informa o processo e tenta porta seguinte.
+Voce pode fixar porta com `--port` ou desativar fallback com `--no-port-fallback`.
+
+## Nota final
+
+README propositalmente curto.
+Detalhes operacionais longos devem ficar em `docs/` e `tools/README.md`, nao aqui.
