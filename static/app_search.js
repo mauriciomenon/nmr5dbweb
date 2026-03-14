@@ -57,6 +57,11 @@
       });
       if (j && j.ok && window.refreshUiState) {
         window.refreshUiState();
+      } else if (window.setSearchMeta) {
+        window.setSearchMeta(
+          'Erro ao excluir: ' + ((j && j.error) || 'falha'),
+          'error'
+        );
       }
     } catch (e) {
       if (window.setSearchMeta) window.setSearchMeta('Erro ao excluir.', 'error');

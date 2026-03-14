@@ -66,7 +66,9 @@ function highlightText(text, tokens) {
   if (!text) return '';
   if (!tokens || !tokens.length) return text;
   try {
-    const parts = tokens.map((t) => escapeRegExp(t)).filter(Boolean);
+    const parts = tokens
+      .map((t) => escapeRegExp(escapeHtml(String(t))))
+      .filter(Boolean);
     if (!parts.length) return text;
     const re = new RegExp('(' + parts.join('|') + ')', 'ig');
     return text.replace(re, (m) => `<mark>${m}</mark>`);
@@ -864,7 +866,8 @@ async function exportTableCsv(tableEnc) {
     const csvText = makeCsvText(columns, normalizedRows, (row) => row);
     downloadCsv(`${table}.csv`, csvText);
   } catch (e) {
-    alert('Erro ao exportar: falha na requisicao');
+    const errMsg = e && e.message ? e.message : 'falha na requisicao';
+    alert('Erro ao exportar: ' + errMsg);
     logUi('ERROR', 'export csv falhou');
   }
 }
