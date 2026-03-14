@@ -551,17 +551,22 @@ def find_record_across_dbs(
             else:
                 tables = list_tables_for_engine(engine, f)
 
+            table_errors: List[str] = []
             for t in tables:
                 found, sample, err = search_in_table(engine, f, t, filters)
                 if err is not None:
-                    # erro específico de tabela/arquivo; registra e para este arquivo
-                    info["error"] = err
-                    break
+                    # erro especifico de tabela; registra e segue para as demais
+                    if len(table_errors) < 3:
+                        table_errors.append(f"{t}: {err}")
+                    continue
                 if found:
                     info["found"] = True
                     info["table"] = t
                     info["sample"] = sample
+                    info["error"] = None
                     break
+            if not info["found"] and table_errors:
+                info["error"] = "; ".join(table_errors)
         except Exception as exc:
             info["error"] = str(exc)
         results.append(info)

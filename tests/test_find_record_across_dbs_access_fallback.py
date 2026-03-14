@@ -114,3 +114,28 @@ def test_detect_engine_db_duckdb_quando_nao_sqlite(tmp_path):
     conn.close()
 
     assert track.detect_engine(db_path) == "duckdb"
+
+
+def test_find_record_across_dbs_continua_apos_erro_de_tabela(tmp_path, monkeypatch):
+    db_path = tmp_path / "2026-03-14_sample.duckdb"
+    db_path.write_bytes(b"duck")
+
+    monkeypatch.setattr(track, "list_db_files", lambda _base: [db_path])
+    monkeypatch.setattr(track, "detect_engine", lambda _path: "duckdb")
+    monkeypatch.setattr(track, "list_tables_for_engine", lambda _engine, _path: ["bad", "good"])
+
+    def _search(_engine, _path, table, _filters):
+        if table == "bad":
+            return False, None, "forced table error"
+        return True, {"RTUNO": 1}, None
+
+    monkeypatch.setattr(track, "search_in_table", _search)
+
+    out = track.find_record_across_dbs(tmp_path, "RTUNO=1")
+    assert "error" not in out
+    assert len(out["results"]) == 1
+    row = out["results"][0]
+    assert row["found"] is True
+    assert row["table"] == "good"
+    assert row["sample"] == {"RTUNO": 1}
+    assert row["error"] is None
