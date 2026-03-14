@@ -38,7 +38,7 @@ async function restoreFromSavedState() {
     db2Input.value
   ) {
     try {
-      const selectedBefore = (saved && saved.table) || (tableSelect ? tableSelect.value : '');
+      const selectedBefore = saved.table || (tableSelect ? tableSelect.value : '');
       const headData = await postJson('/api/compare_db_tables', {
         db1_path: db1Input.value,
         db2_path: db2Input.value,
@@ -174,7 +174,8 @@ async function handleFileUpload(side) {
       nameSpan.textContent = file.name + ' (carregado)';
       setUploadStatus(`Upload do Banco ${side} concluido com sucesso.`);
     }
-    const nextPath = String(pathInput.value || '').trim();
+    const currentPathValue = String(pathInput.value || '').trim();
+    const nextPath = currentPathValue;
     if (nextPath !== previousPath) {
       compareDbState.lastComparePayload = null;
       compareDbState.lastCompareMeta = null;
@@ -201,7 +202,7 @@ async function handleFileUpload(side) {
       side === 'A' ? 'db2Path' : 'db1Path'
     );
     if (
-      pathInput.value.trim() &&
+      currentPathValue &&
       otherPathInput &&
       otherPathInput.value.trim()
     ) {
