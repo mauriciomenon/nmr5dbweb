@@ -1,5 +1,13 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, compare overview hard comment)
+
+- `interface/compare_dbs.py` overview loop now distinguishes:
+  - expected per-table failures (`duckdb.Error`, `RuntimeError`, `ValueError`, `TypeError`)
+  - unexpected failures (logged with table context before returning error status row)
+- No response contract changes in compare overview payload.
+- Focused compare/backend tests passed (`33 passed` in compare-focused pytest subset).
+
 ## Latest Round Update (2026-03-14, final gate closure)
 
 - Final PR gate state confirmed on `mauriciomenon/nmr5dbweb#2`:

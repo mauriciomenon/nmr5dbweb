@@ -9,11 +9,14 @@ antes.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Sequence
 
 import duckdb
+
+logger = logging.getLogger(__name__)
 
 
 def _connect_memory() -> duckdb.DuckDBPyConnection:
@@ -443,7 +446,14 @@ def compare_tables_overview_duckdb(
                     "row_count_a": row_count_a_int,
                     "row_count_b": row_count_b_int,
                 })
+            except (duckdb.Error, RuntimeError, ValueError, TypeError) as exc:
+                table_row.update({
+                    "status": "error",
+                    "diff_count": -1,
+                    "error": str(exc),
+                })
             except Exception as exc:  # noqa: BLE001
+                logger.exception("Unexpected overview error for table %s", table)
                 table_row.update({
                     "status": "error",
                     "diff_count": -1,

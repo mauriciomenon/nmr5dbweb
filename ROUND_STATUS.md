@@ -1,5 +1,26 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, compare overview exception handling)
+
+### Goal
+
+1. Address active hard comment in compare overview error handling.
+2. Keep patch minimal and no contract changes.
+
+### Applied
+
+1. `interface/compare_dbs.py`
+   - split expected overview exceptions from unexpected exceptions.
+   - unexpected exceptions are now explicitly logged with table context.
+   - preserved per-table error status payload in overview output.
+
+### Validation After Changes
+
+- `uv run python -m py_compile interface/compare_dbs.py`: passed.
+- `uv run ruff check interface/compare_dbs.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_compare_dbs.py tests/test_compare_db_rows_api.py -k "overview or compare"`: `33 passed`.
+- `kluster_code_review_auto`: one high issue detected and fixed in same slice (`table` variable in logger call), final rerun clean.
+
 ## Current Slice: Final Gate Closure (2026-03-14)
 
 ### Goal
