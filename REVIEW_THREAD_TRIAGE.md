@@ -110,3 +110,33 @@ PR: #2
 - mitigado neste slice: 2
 - falso positivo parcial: 1
 - refactor amplo (nao aplicar agora): 3
+
+## Rodada adicional: qltysh (2026-03-14)
+- inventario: 38 threads ativos unicos
+- alvo: separar risco real de alerta estrutural
+
+### Resultado objetivo
+1. corrigido agora (patch pequeno):
+- `interface/app_flask_local_search.py`:
+  - extraidas constantes `ERR_FILENAME_REQUIRED` e `ERR_INVALID_FILENAME_OR_PATH`
+  - aplicado em `resolve_upload_target` e respostas JSON de erro
+  - cobre S1192 (literal duplicado)
+
+2. sem risco real imediato, mantido por escopo:
+- 10x `qlty:function-parameters`
+- 9x `qlty:function-complexity`
+- 9x `radarlint:S3776`
+- 4x `qlty:return-statements`
+- 2x `qlty:similar-code`
+- 1x `qlty:file-complexity`
+- motivo: todos exigem refactor transversal de funcoes nucleares; sem evidencia de bug funcional/regressao neste ciclo.
+
+3. alertas de seguranca estaticos ja mitigados no codigo atual:
+- `bandit:B608` em SQL dinammico com identificador escapado por `quote_identifier(...)` e parametros bind para valores
+- `bandit:B107` em `token_mode` (`any/all`) sem uso de segredo
+
+### Regra aplicada para fechamento
+- thread fechado apenas quando cair em uma destas condicoes:
+  - corrigido com patch e validacao local
+  - falso positivo tecnico com mitigacao explicita ja presente
+  - alerta estrutural sem risco real, marcado como fora de escopo deste sprint

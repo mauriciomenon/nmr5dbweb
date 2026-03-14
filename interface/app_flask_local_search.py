@@ -104,6 +104,8 @@ SEARCH_PER_TABLE_MAX = 200
 SEARCH_CANDIDATE_LIMIT_MAX = 20000
 SEARCH_TOTAL_LIMIT_MAX = 5000
 SEARCH_TABLES_FILTER_MAX = 200
+ERR_FILENAME_REQUIRED = "filename required"
+ERR_INVALID_FILENAME_OR_PATH = "invalid filename or path"
 
 # Conversion & index state
 convert_lock = threading.Lock()
@@ -980,20 +982,20 @@ def list_uploaded_files():
 def resolve_upload_target(filename, *, required=False):
     safe_filename = sanitize_filename(filename)
     if not safe_filename:
-        raise ValueError("filename required" if required else "invalid filename or path")
+        raise ValueError(ERR_FILENAME_REQUIRED if required else ERR_INVALID_FILENAME_OR_PATH)
     try:
         safe_path = Path(safe_filename)
         if safe_path.suffix.lower() not in ALLOWED_EXTENSIONS:
             raise ValueError("extensao invalida")
         if safe_path.name != safe_filename:
-            raise ValueError("invalid filename or path")
+            raise ValueError(ERR_INVALID_FILENAME_OR_PATH)
     except Exception as exc:
-        raise ValueError("invalid filename or path") from exc
+        raise ValueError(ERR_INVALID_FILENAME_OR_PATH) from exc
     target = UPLOAD_DIR / safe_filename
     try:
         target.resolve().relative_to(UPLOAD_DIR.resolve())
     except Exception as exc:
-        raise ValueError("invalid filename or path") from exc
+        raise ValueError(ERR_INVALID_FILENAME_OR_PATH) from exc
     return target
 
 
@@ -2316,7 +2318,7 @@ def admin_select():
     data = request.get_json() or {}
     filename = data.get("filename")
     if not filename:
-        return jsonify({"error": "filename required"}), 400
+        return jsonify({"error": ERR_FILENAME_REQUIRED}), 400
     try:
         fpath = resolve_upload_target(filename, required=True)
     except ValueError as exc:
@@ -2384,7 +2386,7 @@ def admin_delete():
     data = request.get_json() or {}
     filename = data.get("filename")
     if not filename:
-        return jsonify({"error": "filename required"}), 400
+        return jsonify({"error": ERR_FILENAME_REQUIRED}), 400
     try:
         target = resolve_upload_target(filename)
     except ValueError as exc:
