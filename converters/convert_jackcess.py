@@ -217,7 +217,7 @@ def import_to_duckdb(
             continue
 
         base_name = re.sub(r"[^A-Za-z0-9_]", "_", str(table)).strip("_") or "table"
-        source_key = str(mdb_file.resolve()).replace("\\", "/").lower()
+        source_key = str(mdb_file.resolve()).replace("\\", "/")
         table_suffix = hashlib.sha1(f"{source_key}:{table}".encode("utf-8")).hexdigest()[:8]
         table_with_date = f"{base_name}_{table_suffix}_{file_date.replace('-', '')}"
 

@@ -72,3 +72,12 @@ def test_normalize_access_parser_rows_filters_private_attrs_from_object_dict():
     rows = normalize_access_parser_rows([ObjRow()])
     assert rows == [{"public_id": 7}]
     assert all("_private" not in row for row in rows)
+
+
+def test_normalize_access_parser_rows_private_only_object_returns_empty_dict():
+    class PrivateOnlyRow:
+        def __init__(self):
+            self._private = "secret"
+
+    rows = normalize_access_parser_rows([PrivateOnlyRow()])
+    assert rows == [{}]

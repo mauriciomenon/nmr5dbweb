@@ -1,5 +1,19 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, parser private-only serialization + jackcess case safety)
+
+- `interface/access_parser_utils.py`
+  - private-only object rows now normalize to `{}` (no raw object fallback), reducing JSON serialization risk in downstream API payloads.
+- `converters/convert_jackcess.py`
+  - removed forced lowercase from resolved source path key used in table suffix hash, preserving case-sensitive path uniqueness.
+- tests:
+  - added regression for private-only object normalization in `tests/test_access_parser_utils_normalize.py`.
+- Focused validation:
+  - py_compile + ruff: passed
+  - parser normalize tests: `7 passed`
+  - ty: passed
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, conversion resource cleanup hardening)
 
 - `access_convert.py`

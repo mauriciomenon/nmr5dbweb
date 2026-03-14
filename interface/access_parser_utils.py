@@ -154,6 +154,7 @@ def _normalize_access_row_object(row: Any) -> Dict[str, Any]:
                 }
                 if filtered:
                     return filtered
+                return {}
         except Exception as exc:
             logger.debug("row __dict__ conversion failed: %s", exc)
     return {"value": row}

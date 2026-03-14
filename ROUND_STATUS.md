@@ -1,5 +1,31 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, parser private-only row + jackcess path case)
+
+### Goal
+
+1. Close newly raised real logic issues without broad refactor.
+2. Keep behavior deterministic and safe for serialization.
+
+### Applied
+
+1. `interface/access_parser_utils.py`
+   - when object `__dict__` exists but all keys are private, normalization now returns `{}` instead of `{"value": row}`.
+   - avoids leaking raw python objects into API payloads.
+2. `converters/convert_jackcess.py`
+   - `source_key` for table hash suffix no longer lowercases the resolved path.
+   - preserves distinction on case-sensitive filesystems.
+3. tests:
+   - `tests/test_access_parser_utils_normalize.py`: added private-only object regression test.
+
+### Validation After Changes
+
+- `uv run python -m py_compile converters/convert_jackcess.py interface/access_parser_utils.py tests/test_access_parser_utils_normalize.py`: passed.
+- `uv run ruff check converters/convert_jackcess.py interface/access_parser_utils.py tests/test_access_parser_utils_normalize.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py`: `7 passed`.
+- `uv run ty check interface/access_parser_utils.py converters/convert_jackcess.py`: passed.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, pyodbc/pypyodbc cleanup in finally)
 
 ### Goal
