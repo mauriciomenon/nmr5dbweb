@@ -72,6 +72,7 @@ Track real product debt that should not be fixed in the current slice.
 40. `access_convert.py`: plan a dedicated decomposition slice for `convert_access_to_duckdb` (current large nested backend strategies) after PR-hardening phase, with behavior-lock tests first and no mixed feature work in the same round.
 41. Reconcile upload non-2xx handling contract in `static/app_bootstrap_actions.js` (transport failure handling vs structured backend validation message path) with one explicit product decision and tests.
 42. Add focused regression for converter table-name uniqueness policy in `converters/convert_jackcess.py` to lock collision behavior for sanitized names.
+43. `converters/convert_pyaccess_parser.py`: split `convert_mdb_to_duckdb` into smaller units (file checks, table schema, row migration, metadata write) only in a dedicated maintenance slice with behavior-lock tests first.
 
 ## Do Not Pull Into Slice 1
 
