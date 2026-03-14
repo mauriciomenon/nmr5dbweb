@@ -25,7 +25,10 @@ async function openStatusModal() {
 function bindClick(id, handler) {
   const el = $(id);
   if (el) {
+    const key = `boundClick_${String(id).replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    if (el.dataset && el.dataset[key] === '1') return;
     el.addEventListener('click', handler);
+    if (el.dataset) el.dataset[key] = '1';
   }
 }
 
@@ -104,12 +107,15 @@ function setupModalBindings() {
 
   const overlayEl = $('overlay');
   if (overlayEl) {
-    const closeHandler = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      forceCloseModals();
-    };
-    overlayEl.addEventListener('click', closeHandler, true);
+    if (!(overlayEl.dataset && overlayEl.dataset.overlayCloseBound === '1')) {
+      const closeHandler = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        forceCloseModals();
+      };
+      overlayEl.addEventListener('click', closeHandler, true);
+      if (overlayEl.dataset) overlayEl.dataset.overlayCloseBound = '1';
+    }
   }
 
   [
@@ -123,7 +129,10 @@ function setupModalBindings() {
     'overlay',
   ].forEach((id) => {
     const el = $(id);
-    if (el) el.addEventListener('click', () => scheduleStatusPoll());
+    if (!el) return;
+    if (el.dataset && el.dataset.boundStatusPoll === '1') return;
+    el.addEventListener('click', () => scheduleStatusPoll());
+    if (el.dataset) el.dataset.boundStatusPoll = '1';
   });
 }
 

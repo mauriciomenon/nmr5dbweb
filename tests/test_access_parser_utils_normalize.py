@@ -61,3 +61,13 @@ def test_normalize_access_parser_rows_prefers_to_dict_over_iterable():
         {"id": 1, "name": "alpha"},
         {"id": 2, "name": "beta"},
     ]
+
+
+def test_normalize_access_parser_rows_filters_private_attrs_from_object_dict():
+    class ObjRow:
+        def __init__(self):
+            self.public_id = 7
+            self._private = "secret"
+
+    rows = normalize_access_parser_rows([ObjRow()])
+    assert rows == [{"public_id": 7}]

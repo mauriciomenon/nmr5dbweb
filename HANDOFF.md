@@ -1,5 +1,20 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, parser privacy and modal bind idempotence)
+
+- `interface/access_parser_utils.py`
+  - object-row normalization now filters private `__dict__` keys (prefix `_`) before returning normalized row data.
+- `static/app_bootstrap_modals.js`
+  - modal click bindings are now idempotent to avoid duplicate listener registration when setup runs more than once.
+  - overlay close and status-poll click bindings now also guard against duplicate registration.
+- `tests/test_access_parser_utils_normalize.py`
+  - added regression asserting private attributes are excluded from normalized rows.
+- Focused validations:
+  - python compile, ruff, pytest (`6 passed`)
+  - eslint (`static/app_bootstrap_modals.js`)
+  - ty (`interface/access_parser_utils.py`)
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, hard comment continuation on converter/ui/parser)
 
 - `converters/convert_jackcess.py`

@@ -1,5 +1,32 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, parser privacy + modal bind idempotence)
+
+### Goal
+
+1. Close remaining short real-risk bot comments without broad refactor.
+2. Preserve existing UI flow and backend contracts.
+
+### Applied
+
+1. `interface/access_parser_utils.py`
+   - `_normalize_access_row_object` now filters private attributes (`_...`) when normalizing from object `__dict__`.
+2. `static/app_bootstrap_modals.js`
+   - `bindClick` now prevents duplicate `click` listener binding per element/id.
+   - overlay close listener binding is now idempotent.
+   - status-poll click listener binding is now idempotent.
+3. `tests/test_access_parser_utils_normalize.py`
+   - added regression test to ensure private object attributes are not exposed in normalized rows.
+
+### Validation After Changes
+
+- `uv run python -m py_compile interface/access_parser_utils.py tests/test_access_parser_utils_normalize.py`: passed.
+- `uv run ruff check interface/access_parser_utils.py tests/test_access_parser_utils_normalize.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py`: `6 passed`.
+- `pnpm -s eslint static/app_bootstrap_modals.js`: passed.
+- `uv run ty check interface/access_parser_utils.py`: passed.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, converter/ui strict handling)
 
 ### Goal

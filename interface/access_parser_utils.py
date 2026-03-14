@@ -147,7 +147,13 @@ def _normalize_access_row_object(row: Any) -> Dict[str, Any]:
         try:
             raw = dict(vars(row))
             if raw:
-                return raw
+                filtered = {
+                    str(key): value
+                    for key, value in raw.items()
+                    if not str(key).startswith("_")
+                }
+                if filtered:
+                    return filtered
         except Exception as exc:
             logger.debug("row __dict__ conversion failed: %s", exc)
     return {"value": row}
