@@ -1,0 +1,25 @@
+tools/build_global_report_from_analyses.py
+  33ace41bd7d40856 164-165,258,261,428,437
+tools/batch_analyze_all_dbs.py
+  33ace41bd7d40856 94,96,102,107,110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.9",
+  "base_commit_sha": "4fa20e8d7bd2f1b312c3f9d562fb4fe1f0f68641",
+  "prompts": {
+    "33ace41bd7d40856": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ce9dc-3a0f-7c41-91bd-a20547c97c25",
+        "model": "gpt-5.4"
+      },
+      "human_author": "Maurício Menon <54405514+mauriciomenon@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 34,
+      "total_deletions": 18,
+      "accepted_lines": 11,
+      "overriden_lines": 0
+    }
+  }
+}
