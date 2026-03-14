@@ -1,25 +1,31 @@
 #!/usr/bin/env python3
 
 import re
+from datetime import date
 from pathlib import Path
 from typing import Optional, List
 
 
 def extract_date_from_filename(filename: str) -> Optional[str]:
     patterns = [
-        r"(\d{2})[_-](\d{2})[_-](\d{4})",
-        r"(\d{4})[_-](\d{2})[_-](\d{2})",
-        r"(\d{2})(\d{2})(\d{4})",
-        r"(\d{4})(\d{2})(\d{2})",
+        (r"(\d{2})[_-](\d{2})[_-](\d{4})", "dmy"),
+        (r"(\d{4})[_-](\d{2})[_-](\d{2})", "ymd"),
+        (r"(\d{2})(\d{2})(\d{4})", "dmy"),
+        (r"(\d{4})(\d{2})(\d{2})", "ymd"),
     ]
-    for pattern in patterns:
+    for pattern, mode in patterns:
         match = re.search(pattern, filename)
         if not match:
             continue
-        groups = match.groups()
-        if len(groups[0]) == 4:
-            return f"{groups[0]}-{groups[1]}-{groups[2]}"
-        return f"{groups[2]}-{groups[1]}-{groups[0]}"
+        g1, g2, g3 = match.groups()
+        if mode == "ymd":
+            year, month, day = int(g1), int(g2), int(g3)
+        else:
+            day, month, year = int(g1), int(g2), int(g3)
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            continue
     return None
 
 
