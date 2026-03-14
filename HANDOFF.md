@@ -1,5 +1,15 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, jackcess cli top-level exception handling)
+
+- `converters/convert_jackcess.py`
+  - main CLI path now has a top-level exception handler.
+  - unexpected exceptions now return clear `Fatal error: ...` output with non-zero exit code.
+- Focused validation:
+  - py_compile + ruff + ty: passed
+  - `uv run python converters/convert_jackcess.py --help`: passed
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, parser private-only serialization + jackcess case safety)
 
 - `interface/access_parser_utils.py`

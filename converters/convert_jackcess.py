@@ -277,39 +277,43 @@ def batch_import(input_dir: Path, duckdb_file: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Convert MDB/ACCDB to DuckDB using Jackcess",
-    )
-    parser.add_argument(
-        "--input",
-        type=Path,
-        help="Input MDB/ACCDB file or directory for batch",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("database.duckdb"),
-        help="Output DuckDB file (default: database.duckdb)",
-    )
-    parser.add_argument(
-        "--batch",
-        action="store_true",
-        help="Process all MDB/ACCDB files in --input directory",
-    )
+    try:
+        parser = argparse.ArgumentParser(
+            description="Convert MDB/ACCDB to DuckDB using Jackcess",
+        )
+        parser.add_argument(
+            "--input",
+            type=Path,
+            help="Input MDB/ACCDB file or directory for batch",
+        )
+        parser.add_argument(
+            "--output",
+            type=Path,
+            default=Path("database.duckdb"),
+            help="Output DuckDB file (default: database.duckdb)",
+        )
+        parser.add_argument(
+            "--batch",
+            action="store_true",
+            help="Process all MDB/ACCDB files in --input directory",
+        )
 
-    args = parser.parse_args()
+        args = parser.parse_args()
 
-    input_error = validate_cli_input(args.input, args.batch)
-    if input_error == "missing_input":
-        parser.print_help()
+        input_error = validate_cli_input(args.input, args.batch)
+        if input_error == "missing_input":
+            parser.print_help()
+            sys.exit(1)
+        if input_error:
+            print(input_error)
+            sys.exit(1)
+        if args.batch:
+            batch_import(args.input, args.output)
+        else:
+            import_to_duckdb(args.input, args.output)
+    except Exception as exc:
+        print(f"Fatal error: {exc}")
         sys.exit(1)
-    if input_error:
-        print(input_error)
-        sys.exit(1)
-    if args.batch:
-        batch_import(args.input, args.output)
-    else:
-        import_to_duckdb(args.input, args.output)
 
 
 if __name__ == "__main__":

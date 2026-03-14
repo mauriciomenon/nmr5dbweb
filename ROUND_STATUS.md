@@ -1,5 +1,25 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, jackcess cli top-level exception)
+
+### Goal
+
+1. Improve CLI failure UX in `convert_jackcess` without touching conversion flow logic.
+
+### Applied
+
+1. `converters/convert_jackcess.py`
+   - wrapped `main()` flow in top-level `try/except`.
+   - on unexpected error, CLI now prints `Fatal error: ...` and exits with status `1`.
+
+### Validation After Changes
+
+- `uv run python -m py_compile converters/convert_jackcess.py`: passed.
+- `uv run ruff check converters/convert_jackcess.py`: passed.
+- `uv run ty check converters/convert_jackcess.py`: passed.
+- `uv run python converters/convert_jackcess.py --help`: passed.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, parser private-only row + jackcess path case)
 
 ### Goal
