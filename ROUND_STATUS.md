@@ -1,5 +1,28 @@
 # Round Status
 
+## Current Slice: Qlty Unblock Attempt (2026-03-14, bandit false-positive reduction)
+
+### Goal
+
+1. Reduce current `qlty check` blockers with low-risk targeted edits.
+2. Avoid broad refactor in legacy high-complexity modules.
+
+### Applied
+
+1. `interface/access_parser_utils.py`
+   - removed `try/except/pass` patterns in row normalization helpers.
+   - replaced silent pass with debug logs for conversion fallback failures.
+2. `interface/app_flask_local_search.py`
+   - annotated known-safe dynamic SQL points with `# nosec B608` where identifiers are normalized/quoted.
+   - annotated `token_mode` literals (`any`/`all`) as false-positive for bandit password heuristics (`B105/B107`).
+
+### Validation After Changes
+
+- `uv run python -m py_compile interface/access_parser_utils.py interface/app_flask_local_search.py`: passed.
+- `uv run ruff check interface/access_parser_utils.py interface/app_flask_local_search.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py tests/test_access_parser_logging_utils.py tests/test_app_flask_local_search_api.py -k "search_access_driver_error_retorna_503 or search_duckdb_internal_error_retorna_500 or search_sqlite_internal_error_retorna_500"`: `3 passed, 79 deselected`.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, table-scan + ui error feedback)
 
 ### Goal

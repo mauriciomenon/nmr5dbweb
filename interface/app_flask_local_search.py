@@ -1123,9 +1123,9 @@ def _duckdb_to_sqlite_file(duckdb_path, sqlite_path):
             dst.execute(f"CREATE TABLE {quote_identifier(table)} ({create_cols})")
 
             col_list = ", ".join(quote_identifier(col) for col in columns)
-            query = src.execute(f"SELECT {col_list} FROM {quote_identifier(table)}")
+            query = src.execute(f"SELECT {col_list} FROM {quote_identifier(table)}")  # nosec B608
             insert_sql = (
-                f"INSERT INTO {quote_identifier(table)} ({col_list}) VALUES ("
+                f"INSERT INTO {quote_identifier(table)} ({col_list}) VALUES ("  # nosec B608
                 + ", ".join(["?"] * len(columns))
                 + ")"
             )
@@ -1305,12 +1305,12 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
                 report["tables"].append(table_report)
                 continue
             duck_count = int(
-                dconn.execute(
+                dconn.execute(  # nosec B608
                     f"SELECT COUNT(*) FROM {quote_identifier(table)}"
                 ).fetchone()[0]
             )
             sqlite_count = int(
-                sconn.execute(
+                sconn.execute(  # nosec B608
                     f"SELECT COUNT(*) FROM {quote_identifier(table)}"
                 ).fetchone()[0]
             )
@@ -1331,11 +1331,11 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
             mismatch_offset = None
             for offset in sample_offsets:
                 sample_checked += 1
-                duck_row = dconn.execute(
+                duck_row = dconn.execute(  # nosec B608
                     f"SELECT * FROM {quote_identifier(table)} LIMIT 1 OFFSET ?",
                     [offset],
                 ).fetchone()
-                sqlite_row = sconn.execute(
+                sqlite_row = sconn.execute(  # nosec B608
                     f"SELECT * FROM {quote_identifier(table)} LIMIT 1 OFFSET ?",
                     (offset,),
                 ).fetchone()
@@ -1688,12 +1688,12 @@ def get_table_columns_sqlite(path, table):
 
 
 def get_table_columns_duckdb_conn(conn, table):
-    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")  # nosec B608
     return [column[0] for column in cur.description]
 
 
 def get_table_columns_sqlite_conn(conn, table):
-    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")
+    cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")  # nosec B608
     return [desc[0] for desc in cur.description or []]
 
 
@@ -1719,12 +1719,12 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
     where_clause, params = build_table_filter_clause(columns, col, q, cast_type)
     order_clause = build_table_order_clause(columns, sort, order)
 
-    count_sql = f"SELECT COUNT(*) FROM {quoted_table}"
+    count_sql = f"SELECT COUNT(*) FROM {quoted_table}"  # nosec B608
     if where_clause:
         count_sql += f" {where_clause}"
     total = conn.execute(count_sql, params).fetchone()[0]
 
-    data_sql = f"SELECT * FROM {quoted_table}"
+    data_sql = f"SELECT * FROM {quoted_table}"  # nosec B608
     data_params = list(params)
     if where_clause:
         data_sql += f" {where_clause}"
@@ -1813,7 +1813,7 @@ def build_sqlite_search_where(columns, tokens, token_mode):
             column_checks.append(f"CAST({quote_identifier(column)} AS TEXT) LIKE ? COLLATE NOCASE")
             params.append(f"%{token}%")
         token_clauses.append("(" + " OR ".join(column_checks) + ")")
-    joiner = " OR " if token_mode == "any" else " AND "
+    joiner = " OR " if token_mode == "any" else " AND "  # nosec B105
     return "WHERE " + joiner.join(token_clauses), params
 
 
@@ -1964,7 +1964,7 @@ def row_matches_access_tokens(row_obj, search_cols, tokens, token_mode):
         return True
     text_values = [str(serialize_value(row_obj.get(col))) for col in search_cols]
     search_text = normalize_text(" ".join(text_values))
-    if token_mode == "all":
+    if token_mode == "all":  # nosec B105
         return all(tok in search_text for tok in tokens)
     return any(tok in search_text for tok in tokens)
 
@@ -1975,7 +1975,7 @@ def fallback_search_access_parser(
     per_table=10,
     candidate_limit=1000,
     total_limit=500,
-    token_mode="any",
+    token_mode="any",  # nosec B107
     min_score=None,
     tables=None,
     max_tables=500,
@@ -2085,7 +2085,7 @@ def fallback_search_sqlite(
     per_table=10,
     candidate_limit=1000,
     total_limit=500,
-    token_mode="any",
+    token_mode="any",  # nosec B107
     min_score=None,
     tables=None,
     max_tables=250,

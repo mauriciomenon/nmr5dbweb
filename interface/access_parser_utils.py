@@ -139,8 +139,8 @@ def _normalize_access_row_object(row: Any) -> Dict[str, Any]:
     if hasattr(row, "_asdict"):
         try:
             return dict(row._asdict())
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("row _asdict conversion failed: %s", exc)
     if isinstance(row, (list, tuple)):
         return {f"col_{idx}": value for idx, value in enumerate(row)}
     if hasattr(row, "__dict__"):
@@ -148,8 +148,8 @@ def _normalize_access_row_object(row: Any) -> Dict[str, Any]:
             raw = dict(vars(row))
             if raw:
                 return raw
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("row __dict__ conversion failed: %s", exc)
     return {"value": row}
 
 
