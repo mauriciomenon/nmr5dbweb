@@ -179,7 +179,8 @@ function collectCompareRequest(page = 1) {
   }
 
   const change_types = [];
-  if (formState.filterChanged) change_types.push(COMPARE_UI_TO_BACKEND_TYPES.changed);
+  if (formState.filterChanged)
+    change_types.push(COMPARE_UI_TO_BACKEND_TYPES.changed);
   if (formState.filterAdded)
     change_types.push(COMPARE_UI_TO_BACKEND_TYPES.added);
   if (formState.filterRemoved)
@@ -215,10 +216,7 @@ function getErrorText(err) {
 }
 
 function applyCompareMissingDbState() {
-  setCompareStatus(
-    'Informe os caminhos de ambos os bancos (.duckdb).',
-    'warn'
-  );
+  setCompareStatus('Informe os caminhos de ambos os bancos (.duckdb).', 'warn');
   setFlowHint(
     'Informe os caminhos de ambos os bancos A e B para conseguir comparar.',
     'warn'
@@ -229,7 +227,10 @@ function applyCompareMissingDbState() {
 }
 
 function normalizePathForCompare(pathValue) {
-  return String(pathValue || '').trim().replace(/\\/g, '/').toLowerCase();
+  return String(pathValue || '')
+    .trim()
+    .replace(/\\/g, '/')
+    .toLowerCase();
 }
 
 function hasDuplicateItems(values) {
@@ -298,14 +299,14 @@ function validateCompareRequest(compareRequest) {
   }
   if (hasDuplicateItems(payload.compare_columns)) {
     setCompareStatus('As colunas de comparacao contem duplicidade.', 'warn');
-    setFlowHint(
-      'Remova colunas repetidas no campo de comparacao.',
-      'warn'
-    );
+    setFlowHint('Remova colunas repetidas no campo de comparacao.', 'warn');
     setStepState('stepCompare', 'Colunas duplicadas', 'warn');
     return false;
   }
-  if (Array.isArray(payload.change_types) && payload.change_types.length === 0) {
+  if (
+    Array.isArray(payload.change_types) &&
+    payload.change_types.length === 0
+  ) {
     setCompareStatus(
       'Selecione ao menos um tipo de diferenca (alterada, nova ou removida).',
       'warn'
@@ -367,7 +368,8 @@ async function runCompare() {
   saveCompareState();
 
   await executeCompareRequest(compareRequest.payload, {
-    busyStatus: 'Comparando tabela completa entre A e B (pode levar alguns segundos)...',
+    busyStatus:
+      'Comparando tabela completa entre A e B (pode levar alguns segundos)...',
     busyFlow:
       'Comparando tabela completa entre A e B. Aguarde, dependendo do tamanho pode levar alguns segundos ou minutos.',
     busyStep: 'Comparando...',
@@ -455,7 +457,12 @@ function escapeCsvCell(val) {
     s = "'" + s;
   }
   if (s.includes('"')) s = s.replace(/"/g, '""');
-  if (s.includes('"') || s.includes(';') || s.includes('\n') || s.includes('\r')) {
+  if (
+    s.includes('"') ||
+    s.includes(';') ||
+    s.includes('\n') ||
+    s.includes('\r')
+  ) {
     s = '"' + s + '"';
   }
   return s;
@@ -541,7 +548,8 @@ function buildCompareReportSummary(meta, allRows) {
       ]);
       if (oldState || newState) {
         const transitionKey = `${oldState || '-'} -> ${newState || '-'}`;
-        stateTransitions[transitionKey] = (stateTransitions[transitionKey] || 0) + 1;
+        stateTransitions[transitionKey] =
+          (stateTransitions[transitionKey] || 0) + 1;
       }
       const family = pickFirstNonBlank(row.a || {}, row.b || {}, [
         'PNLNAM',
@@ -667,7 +675,11 @@ function buildCompareReportSummary(meta, allRows) {
   let priority = 'baixa';
   if (impactedPct >= 50 || byType.changed >= 10) {
     priority = 'critica';
-  } else if (impactedPct >= 25 || byType.changed >= 5 || topNullTransitions.length >= 3) {
+  } else if (
+    impactedPct >= 25 ||
+    byType.changed >= 5 ||
+    topNullTransitions.length >= 3
+  ) {
     priority = 'alta';
   } else if (impactedPct >= 10 || topNumericDrift.length >= 2) {
     priority = 'media';
@@ -698,14 +710,15 @@ function buildCompareReportSummary(meta, allRows) {
 
 function buildCompareReportPayload(meta, allRows, basePayload) {
   return {
-    report_version: "1.1",
+    report_version: '1.1',
     generated_at: new Date().toISOString(),
     source: {
       db1_path: meta.db1 || basePayload.db1_path || '',
       db2_path: meta.db2 || basePayload.db2_path || '',
       table: meta.table || basePayload.table || '',
       key_columns: meta.key_columns || basePayload.key_columns || [],
-      compare_columns: meta.compare_columns || basePayload.compare_columns || [],
+      compare_columns:
+        meta.compare_columns || basePayload.compare_columns || [],
       filters: {
         key_filter: basePayload.key_filter || null,
         change_types: basePayload.change_types || [],
@@ -894,8 +907,7 @@ async function generateTablesOverview() {
       overview.push({
         table: item.table,
         status: item.status || 'error',
-        diffCount:
-          typeof item.diff_count === 'number' ? item.diff_count : -1,
+        diffCount: typeof item.diff_count === 'number' ? item.diff_count : -1,
         row_count_a: item.row_count_a,
         row_count_b: item.row_count_b,
         error: item.error || '',

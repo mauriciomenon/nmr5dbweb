@@ -11,11 +11,7 @@ async function restoreFromSavedState() {
     return;
   }
 
-  const {
-    db1Input,
-    db2Input,
-    tableSelect,
-  } = getCompareFormRefs();
+  const { db1Input, db2Input, tableSelect } = getCompareFormRefs();
   applyCompareFormState(saved);
 
   compareDbState.tablesLoadedOnce = !!saved.tablesLoadedOnce;
@@ -38,7 +34,8 @@ async function restoreFromSavedState() {
     db2Input.value
   ) {
     try {
-      const selectedBefore = saved.table || (tableSelect ? tableSelect.value : '');
+      const selectedBefore =
+        saved.table || (tableSelect ? tableSelect.value : '');
       const headData = await postJson('/api/compare_db_tables', {
         db1_path: db1Input.value,
         db2_path: db2Input.value,
@@ -110,7 +107,8 @@ async function handleFileUpload(side) {
   const pathInput = document.getElementById(
     side === 'A' ? 'db1Path' : 'db2Path'
   );
-  const previousPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
+  const previousPath =
+    pathInput && pathInput.value ? String(pathInput.value).trim() : '';
   const btn = document.getElementById(
     side === 'A' ? 'btnUploadA' : 'btnUploadB'
   );
@@ -219,11 +217,7 @@ async function handleFileUpload(side) {
     const otherPathInput = document.getElementById(
       side === 'A' ? 'db2Path' : 'db1Path'
     );
-    if (
-      currentPathValue &&
-      otherPathInput &&
-      otherPathInput.value.trim()
-    ) {
+    if (currentPathValue && otherPathInput && otherPathInput.value.trim()) {
       setFlowHint(
         'Arquivos A e B ja informados. Agora carregue as tabelas em comum.',
         'info'

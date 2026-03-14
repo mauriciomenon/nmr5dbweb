@@ -32,7 +32,18 @@ const openTableRequestSeq = new Map();
 const TABLE_COLUMN_GROUPS = [
   {
     name: 'IDENTIFICACAO',
-    keys: ['INH', 'ITEM', 'PNL', 'PNT', 'RTU', 'SUB', 'UNIQ', 'NAME', 'NOME', 'COD'],
+    keys: [
+      'INH',
+      'ITEM',
+      'PNL',
+      'PNT',
+      'RTU',
+      'SUB',
+      'UNIQ',
+      'NAME',
+      'NOME',
+      'COD',
+    ],
   },
   {
     name: 'STATUS',
@@ -163,7 +174,11 @@ function isLikelyWideColumn(name) {
 
 function normalizeTableRowPayload(payload, fallbackColumns = null) {
   if (!payload || typeof payload !== 'object') return {};
-  if (payload.row && typeof payload.row === 'object' && !Array.isArray(payload.row)) {
+  if (
+    payload.row &&
+    typeof payload.row === 'object' &&
+    !Array.isArray(payload.row)
+  ) {
     return payload.row;
   }
   if (typeof payload.row_json === 'string') {
@@ -198,7 +213,10 @@ function normalizeTableRowPayload(payload, fallbackColumns = null) {
 
 function buildColumnGroups(columns) {
   const groups = new Map(
-    TABLE_COLUMN_GROUPS.map((group) => [group.name, { name: group.name, columns: [] }])
+    TABLE_COLUMN_GROUPS.map((group) => [
+      group.name,
+      { name: group.name, columns: [] },
+    ])
   );
   const unknownColumns = [];
 
@@ -208,7 +226,11 @@ function buildColumnGroups(columns) {
     const normalized = String(column || '').toUpperCase();
     let assignedName = null;
     for (const groupDef of TABLE_COLUMN_GROUPS) {
-      if (groupDef.keys.some((needle) => key.includes(needle) || normalized.includes(needle))) {
+      if (
+        groupDef.keys.some(
+          (needle) => key.includes(needle) || normalized.includes(needle)
+        )
+      ) {
         assignedName = groupDef.name;
         break;
       }
@@ -769,7 +791,10 @@ function mergeUniqueColumns(base, extra) {
 function buildOpenTableHeader(table, state) {
   const card = document.createElement('div');
   card.className = 'card';
-  const details = [`linhas: ${state.total}`, `engine: ${escapeHtml(state.dbEngine || '')}`];
+  const details = [
+    `linhas: ${state.total}`,
+    `engine: ${escapeHtml(state.dbEngine || '')}`,
+  ];
   if (hasOpenTableRows(state)) {
     details.unshift(`carregadas: ${state.rows.length}`);
   }
@@ -819,7 +844,9 @@ function renderOpenTablePager(table, state, container) {
   exportBtn.type = 'button';
   exportBtn.textContent = 'Export CSV';
   exportBtn.disabled = loading || !state.total;
-  exportBtn.addEventListener('click', () => exportTableCsv(encodeURIComponent(table)));
+  exportBtn.addEventListener('click', () =>
+    exportTableCsv(encodeURIComponent(table))
+  );
 
   footer.appendChild(nextBtn);
   footer.appendChild(exportBtn);
@@ -863,9 +890,7 @@ async function loadOpenTable(table, options) {
     const mergedColumns = clear
       ? cols
       : mergeUniqueColumns(state.columns.slice(), cols);
-    const mergedRows = clear
-      ? rowObjs
-      : state.rows.concat(rowObjs);
+    const mergedRows = clear ? rowObjs : state.rows.concat(rowObjs);
     const nextState = setOpenTableState(table, {
       columns: mergedColumns.slice(0, 200),
       rows: mergedRows,
@@ -881,8 +906,7 @@ async function loadOpenTable(table, options) {
     if (!area) return;
     area.innerHTML = '';
     if (!mergedRows.length) {
-      area.innerHTML =
-        '<div class="card small">Sem linhas para mostrar.</div>';
+      area.innerHTML = '<div class="card small">Sem linhas para mostrar.</div>';
       return;
     }
 
@@ -901,7 +925,9 @@ async function loadOpenTable(table, options) {
         nextState.total || mergedRows.length
       )
     );
-    hdr.appendChild(buildRowPreviewBand(mergedRows.slice(0, 3), tableView.orderedCols));
+    hdr.appendChild(
+      buildRowPreviewBand(mergedRows.slice(0, 3), tableView.orderedCols)
+    );
     hdr.appendChild(tableView.shell);
     area.appendChild(hdr);
     renderOpenTablePager(table, nextState, area);
@@ -982,7 +1008,10 @@ function exportResultsCsv() {
       } else if (c === 'score') {
         rowOut[c] = r.score;
       } else {
-        const v = r.row && Object.prototype.hasOwnProperty.call(r.row, c) ? r.row[c] : '';
+        const v =
+          r.row && Object.prototype.hasOwnProperty.call(r.row, c)
+            ? r.row[c]
+            : '';
         rowOut[c] = v && typeof v === 'object' ? JSON.stringify(v) : v;
       }
     });

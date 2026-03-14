@@ -347,18 +347,18 @@ function updateConversionModeText(status) {
   const precheck = status.access_precheck || null;
   const backendPreferred = status.conversion_backend_preferred || '';
   const backendLast = status.conversion_backend_last || '';
-  const lastText = backendLast
-    ? `Ultima conversao: ${backendLast}. `
-    : '';
+  const lastText = backendLast ? `Ultima conversao: ${backendLast}. ` : '';
   if (precheck && precheck.ready === false) {
     const reason = precheck.reason || 'ambiente incompleto';
     el.textContent =
-      lastText + 'Conversao Access indisponivel neste ambiente: ' + reason + '.';
+      lastText +
+      'Conversao Access indisponivel neste ambiente: ' +
+      reason +
+      '.';
     return;
   }
   if (backendPreferred === 'odbc') {
-    el.textContent =
-      lastText + 'Modo atual: ODBC preferencial com fallback.';
+    el.textContent = lastText + 'Modo atual: ODBC preferencial com fallback.';
     return;
   }
   if (backendPreferred === 'access_parser') {
@@ -1651,9 +1651,12 @@ async function refreshStatus() {
         $('convBar').style.width = '100%';
         $('convPercentText').textContent = '100%';
       } else {
-        $('convStatusText').textContent =
-          conversionInfo.msg ? conversionInfo.msg : 'Nenhuma conversao em andamento';
-        const percentText = conversionInfo.percent ? conversionInfo.percent + '%' : '0%';
+        $('convStatusText').textContent = conversionInfo.msg
+          ? conversionInfo.msg
+          : 'Nenhuma conversao em andamento';
+        const percentText = conversionInfo.percent
+          ? conversionInfo.percent + '%'
+          : '0%';
         $('convBar').style.width = percentText;
         $('convPercentText').textContent = percentText;
       }
@@ -1980,7 +1983,11 @@ if (!window.__appSearchFlowBound) {
 
   const canRunSearchNow = () => {
     try {
-      if (lastStatus && lastStatus.conversion && lastStatus.conversion.running) {
+      if (
+        lastStatus &&
+        lastStatus.conversion &&
+        lastStatus.conversion.running
+      ) {
         return blockSearch(
           'Busca bloqueada: conversao em andamento.',
           'Aguarde a conversao do banco terminar antes de pesquisar.'
@@ -2028,7 +2035,10 @@ if (!window.__appSearchFlowBound) {
       }
       return parsed;
     };
-    const per_table = parseBoundedSearchInt('per_table', SEARCH_UI_LIMITS.per_table);
+    const per_table = parseBoundedSearchInt(
+      'per_table',
+      SEARCH_UI_LIMITS.per_table
+    );
     const candidate_limit = parseBoundedSearchInt(
       'candidate_limit',
       SEARCH_UI_LIMITS.candidate_limit
@@ -2085,10 +2095,7 @@ if (!window.__appSearchFlowBound) {
     try {
       request = buildSearchRequest(q);
     } catch (e) {
-      const msg =
-        e && e.message
-          ? e.message
-          : 'Parametros invalidos de busca.';
+      const msg = e && e.message ? e.message : 'Parametros invalidos de busca.';
       setSearchMeta(msg, 'warn');
       setFlowBanner(msg, 'warn');
       return;
@@ -2171,12 +2178,16 @@ if (!window.__appSearchFlowBound) {
     return 'tag-' + encodeURIComponent(name);
   };
 
-  if (typeof window.setBusyButton !== 'function') window.setBusyButton = setBusyButton;
-  if (typeof window.setSearchMeta !== 'function') window.setSearchMeta = setSearchMeta;
+  if (typeof window.setBusyButton !== 'function')
+    window.setBusyButton = setBusyButton;
+  if (typeof window.setSearchMeta !== 'function')
+    window.setSearchMeta = setSearchMeta;
   if (typeof window.onSelectRowClick !== 'function')
     window.onSelectRowClick = onSelectRowClick;
-  if (typeof window.deleteUpload !== 'function') window.deleteUpload = deleteUpload;
-  if (typeof window.selectUpload !== 'function') window.selectUpload = selectUpload;
+  if (typeof window.deleteUpload !== 'function')
+    window.deleteUpload = deleteUpload;
+  if (typeof window.selectUpload !== 'function')
+    window.selectUpload = selectUpload;
   if (typeof window.selectDbFromTab !== 'function')
     window.selectDbFromTab = selectDbFromTab;
   if (typeof window.doSearch !== 'function') window.doSearch = doSearch;

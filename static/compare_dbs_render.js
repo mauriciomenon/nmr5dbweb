@@ -52,7 +52,9 @@ function buildCompareSummary(data, rows, changedRows) {
     }
   }
 
-  const sortedColDiff = Object.entries(colDiffCounts).sort((a, b) => b[1] - a[1]);
+  const sortedColDiff = Object.entries(colDiffCounts).sort(
+    (a, b) => b[1] - a[1]
+  );
   const previewLimit = 12;
   const shownCols = sortedColDiff.slice(0, previewLimit);
   const hiddenCols = Math.max(0, sortedColDiff.length - shownCols.length);
@@ -232,7 +234,9 @@ function buildCompareAnomalySignals(data, changedRows) {
 
     const hasKeyValue = keyColumns.some((key) => {
       const value = (row.key || {})[key];
-      return value !== undefined && value !== null && String(value).trim() !== '';
+      return (
+        value !== undefined && value !== null && String(value).trim() !== ''
+      );
     });
     if (!hasKeyValue) {
       keyMissing.push(keyText);
@@ -340,10 +344,7 @@ function buildCompareDomainRiskSignals(changedRows) {
         );
     if (!diffCols.length) return;
 
-    const oldState = pickDomainField(
-      row,
-      stateCols
-    );
+    const oldState = pickDomainField(row, stateCols);
     const newState = pickDomainField(
       {
         a: row.b || {},
@@ -352,7 +353,8 @@ function buildCompareDomainRiskSignals(changedRows) {
       stateCols
     );
     const family =
-      pickDomainField(row, ['PNLNAM', 'SUBNAM', 'DEVNAM']) || 'familia nao identificada';
+      pickDomainField(row, ['PNLNAM', 'SUBNAM', 'DEVNAM']) ||
+      'familia nao identificada';
     const signal = families[family] || {
       count: 0,
       score: 0,
@@ -360,9 +362,13 @@ function buildCompareDomainRiskSignals(changedRows) {
       transitions: {},
     };
     signal.count += 1;
-    signal.score += diffCols.length + (oldState && newState && oldState !== newState ? 3 : 0);
+    signal.score +=
+      diffCols.length + (oldState && newState && oldState !== newState ? 3 : 0);
     signal.sample = signal.sample || `registro_${index + 1}`;
-    const transition = oldState || newState ? `${oldState || '-'} => ${newState || '-'}` : 'sem transicao';
+    const transition =
+      oldState || newState
+        ? `${oldState || '-'} => ${newState || '-'}`
+        : 'sem transicao';
     signal.transitions[transition] = (signal.transitions[transition] || 0) + 1;
     families[family] = signal;
 
@@ -375,7 +381,9 @@ function buildCompareDomainRiskSignals(changedRows) {
       count: info.count,
       score: info.score,
       sample: info.sample,
-      transitions: Object.entries(info.transitions || {}).sort((a, b) => b[1] - a[1]),
+      transitions: Object.entries(info.transitions || {}).sort(
+        (a, b) => b[1] - a[1]
+      ),
     }))
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
@@ -403,12 +411,11 @@ function buildCompareRiskSignals(data, changedRows) {
     );
     if (!changedColumns.length) return;
 
-    const keyText =
-      keyColumns.length
-        ? keyColumns
-            .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
-            .join(', ')
-        : `index_${index + 1}`;
+    const keyText = keyColumns.length
+      ? keyColumns
+          .map((key) => `${key}=${JSON.stringify((row.key || {})[key])}`)
+          .join(', ')
+      : `index_${index + 1}`;
 
     const oldState = pickDomainField(row, stateCols);
     const newState = pickDomainField(
@@ -418,8 +425,7 @@ function buildCompareRiskSignals(data, changedRows) {
       },
       stateCols
     );
-    const stateScore =
-      oldState && newState && oldState !== newState ? 2 : 0;
+    const stateScore = oldState && newState && oldState !== newState ? 2 : 0;
     const changedScore = changedColumns.length;
     const riskScore = changedScore + stateScore;
 
@@ -435,9 +441,7 @@ function buildCompareRiskSignals(data, changedRows) {
     }
   });
 
-  const topRiskRows = riskRows
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 6);
+  const topRiskRows = riskRows.sort((a, b) => b.score - a.score).slice(0, 6);
   const repeatedRiskKeys = Object.entries(domainIndex)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
@@ -452,7 +456,9 @@ function buildCompareRiskSignals(data, changedRows) {
 function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
   const totalKeys = Number(summaryData.totalKeys || 0);
   const impactedKeys = Number(
-    (summaryData.onlyInDbA || 0) + (summaryData.onlyInDbB || 0) + (summaryData.changed || 0)
+    (summaryData.onlyInDbA || 0) +
+      (summaryData.onlyInDbB || 0) +
+      (summaryData.changed || 0)
   );
   const impactedPct = totalKeys > 0 ? (impactedKeys / totalKeys) * 100 : 0;
   const riskRowCount = Number((riskSignals && riskSignals.riskRowCount) || 0);
@@ -468,7 +474,11 @@ function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
   if (impactedPct >= 50 || riskRowCount >= 4) {
     label = 'critica';
     badgeClass = 'removed';
-  } else if (impactedPct >= 25 || riskRowCount >= 2 || nullTransitionsTotal >= 4) {
+  } else if (
+    impactedPct >= 25 ||
+    riskRowCount >= 2 ||
+    nullTransitionsTotal >= 4
+  ) {
     label = 'alta';
     badgeClass = 'changed';
   } else if (impactedPct >= 10 || numericDriftColumnsCount >= 2) {
@@ -484,8 +494,10 @@ function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
     `${impactedKeys}/${totalKeys || 0} chave(s) impactadas (${impactedPct.toFixed(1)}%)`
   );
   if (riskRowCount > 0) reasons.push(`${riskRowCount} chave(s) com risco >= 4`);
-  if (nullTransitionsTotal > 0) reasons.push(`${nullTransitionsTotal} transicao(oes) vazio/preenchido`);
-  if (numericDriftColumnsCount > 0) reasons.push(`${numericDriftColumnsCount} coluna(s) com drift numerico`);
+  if (nullTransitionsTotal > 0)
+    reasons.push(`${nullTransitionsTotal} transicao(oes) vazio/preenchido`);
+  if (numericDriftColumnsCount > 0)
+    reasons.push(`${numericDriftColumnsCount} coluna(s) com drift numerico`);
   return {
     label,
     badgeClass,
@@ -493,10 +505,17 @@ function buildCompareSeveritySignals(summaryData, valueSignals, riskSignals) {
   };
 }
 
-function buildCompareRecommendedActions(summaryData, anomalySignals, valueSignals, riskSignals) {
+function buildCompareRecommendedActions(
+  summaryData,
+  anomalySignals,
+  valueSignals,
+  riskSignals
+) {
   const actions = [];
   const impactedPct = Number(summaryData && summaryData.totalKeys)
-    ? ((Number(summaryData.changed || 0) + Number(summaryData.onlyInDbA || 0) + Number(summaryData.onlyInDbB || 0)) /
+    ? ((Number(summaryData.changed || 0) +
+        Number(summaryData.onlyInDbA || 0) +
+        Number(summaryData.onlyInDbB || 0)) /
         Number(summaryData.totalKeys)) *
       100
     : 0;
@@ -507,13 +526,19 @@ function buildCompareRecommendedActions(summaryData, anomalySignals, valueSignal
     );
   }
   if ((riskSignals.topRiskRows || []).length) {
-    actions.push(`Validar manualmente as chaves com risco operacional acima de 3.`);
+    actions.push(
+      `Validar manualmente as chaves com risco operacional acima de 3.`
+    );
   }
   if ((valueSignals.topNullTransitions || []).length) {
-    actions.push(`Conferir transicoes de vazio/preenchido antes de promover alteracoes.`);
+    actions.push(
+      `Conferir transicoes de vazio/preenchido antes de promover alteracoes.`
+    );
   }
   if ((valueSignals.topNumericDrift || []).length) {
-    actions.push(`Auditar os maiores deltas numericos para evitar regressao de valores.`);
+    actions.push(
+      `Auditar os maiores deltas numericos para evitar regressao de valores.`
+    );
   }
   if (impactedPct >= 25) {
     actions.push(
@@ -521,7 +546,9 @@ function buildCompareRecommendedActions(summaryData, anomalySignals, valueSignal
     );
   }
   if (!actions.length) {
-    actions.push('Sem sinal critico no recorte atual; manter monitoramento por amostragem.');
+    actions.push(
+      'Sem sinal critico no recorte atual; manter monitoramento por amostragem.'
+    );
   }
   return actions.slice(0, 6);
 }
@@ -568,9 +595,7 @@ function buildPriorityAnomalyItems(
     });
   });
 
-  return items
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
+  return items.sort((a, b) => b.score - a.score).slice(0, 8);
 }
 
 function pickDomainField(row, candidates) {
@@ -668,7 +693,8 @@ function renderCompareSummary(data, summaryData) {
   );
   const totalChanged = Number(summaryData.changed || changedRows.length || 0);
   const totalKeys = Number(summaryData.totalKeys || 0);
-  const changedDensity = totalKeys > 0 ? ((totalChanged / totalKeys) * 100).toFixed(1) : '0.0';
+  const changedDensity =
+    totalKeys > 0 ? ((totalChanged / totalKeys) * 100).toFixed(1) : '0.0';
   const dbALabel = shortDbLabel(data.db1);
   const dbBLabel = shortDbLabel(data.db2);
   const rowsA = Number((data.summary || {}).rows_a || 0);
@@ -678,7 +704,15 @@ function renderCompareSummary(data, summaryData) {
     ? `<div class="report-review-list">${review.topKeys
         .map(
           ([keyText, meta]) =>
-            `<div class="report-review-item"><strong>${safe(keyText)}</strong><span>${meta.count} campos mudaram${meta.columns.length ? ' · ' + meta.columns.slice(0, 5).map((item) => safe(item)).join(', ') : ''}</span></div>`
+            `<div class="report-review-item"><strong>${safe(keyText)}</strong><span>${meta.count} campos mudaram${
+              meta.columns.length
+                ? ' · ' +
+                  meta.columns
+                    .slice(0, 5)
+                    .map((item) => safe(item))
+                    .join(', ')
+                : ''
+            }</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -804,7 +838,8 @@ function renderCompareSummary(data, summaryData) {
   const recommendedActionsHtml = recommendedActions.length
     ? `<div class="result-col-diff"><strong>Acoes recomendadas:</strong>${recommendedActions
         .map(
-          (action) => `<div class="report-review-item"><span>${safe(action)}</span></div>`
+          (action) =>
+            `<div class="report-review-item"><span>${safe(action)}</span></div>`
         )
         .join('')}</div>`
     : '';
@@ -1178,7 +1213,8 @@ function renderCompareSection(
     const rowId = `row-${++rowCounterRef.value}`;
     const rowSummary = document.createElement('summary');
     const summaryData = buildRowSummary(data, row, isRangerSostat);
-    const typeConfig = COMPARE_UI_DIFF_TYPES[row.type] || COMPARE_UI_DIFF_TYPES.changed;
+    const typeConfig =
+      COMPARE_UI_DIFF_TYPES[row.type] || COMPARE_UI_DIFF_TYPES.changed;
     const visualType = typeConfig.badgeClass || row.type;
     const typeLabel = escapeHtmlText(
       `${typeConfig.uiLabel} (${typeConfig.directionLabel})`

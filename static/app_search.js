@@ -41,7 +41,10 @@
   });
 
   missing('deleteUpload', async function (nameEnc, btn) {
-    if (!window.confirm || !window.confirm('Deseja realmente excluir este arquivo?')) {
+    if (
+      !window.confirm ||
+      !window.confirm('Deseja realmente excluir este arquivo?')
+    ) {
       return;
     }
     if (!window.selectUpload) return;
@@ -65,7 +68,8 @@
       }
     } catch (e) {
       var errMsg = e && e.message ? e.message : 'falha';
-      if (window.setSearchMeta) window.setSearchMeta('Erro ao excluir: ' + errMsg, 'error');
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao excluir: ' + errMsg, 'error');
       if (window.logUi) window.logUi('ERROR', 'delete falhou: ' + errMsg);
     } finally {
       if (restoreBtn) restoreBtn();
@@ -95,7 +99,8 @@
     } catch (e) {
       var errMsg = e && e.message ? e.message : 'falha';
       if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
-      if (window.setSearchMeta) window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
     } finally {
       if (restoreBtn) restoreBtn();
     }
@@ -120,7 +125,8 @@
     } catch (e) {
       var errMsg = e && e.message ? e.message : 'falha';
       if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
-      if (window.setSearchMeta) window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
+      if (window.setSearchMeta)
+        window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
     }
   });
 
