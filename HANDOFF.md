@@ -454,3 +454,9 @@ The first stabilization slice is intentionally narrow:
   - py_compile (touched files)
   - ruff (touched files)
   - pytest focused (`11 passed`)
+
+## Update 2026-03-14 - lint guardrails slice
+
+- `no-undef` moved from `off` to `warn` in the 3 ESLint configs.
+- This keeps current CI non-blocking while restoring visibility for undefined globals.
+- `pnpm -s eslint static` completed with warnings only.

@@ -24,7 +24,7 @@ export default [
     },
     rules: {
       'no-empty': 'off',
-      'no-undef': 'off',
+      'no-undef': 'warn',
       'no-useless-assignment': 'off',
       'no-unused-vars': 'off',
       'no-var': 'off',

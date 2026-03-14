@@ -2187,3 +2187,22 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `uv run --python 3.13 ruff check interface/access_parser_utils.py tests/test_access_parser_utils_tables.py`
 - `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_access_parser_utils_tables.py tests/test_access_parser_utils_normalize.py`
 - Result: `11 passed`
+
+## Slice 2026-03-14 - ESLint no-undef hardening (non-blocking)
+
+### Scope
+- Address explicit high review concern about fully disabling `no-undef`.
+- Keep runtime behavior unchanged.
+
+### What changed
+- Updated lint configs from `no-undef: off` to `no-undef: warn` in:
+  - `eslint.config.mjs`
+  - `.eslintrc.cjs`
+  - `static/.eslintrc.json`
+
+### Why
+- Re-enable undefined-symbol visibility without forcing hard failures in current modular static-script architecture.
+
+### Validation
+- `pnpm -s eslint static`
+- Result: pass with warnings (non-blocking)

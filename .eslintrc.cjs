@@ -22,7 +22,7 @@ module.exports = {
       },
       rules: {
         'no-empty': 'off',
-        'no-undef': 'off',
+        'no-undef': 'warn',
         'no-unused-vars': 'off',
         'no-var': 'off',
         'prefer-const': 'off',
