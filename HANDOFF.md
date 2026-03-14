@@ -1,9 +1,16 @@
 # Handoff
 
-## Latest Round Update (2026-03-13)
+## Latest Round Update (2026-03-14)
 
 - Control docs synchronized after hard PR-comment triage.
 - Latest reliability/security commits in sequence:
+  - `35cd50c` compare upload null/constant-condition cleanup to close DeepScan blocker
+  - `0d8c50d` compare upload null guards for saved state and path refs
+  - `9f47772` safe DOM highlight rendering and priority save hardening
+  - `d699502` modal listener reduction and better status-open error detail
+  - `fac94f5` bootstrap and upload response hardening
+  - `ef67cd4` search delete feedback and export/highlight hardening
+  - `23a1a90` priority DnD and reversible remove-flow hardening
   - `2b7a50b` frontend hardening for async logging, modal timer guards, and index-toggle error flow
   - `6d65a20` startup precedence fix for `UPLOAD_FOLDER` env override
   - `9d03576` startup env normalization + fallback output assertion
@@ -19,6 +26,8 @@
   - startup error messaging split between bind-in-use and generic OS startup failures
   - safer frontend async paths for logging and auto-index update
   - modal-close timers that no longer close the wrong modal after user navigation
+  - compare upload guards aligned with DeepScan null-check expectations
+  - table/result highlight path no longer depends on `innerHTML` for token marks
 
 ## Current Context
 

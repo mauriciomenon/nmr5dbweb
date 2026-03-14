@@ -1,5 +1,51 @@
 # Round Status
 
+## Current Slice: DeepScan Closure And Hard PR Continuation (2026-03-14)
+
+### Goal
+
+1. Close the active DeepScan blocker with minimal-risk patches.
+2. Continue hard PR-comment fixes only where runtime/quality risk is real.
+3. Keep browser behavior stable under focused regression checks.
+
+### Applied
+
+1. DeepScan closure in `static/compare_dbs_upload.js`:
+   - validated parsed `saved` object before property use.
+   - guarded required DOM refs (`nameSpan`, `pathInput`) before upload flow.
+   - removed constant condition around `saved` after prior object guard.
+   - normalized path value once (`currentPathValue`) and reused in later checks.
+2. Hard-comment continuation in frontend:
+   - `static/app_priority.js`: prevented duplicate DnD listener binding, preserved reversible remove flow, filtered invalid save payload values.
+   - `static/app_results.js`: replaced `innerHTML` highlight rendering with DOM-safe fragment rendering; removed stale global export symbol.
+   - `static/app_search.js`: backend delete errors now propagate to visible UI status.
+   - `static/app_bootstrap.js`: bootstrap path now has top-level guarded error reporting.
+   - `static/app_bootstrap_actions.js`: upload response handling hardened for non-JSON/HTTP failures; removed silent catch behavior.
+   - `static/app_bootstrap_modals.js`: reduced duplicate overlay listeners and improved modal-status error detail.
+
+### Commits In This Slice Sequence
+
+- `23a1a90` fix(priority): avoid dnd rebinding and preserve reversible list edits
+- `ef67cd4` fix(search): improve delete feedback and harden token highlight/export errors
+- `fac94f5` fix(bootstrap): harden init path and upload response handling
+- `d699502` fix(modals): reduce overlay listener duplication and improve status error detail
+- `9f47772` fix(ui): harden safe highlight rendering and priority save flow
+- `0d8c50d` fix(compare-upload): tighten null guards for saved state and path refs
+- `35cd50c` fix(compare-upload): remove constant saved check and reuse normalized path
+
+### Validation After Changes
+
+- `pnpm -s eslint` on touched frontend files: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_frontend_invalid_flows_browser.py`: passed (`18 passed`) in full runs.
+- focused compare browser slice: passed (`2 passed`).
+- repeated `kluster_code_review_auto` cycles: clean.
+
+### Check Snapshot
+
+1. `DeepScan`: `SUCCESS`.
+2. `reviewDecision`: `APPROVED`.
+3. `qlty check`: still pending/failing intermittently from broader legacy blocking set outside this short slice.
+
 ## Current Slice: PR Hard Comments Frontend Async/Modal Guard (2026-03-13)
 
 ### Goal
