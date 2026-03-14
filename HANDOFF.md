@@ -1,5 +1,22 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, strict sanitize, jackcess uniqueness, track xss hardening)
+
+- `access_convert.py`
+  - strict-mode failure text exposed to callers is now sanitized (`Conversion failed in strict mode. See logs for details.`), with full detail retained in logs.
+- `converters/convert_jackcess.py`
+  - destination table-name hash now includes source file name and table name to avoid cross-file table collisions on same date.
+- `static/track_record.html`
+  - result row rendering now escapes dynamic fields before `innerHTML` composition, reducing stored-xss risk from backend/file/table/error content.
+- tests:
+  - explicit `_private`-absent assertion added in parser-row normalization test.
+  - strict-mode conversion tests updated for sanitized public message contract.
+- Focused validations:
+  - python compile + ruff: passed
+  - parser/conversion tests: `12 passed`
+  - track browser smoke subset: `2 passed`
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, parser privacy and modal bind idempotence)
 
 - `interface/access_parser_utils.py`

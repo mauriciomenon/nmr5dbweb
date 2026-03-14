@@ -217,7 +217,7 @@ def import_to_duckdb(
             continue
 
         base_name = re.sub(r"[^A-Za-z0-9_]", "_", str(table)).strip("_") or "table"
-        table_suffix = hashlib.sha1(str(table).encode("utf-8")).hexdigest()[:8]
+        table_suffix = hashlib.sha1(f"{mdb_file.name}:{table}".encode("utf-8")).hexdigest()[:8]
         table_with_date = f"{base_name}_{table_suffix}_{file_date.replace('-', '')}"
 
         try:

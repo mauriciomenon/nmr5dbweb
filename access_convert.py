@@ -68,7 +68,7 @@ def _public_failure_message(primary_message: str) -> str:
     if not text:
         return "All conversion methods failed. See logs for details."
     if "strict mode" in text.lower():
-        return text
+        return "Conversion failed in strict mode. See logs for details."
     return "All conversion methods failed. See logs for details."
 
 

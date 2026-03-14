@@ -31,8 +31,7 @@ def test_access_parser_strict_fails_on_skipped_table(tmp_path, monkeypatch):
     ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=False)
 
     assert ok is False
-    assert "access-parser strict mode" in msg
-    assert "skipped 1/" in msg
+    assert msg == "Conversion failed in strict mode. See logs for details."
 
 
 def test_access_parser_allow_skips_enables_partial_conversion(tmp_path, monkeypatch):
@@ -71,7 +70,7 @@ def test_access_parser_strict_fails_when_no_table_has_rows(tmp_path, monkeypatch
     ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=False)
 
     assert ok is False
-    assert "no tables converted" in msg
+    assert msg == "Conversion failed in strict mode. See logs for details."
 
 
 def test_access_parser_no_data_errors_are_not_counted_as_skips(tmp_path, monkeypatch):

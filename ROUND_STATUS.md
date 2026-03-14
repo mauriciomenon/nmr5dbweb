@@ -1,5 +1,36 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, strict sanitize + jackcess uniqueness + track xss)
+
+### Goal
+
+1. Close active security/logic comments with minimal patch.
+2. Keep behavior stable and avoid broad refactor.
+
+### Applied
+
+1. `access_convert.py`
+   - strict-mode final public message is now sanitized:
+     - `Conversion failed in strict mode. See logs for details.`
+   - backend detail remains in server logs only.
+2. `converters/convert_jackcess.py`
+   - table suffix hash now includes source file name and table name (`{mdb_file.name}:{table}`) to avoid cross-file same-date table collision.
+3. `static/track_record.html`
+   - added HTML escaping helper for dynamic values rendered in results rows.
+   - escaped relpath/filename, date, size, engine, table, sample, and error in row HTML.
+4. tests:
+   - `tests/test_access_parser_utils_normalize.py`: explicit assertion that `_private` does not appear.
+   - `tests/test_access_convert_parser_strict.py`: updated strict-mode failure expectations to sanitized public message.
+
+### Validation After Changes
+
+- `uv run python -m py_compile access_convert.py converters/convert_jackcess.py tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: passed.
+- `uv run ruff check access_convert.py converters/convert_jackcess.py tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: `12 passed`.
+- `PYTHONPATH=. uv run pytest -q tests/test_frontend_invalid_flows_browser.py -k "track_page or track_browse_modal_flow"`: `2 passed`.
+- `uv run ty check access_convert.py converters/convert_jackcess.py interface/access_parser_utils.py`: known unresolved optional-driver diagnostics (`pyodbc`, `pypyodbc`) and one pandas type diagnostic in legacy path.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, parser privacy + modal bind idempotence)
 
 ### Goal

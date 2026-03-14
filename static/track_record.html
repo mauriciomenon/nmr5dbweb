@@ -408,6 +408,15 @@
 
   <script>
     let currentBrowsePath = '';
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function setStatusText(message, level) {
       const status = document.getElementById('statusText');
       if (!status) return;
@@ -454,18 +463,24 @@
       summary.textContent = `Arquivos analisados: ${totalFiles} · Encontrado em ${foundCount} arquivo(s)`;
       payload.results.forEach(r => {
         const tr = document.createElement('tr');
-        const dateStr = r.date || '';
-        const sizeKb = r.size_bytes != null ? (r.size_bytes / 1024).toFixed(1) + ' KB' : '';
-        const sample = r.sample ? JSON.stringify(r.sample) : '';
+        const relpath = escapeHtml(r.relpath || r.filename || '');
+        const dateStr = escapeHtml(r.date || '');
+        const sizeKb = escapeHtml(
+          r.size_bytes != null ? (r.size_bytes / 1024).toFixed(1) + ' KB' : ''
+        );
+        const engine = escapeHtml(r.engine || '');
+        const tableName = escapeHtml(r.table || '');
+        const sample = escapeHtml(r.sample ? JSON.stringify(r.sample) : '');
+        const errorText = escapeHtml(r.error || '');
         tr.innerHTML = `
-          <td class="mono">${r.relpath || r.filename}</td>
+          <td class="mono">${relpath}</td>
           <td>${dateStr}</td>
           <td>${sizeKb}</td>
-          <td>${r.engine || ''}</td>
+          <td>${engine}</td>
           <td>${r.found ? '<span class="pill ok">SIM</span>' : '<span class="pill">NÃO</span>'}</td>
-          <td class="mono">${r.table || ''}</td>
-          <td class="mono sample" title="${sample.replace(/"/g, '&quot;')}">${sample}</td>
-          <td>${r.error ? '<span class="pill err" title="' + r.error.replace(/"/g, '&quot;') + '">' + r.error + '</span>' : ''}</td>
+          <td class="mono">${tableName}</td>
+          <td class="mono sample" title="${sample}">${sample}</td>
+          <td>${errorText ? '<span class="pill err" title="' + errorText + '">' + errorText + '</span>' : ''}</td>
         `;
         tbody.appendChild(tr);
       });
