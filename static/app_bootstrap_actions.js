@@ -4,7 +4,9 @@ function setupFilePanelBindings() {
     openFilesBtn.addEventListener('click', () => {
       try {
         forceCloseModals();
-      } catch (e) {}
+      } catch (e) {
+        if (window.logUi) window.logUi('WARN', 'forceCloseModals falhou');
+      }
       setFilesPanelOpen(!filesPanelOpen);
       if (filesPanelOpen) {
         const panel = $('filesPanel');
@@ -55,7 +57,20 @@ function setupUploadBindings() {
     if (msg) msg.textContent = 'Enviando...';
     try {
       const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-      const j = await res.json();
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      let j = null;
+      if (contentType.includes('application/json')) {
+        j = await res.json();
+      } else {
+        const bodyText = await res.text();
+        const compactBody = bodyText ? bodyText.trim().slice(0, 180) : '';
+        throw new Error(
+          compactBody || `Resposta inesperada do servidor (HTTP ${res.status})`
+        );
+      }
+      if (!res.ok) {
+        throw new Error((j && j.error) || `HTTP ${res.status}`);
+      }
       const nameHint = shortName(
         (j && (j.db_path || j.db || j.output || j.input)) || f.name || ''
       );
@@ -86,12 +101,13 @@ function setupUploadBindings() {
       }
       await refreshUiState();
     } catch (e) {
+      const errMsg = e && e.message ? e.message : 'falha';
       if (msg) msg.textContent = 'Erro no upload';
       setFlowBanner(
         'Erro no upload. Verifique o servidor e tente novamente.',
         'error'
       );
-      logUi('ERROR', 'upload falhou');
+      logUi('ERROR', 'upload falhou: ' + errMsg);
     } finally {
       uploadBtn.disabled = false;
       uploadBtn.textContent = 'Enviar';
