@@ -1,5 +1,29 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, main env + search error detail)
+
+### Goal
+
+1. Close small active comments without layout or flow changes.
+2. Keep runtime behavior equivalent with clearer operator feedback.
+
+### Applied
+
+1. `main.py`
+   - introduced `upload_folder_effective` and used it for both `UPLOAD_FOLDER` env and startup print.
+   - keeps `CLI > env > default` behavior while removing ambiguity in startup output.
+2. `static/app_search.js`
+   - delete/select catch paths now propagate concrete error detail (`e.message`) to UI status and logs.
+   - kept existing flow and DOM interactions unchanged.
+
+### Validation After Changes
+
+- `uv run python -m py_compile main.py`: passed.
+- `uv run ruff check main.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_main_port_fallback.py`: `7 passed`.
+- `pnpm -s eslint static/app_search.js`: passed.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, compare overview exception handling)
 
 ### Goal

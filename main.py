@@ -213,11 +213,12 @@ Exemplos de uso:
         args.port = nova_porta
 
     # Configurar variaveis de ambiente
+    upload_folder_effective = args.upload_folder or default_upload_dir
     os.environ["FLASK_HOST"] = args.host
     os.environ["FLASK_PORT"] = str(args.port)
     os.environ["FLASK_DEBUG"] = str(args.debug)
 
-    os.environ["UPLOAD_FOLDER"] = args.upload_folder
+    os.environ["UPLOAD_FOLDER"] = upload_folder_effective
 
     os.environ["MAX_CONTENT_LENGTH"] = str(args.max_content_length)
 
@@ -234,7 +235,7 @@ Exemplos de uso:
 
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print("Iniciando servidor Flask")
-        print(f"Pasta de uploads: {args.upload_folder or default_upload_dir}")
+        print(f"Pasta de uploads: {upload_folder_effective}")
         print(f"Servidor: http://{args.host}:{args.port}")
         print(f"Debug: {'Ativado' if args.debug else 'Desativado'}")
         print(f"Modo threaded: {'Ativado' if args.threaded else 'Desativado'}")

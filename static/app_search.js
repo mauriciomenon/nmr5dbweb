@@ -64,8 +64,9 @@
         );
       }
     } catch (e) {
-      if (window.setSearchMeta) window.setSearchMeta('Erro ao excluir.', 'error');
-      if (window.logUi) window.logUi('ERROR', 'delete falhou');
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (window.setSearchMeta) window.setSearchMeta('Erro ao excluir: ' + errMsg, 'error');
+      if (window.logUi) window.logUi('ERROR', 'delete falhou: ' + errMsg);
     } finally {
       if (restoreBtn) restoreBtn();
     }
@@ -92,8 +93,9 @@
         msg.textContent = 'Erro ao selecionar: ' + ((j && j.error) || 'falha');
       }
     } catch (e) {
-      if (msg) msg.textContent = 'Erro ao selecionar DB';
-      if (window.setSearchMeta) window.setSearchMeta('Erro ao selecionar DB.', 'error');
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
+      if (window.setSearchMeta) window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
     } finally {
       if (restoreBtn) restoreBtn();
     }
@@ -116,7 +118,9 @@
         msg.textContent = 'Erro ao selecionar: ' + ((j && j.error) || 'falha');
       }
     } catch (e) {
-      if (msg) msg.textContent = 'Erro ao selecionar DB';
+      var errMsg = e && e.message ? e.message : 'falha';
+      if (msg) msg.textContent = 'Erro ao selecionar: ' + errMsg;
+      if (window.setSearchMeta) window.setSearchMeta('Erro ao selecionar DB: ' + errMsg, 'error');
     }
   });
 

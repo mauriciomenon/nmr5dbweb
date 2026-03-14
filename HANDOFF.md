@@ -1,5 +1,14 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, main/search hard-comment mini slice)
+
+- `main.py` now uses one explicit `upload_folder_effective` value for env setup and startup banner output.
+- `static/app_search.js` now surfaces detailed catch-path error text for delete/select actions in both status UI and logs.
+- No layout changes and no endpoint contract changes.
+- Focused validations passed:
+  - `tests/test_main_port_fallback.py` (`7 passed`)
+  - eslint on `static/app_search.js`
+
 ## Latest Round Update (2026-03-14, compare overview hard comment)
 
 - `interface/compare_dbs.py` overview loop now distinguishes:
