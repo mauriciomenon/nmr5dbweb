@@ -21,6 +21,7 @@ import datetime
 import re
 import csv
 import hashlib
+import sqlite3
 from typing import Any
 
 # libs opcionais
@@ -40,8 +41,6 @@ except Exception:
 else:
     pyodbc = _pyodbc
 
-import sqlite3
-
 EXTS_PADRAO = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
 DATE_RE = re.compile(r'(?P<y>\d{4})[-_]? ?(?P<m>\d{2})[-_]? ?(?P<d>\d{2})')
 
@@ -54,33 +53,46 @@ def require_duckdb():
 # ---------- utilitários ----------
 def to_json_serializable(obj):
     try:
-        if obj is None: return None
+        if obj is None:
+            return None
         if isinstance(obj, Decimal):
-            if obj == obj.to_integral_value(): return int(obj)
+            if obj == obj.to_integral_value():
+                return int(obj)
             return float(obj)
-        if isinstance(obj, (datetime.datetime, datetime.date)): return obj.isoformat()
+        if isinstance(obj, (datetime.datetime, datetime.date)):
+            return obj.isoformat()
         if isinstance(obj, bytes):
-            try: return obj.decode("utf-8")
-            except: return obj.hex()
-        if isinstance(obj, (list, tuple)): return [to_json_serializable(v) for v in obj]
-        if isinstance(obj, dict): return {str(k): to_json_serializable(v) for k,v in obj.items()}
-        if isinstance(obj, (int, float, str, bool)): return obj
+            try:
+                return obj.decode("utf-8")
+            except Exception:
+                return obj.hex()
+        if isinstance(obj, (list, tuple)):
+            return [to_json_serializable(v) for v in obj]
+        if isinstance(obj, dict):
+            return {str(k): to_json_serializable(v) for k, v in obj.items()}
+        if isinstance(obj, (int, float, str, bool)):
+            return obj
         try:
             json.dumps(obj)
             return obj
         except Exception:
             return str(obj)
     except Exception:
-        try: return str(obj)
-        except: return None
+        try:
+            return str(obj)
+        except Exception:
+            return None
 
 def extract_date_from_filename(name: str):
     m = DATE_RE.search(name)
-    if not m: return None
+    if not m:
+        return None
     try:
-        y = int(m.group('y')); mm = int(m.group('m')); d = int(m.group('d'))
+        y = int(m.group('y'))
+        mm = int(m.group('m'))
+        d = int(m.group('d'))
         return datetime.date(y, mm, d)
-    except:
+    except Exception:
         return None
 
 def ordenar_arquivos(lista_paths, order='name'):
@@ -88,7 +100,8 @@ def ordenar_arquivos(lista_paths, order='name'):
         return sorted(lista_paths, key=lambda p: p.stat().st_mtime)
     def keyfn(p):
         dt = extract_date_from_filename(p.name)
-        if dt: return (dt.toordinal(), p.name.lower())
+        if dt:
+            return (dt.toordinal(), p.name.lower())
         return (9999999, p.name.lower())
     return sorted(lista_paths, key=keyfn)
 
@@ -97,7 +110,8 @@ def quick_sha1(path, nbytes=65536):
         h = hashlib.sha1()
         with open(path, "rb") as fh:
             data = fh.read(nbytes)
-            if not data: return None
+            if not data:
+                return None
             h.update(data)
         return h.hexdigest()
     except Exception:
@@ -175,7 +189,8 @@ def colunas_tabela_sqlite(path, tabela):
         conn.close()
 
 def listar_tabelas_access(path):
-    if pyodbc is None: raise RuntimeError("pyodbc não está instalado")
+    if pyodbc is None:
+        raise RuntimeError("pyodbc não está instalado")
     conn = None
     conn_strs = [
         fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
@@ -187,7 +202,8 @@ def listar_tabelas_access(path):
             conn = pyodbc.connect(cs, autocommit=True, timeout=30)
             break
         except Exception as e:
-            last_err = e; conn = None
+            last_err = e
+            conn = None
     if conn is None:
         if last_err is not None:
             raise last_err
@@ -198,17 +214,20 @@ def listar_tabelas_access(path):
         for r in cur.tables():
             try:
                 name = getattr(r,"table_name",None) or (r[2] if len(r)>2 else None)
-            except:
+            except Exception:
                 name = None
             if name and not str(name).startswith("MSys"):
                 tables.append(name)
         return tables
     finally:
-        try: conn.close()
-        except: pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def colunas_tabela_access(path, tabela):
-    if pyodbc is None: raise RuntimeError("pyodbc não está instalado")
+    if pyodbc is None:
+        raise RuntimeError("pyodbc não está instalado")
     conn = None
     conn_strs = [
         fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
@@ -216,8 +235,12 @@ def colunas_tabela_access(path, tabela):
     ]
     last_err = None
     for cs in conn_strs:
-        try: conn = pyodbc.connect(cs, autocommit=True, timeout=30); break
-        except Exception as e: last_err = e; conn = None
+        try:
+            conn = pyodbc.connect(cs, autocommit=True, timeout=30)
+            break
+        except Exception as e:
+            last_err = e
+            conn = None
     if conn is None:
         if last_err is not None:
             raise last_err
@@ -228,15 +251,20 @@ def colunas_tabela_access(path, tabela):
         try:
             for c in cur.columns(table=tabela):
                 n = getattr(c,"column_name",None) or (c[3] if len(c)>3 else None)
-                if n: cols.append(n)
+                if n:
+                    cols.append(n)
         except Exception:
             try:
-                cur.execute(f"SELECT TOP 1 * FROM [{tabela}]"); cols = [d[0] for d in cur.description]
-            except: cols=[]
+                cur.execute(f"SELECT TOP 1 * FROM [{tabela}]")
+                cols = [d[0] for d in cur.description]
+            except Exception:
+                cols = []
         return cols
     finally:
-        try: conn.close()
-        except: pass
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 # ---------- construir SQL WHERE e placeholders por engine ----------
 def build_where_clause_and_params(engine: str, filters):
@@ -330,7 +358,8 @@ def checar_com_filtros(path, engine, tabela, filters, sample, show_cols):
                     conn = pyodbc.connect(cs, autocommit=True, timeout=30)
                     break
                 except Exception as e:
-                    last_err = e; conn = None
+                    last_err = e
+                    conn = None
             if conn is None:
                 return 0, None, str(last_err)
             try:
@@ -359,8 +388,10 @@ def checar_com_filtros(path, engine, tabela, filters, sample, show_cols):
                 except Exception:
                     return 0, None, None
             finally:
-                try: conn.close()
-                except: pass
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         return 0, None, "engine não suportada"
     except Exception as e:
@@ -446,7 +477,8 @@ def analyze_csv_file(path_csv):
     if not found_indices:
         print("Registro NÃO encontrado em nenhum arquivo do CSV.")
         return
-    first_i = found_indices[0]; last_i = found_indices[-1]
+    first_i = found_indices[0]
+    last_i = found_indices[-1]
     print("Primeiro encontrado (pela ordem):")
     print(" ", rows_sorted[first_i]['path'])
     if first_i>0 and not rows_sorted[first_i-1]['found']:
@@ -460,7 +492,8 @@ def analyze_csv_file(path_csv):
     disappeared_at=None
     for j in range(last_i+1, len(rows_sorted)):
         if not rows_sorted[j]['found']:
-            disappeared_at = j; break
+            disappeared_at = j
+            break
     if disappeared_at:
         print("Desapareceu entre:")
         print("  último presente:", rows_sorted[last_i]['path'])
@@ -474,7 +507,8 @@ def scan_and_optionally_save(diretorio: Path, args):
     arquivos = [p for p in diretorio.iterdir() if p.is_file() and p.suffix.lower() in exts]
     arquivos = ordenar_arquivos(arquivos, order=args.order)
     if not arquivos:
-        print("Nenhum arquivo encontrado em", diretorio); return None
+        print("Nenhum arquivo encontrado em", diretorio)
+        return None
 
     results_for_csv=[]
     resultados=[]
@@ -493,7 +527,11 @@ def scan_and_optionally_save(diretorio: Path, args):
     for idx, f in enumerate(arquivos):
         ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(f.stat().st_mtime))
         ext = f.suffix.lower()
-        found=False; table_used=None; sample=None; count=0; error=None
+        found = False
+        table_used = None
+        sample = None
+        count = 0
+        error = None
         try:
             if rapido_filters:
                 # Determine tables to try. If --table given, validate it exists.
@@ -582,51 +620,85 @@ def scan_and_optionally_save(diretorio: Path, args):
                         # record first error but keep trying other tables
                         error = err
                     if cnt:
-                        count = cnt; found = True; sample = samp; table_used = tabela
+                        count = cnt
+                        found = True
+                        sample = samp
+                        table_used = tabela
                         break
             else:
                 # modo genérico por --key (coluna ou colunas comuns)
                 chave = args.key
                 col_cand = []
-                if args.col: col_cand = [args.col]
-                col_cand.extend(["id","code","codigo","cod","codigo_id","pk","codigo_pk","record_id","key","uid"])
+                if args.col:
+                    col_cand = [args.col]
+                col_cand.extend(
+                    ["id", "code", "codigo", "cod", "codigo_id", "pk", "codigo_pk", "record_id", "key", "uid"]
+                )
                 if ext in (".duckdb", ".db"):
                     try:
                         tabelas = listar_tabelas_duckdb(f)
                     except Exception as e:
-                        if args.verbose: print(f"[aviso] não foi possível listar tabelas em {f}: {e}", file=sys.stderr)
-                        tabelas=[]
-                    if args.table: tabelas=[t for t in tabelas if args.table.lower() in t.lower()]
+                        if args.verbose:
+                            print(f"[aviso] não foi possível listar tabelas em {f}: {e}", file=sys.stderr)
+                        tabelas = []
+                    if args.table:
+                        tabelas = [t for t in tabelas if args.table.lower() in t.lower()]
                     for t in tabelas:
-                        ok,used_col,samp = buscar_generico_em_tabela(f,"duckdb",t,chave,col_cand,args.try_all_cols,args.sample,args.show_cols)
-                        if ok: found=True; table_used=t; sample=samp; break
+                        ok, used_col, samp = buscar_generico_em_tabela(
+                            f, "duckdb", t, chave, col_cand, args.try_all_cols, args.sample, args.show_cols
+                        )
+                        if ok:
+                            found = True
+                            table_used = t
+                            sample = samp
+                            break
                 elif ext in (".sqlite", ".sqlite3"):
                     try:
                         tabelas = listar_tabelas_sqlite(f)
                     except Exception as e:
-                        if args.verbose: print(f"[aviso] não foi possível listar tabelas em {f}: {e}", file=sys.stderr)
-                        tabelas=[]
-                    if args.table: tabelas=[t for t in tabelas if args.table.lower() in t.lower()]
+                        if args.verbose:
+                            print(f"[aviso] não foi possível listar tabelas em {f}: {e}", file=sys.stderr)
+                        tabelas = []
+                    if args.table:
+                        tabelas = [t for t in tabelas if args.table.lower() in t.lower()]
                     for t in tabelas:
-                        ok,used_col,samp = buscar_generico_em_tabela(f,"sqlite",t,chave,col_cand,args.try_all_cols,args.sample,args.show_cols)
-                        if ok: found=True; table_used=t; sample=samp; break
+                        ok, used_col, samp = buscar_generico_em_tabela(
+                            f, "sqlite", t, chave, col_cand, args.try_all_cols, args.sample, args.show_cols
+                        )
+                        if ok:
+                            found = True
+                            table_used = t
+                            sample = samp
+                            break
                 elif ext in (".mdb", ".accdb"):
                     try:
                         tabelas = listar_tabelas_access(f)
                     except Exception as e:
-                        if args.verbose: print(f"[aviso] não foi possível listar tabelas Access em {f}: {e}", file=sys.stderr)
-                        tabelas=[]
-                    if args.table: tabelas=[t for t in tabelas if args.table.lower() in t.lower()]
+                        if args.verbose:
+                            print(f"[aviso] não foi possível listar tabelas Access em {f}: {e}", file=sys.stderr)
+                        tabelas = []
+                    if args.table:
+                        tabelas = [t for t in tabelas if args.table.lower() in t.lower()]
                     for t in tabelas:
-                        ok,used_col,samp = buscar_generico_em_tabela(f,"access",t,chave,col_cand,args.try_all_cols,args.sample,args.show_cols)
-                        if ok: found=True; table_used=t; sample=samp; break
+                        ok, used_col, samp = buscar_generico_em_tabela(
+                            f, "access", t, chave, col_cand, args.try_all_cols, args.sample, args.show_cols
+                        )
+                        if ok:
+                            found = True
+                            table_used = t
+                            sample = samp
+                            break
                 else:
-                    if args.verbose: print(f"[pular] extensão não suportada: {ext}", file=sys.stderr)
+                    if args.verbose:
+                        print(f"[pular] extensão não suportada: {ext}", file=sys.stderr)
         except Exception as e:
-            error=str(e)
-            if args.verbose: traceback.print_exc()
+            error = str(e)
+            if args.verbose:
+                traceback.print_exc()
 
-        file_mtime=f.stat().st_mtime; file_size_kb=f.stat().st_size//1024; file_sha1=quick_sha1(f)
+        file_mtime = f.stat().st_mtime
+        file_size_kb = f.stat().st_size // 1024
+        file_sha1 = quick_sha1(f)
         # print outputs: prefer explicit ERRO when error set and no found
         if args.brief:
             if error and not found:
@@ -640,7 +712,8 @@ def scan_and_optionally_save(diretorio: Path, args):
                 print(f"[ERRO]    {ts} {f} -> {error}")
             elif found:
                 print(f"[ENCONTRADO] {ts} {f} tabela={table_used}")
-                if args.sample and sample: print("  amostra:", json.dumps(to_json_serializable(sample), ensure_ascii=False))
+                if args.sample and sample:
+                    print("  amostra:", json.dumps(to_json_serializable(sample), ensure_ascii=False))
             else:
                 print(f"[AUSENTE]   {ts} {f}")
 
@@ -656,7 +729,8 @@ def scan_and_optionally_save(diretorio: Path, args):
             "error": error,
             "order_idx": order_map.get(str(f), idx)
         })
-        if args.out_csv: results_for_csv.append(resultados[-1])
+        if args.out_csv:
+            results_for_csv.append(resultados[-1])
 
     # resumo baseado na ordem usada (order_idx)
     presentes=[r for r in resultados if r["found"]]
@@ -664,16 +738,19 @@ def scan_and_optionally_save(diretorio: Path, args):
         print("\nResumo: registro NÃO encontrado em nenhum BD escaneado.")
     else:
         presentes_sorted = sorted(presentes, key=lambda r: r["order_idx"])
-        primeiro = presentes_sorted[0]; ultimo = presentes_sorted[-1]
+        primeiro = presentes_sorted[0]
+        ultimo = presentes_sorted[-1]
         print("\nResumo:")
         print(f"  Primeiro encontrado (pela ordem usada) em: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(primeiro['mtime']))}  {primeiro['path']}")
         print(f"  Último encontrado (pela ordem usada) em:   {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ultimo['mtime']))}  {ultimo['path']}")
         resultados_ordered = sorted(resultados, key=lambda r: r["order_idx"])
-        indices=[i for i,r in enumerate(resultados_ordered) if r["found"]]
-        last_i = indices[-1]; disappeared_at=None
+        indices = [i for i, r in enumerate(resultados_ordered) if r["found"]]
+        last_i = indices[-1]
+        disappeared_at = None
         for j in range(last_i+1, len(resultados_ordered)):
             if not resultados_ordered[j]["found"]:
-                disappeared_at=j; break
+                disappeared_at = j
+                break
         if disappeared_at is not None:
             print("  Desapareceu entre:")
             print(f"    {resultados_ordered[last_i]['path']}")
@@ -720,12 +797,15 @@ def main():
     args = parse_args()
     # modo análise de CSV puro
     if args.analyze_csv and not args.dir:
-        analyze_csv_file(args.analyze_csv); return
+        analyze_csv_file(args.analyze_csv)
+        return
     if not args.dir:
-        print("Se não for analisar CSV existente, informe --dir DIR"); sys.exit(2)
+        print("Se não for analisar CSV existente, informe --dir DIR")
+        sys.exit(2)
     directory = Path(args.dir)
     if not directory.exists() or not directory.is_dir():
-        print("Diretório não encontrado:", directory, file=sys.stderr); sys.exit(2)
+        print("Diretório não encontrado:", directory, file=sys.stderr)
+        sys.exit(2)
     args.exts = [e.lower() for e in args.ext] if args.ext else EXTS_PADRAO
     args.show_cols = [c.strip() for c in args.show_cols.split(",")] if args.show_cols else None
 

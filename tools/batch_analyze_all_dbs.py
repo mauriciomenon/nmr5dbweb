@@ -91,19 +91,24 @@ def main():
     args = parse_args()
     db_dir = Path(args.db_dir)
     if not db_dir.exists():
-        print("Diretório não encontrado:", db_dir); return 1
-    outdir = Path(args.outdir); outdir.mkdir(parents=True, exist_ok=True)
-    exts = [e if e.startswith('.') else '.'+e for e in args.extensions]
+        print("Diretório não encontrado:", db_dir)
+        return 1
+    outdir = Path(args.outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    exts = [e if e.startswith('.') else '.' + e for e in args.extensions]
 
     files = gather_files(db_dir, exts)
     if not files:
-        print("Nenhum arquivo encontrado com as extensões fornecidas em", db_dir); return 1
+        print("Nenhum arquivo encontrado com as extensões fornecidas em", db_dir)
+        return 1
 
     analyze_script = Path(args.analyze_script)
     if not analyze_script.exists():
-        print("Script de análise não encontrado:", analyze_script); return 1
+        print("Script de análise não encontrado:", analyze_script)
+        return 1
 
-    total = len(files); failed = []
+    total = len(files)
+    failed = []
     print(f"Encontrados {total} arquivos. Iniciando processamento...\n")
     for idx, f in enumerate(files, start=1):
         engine = detect_engine_from_ext(f, args.engine_override)
