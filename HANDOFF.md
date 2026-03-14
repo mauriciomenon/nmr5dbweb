@@ -1,5 +1,20 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, continuation on hard comments)
+
+- Added targeted reliability fix in record-tracking backend:
+  - `interface/find_record_across_dbs.py` no longer aborts full-file scan on first per-table error.
+  - scan now continues to next table and preserves concise table-error samples only when no match is found.
+- Added focused regression:
+  - `tests/test_find_record_across_dbs_access_fallback.py` validates continued scan after first table failure.
+- Improved operator error visibility in frontend:
+  - `static/app_bootstrap_actions.js`: index-start catch now surfaces concrete error detail in UI/log.
+  - `static/app_results.js`: export-table CSV failure now sets visible flow banner and detailed log.
+- Validation summary:
+  - focused python compile/lint/tests passed
+  - focused frontend eslint passed
+  - kluster auto checks in this continuation: clean
+
 ## Latest Round Update (2026-03-14, backend hard-comment slice)
 
 - Targeted backend hard-comment closure completed with minimal patch scope:

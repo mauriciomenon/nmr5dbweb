@@ -1,5 +1,33 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, table-scan + ui error feedback)
+
+### Goal
+
+1. Continue on hard PR comments with real runtime impact.
+2. Keep patches minimal and behavior-safe.
+
+### Applied
+
+1. `interface/find_record_across_dbs.py`
+   - changed per-table error handling to continue scanning remaining tables in same file.
+   - keeps up to 3 table-level error samples when no match is found.
+   - avoids false negatives caused by aborting on first table error.
+2. `static/app_bootstrap_actions.js`
+   - improved `start_index` catch-path user/log feedback with concrete error detail.
+3. `static/app_results.js`
+   - improved table CSV export failure feedback in both banner and logs.
+4. tests:
+   - `tests/test_find_record_across_dbs_access_fallback.py`: added regression ensuring scan continues after one table error and still finds later table match.
+
+### Validation After Changes
+
+- `uv run python -m py_compile interface/find_record_across_dbs.py tests/test_find_record_across_dbs_access_fallback.py`: passed.
+- `uv run ruff check interface/find_record_across_dbs.py tests/test_find_record_across_dbs_access_fallback.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_find_record_across_dbs_access_fallback.py`: `7 passed`.
+- `pnpm -s eslint static/app_bootstrap_actions.js static/app_results.js`: passed.
+- `kluster_code_review_auto`: clean on both backend and frontend slices in this round.
+
 ## Current Slice: Hard Backend Comment Closure (2026-03-14)
 
 ### Goal

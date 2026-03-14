@@ -900,7 +900,10 @@ async function exportTableCsv(tableEnc) {
   } catch (e) {
     const errMsg = e && e.message ? e.message : 'falha na requisicao';
     alert('Erro ao exportar: ' + errMsg);
-    logUi('ERROR', 'export csv falhou');
+    if (typeof setFlowBanner === 'function') {
+      setFlowBanner('Erro ao exportar tabela: ' + errMsg, 'error');
+    }
+    logUi('ERROR', 'export csv falhou: ' + errMsg);
   }
 }
 
