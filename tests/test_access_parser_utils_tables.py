@@ -30,3 +30,14 @@ def test_list_access_tables_from_get_table_names():
 
     tables = list_access_tables_from_parser(FakeParser())
     assert tables == ["alpha", "beta"]
+
+
+def test_list_access_tables_falls_back_when_tables_attr_is_empty():
+    class FakeParser:
+        tables = []
+
+        def table_names(self):
+            return ["table_a", "MSysSkip", "table_b"]
+
+    tables = list_access_tables_from_parser(FakeParser())
+    assert tables == ["table_a", "table_b"]

@@ -2165,3 +2165,25 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 ./.venv/bin/python -m pytest -q tests/test_app_flask_local_search_api.py tests/test_compare_dbs.py tests/test_compare_db_rows_api.py tests/test_frontend_invalid_flows_browser.py`: `62 passed`
 - `pnpm exec eslint static`: passed
 - `pnpm exec prettier --check "static/**/*.js" "*.{js,json}"`: passed
+
+## Slice 2026-03-14 - Access parser table fallback hardening
+
+### Scope
+- Keep patch minimal and focused on a real behavior bug in parser table discovery.
+- Do not change UI layout or broad architecture.
+
+### What changed
+- Updated `interface/access_parser_utils.py` in `list_access_tables_from_parser(...)`:
+  - switched chained `elif` fallbacks to progressive `if not tables` fallbacks.
+  - now tries `tables`, then `table_names`, then `get_table_names` when earlier source is present but empty.
+- Added focused regression test in `tests/test_access_parser_utils_tables.py`:
+  - `test_list_access_tables_falls_back_when_tables_attr_is_empty`
+
+### Why
+- Prevent false "no user tables" when parser exposes an empty `tables` attribute but a valid `table_names` source.
+
+### Validation
+- `uv run --python 3.13 python -m py_compile interface/access_parser_utils.py tests/test_access_parser_utils_tables.py`
+- `uv run --python 3.13 ruff check interface/access_parser_utils.py tests/test_access_parser_utils_tables.py`
+- `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_access_parser_utils_tables.py tests/test_access_parser_utils_normalize.py`
+- Result: `11 passed`

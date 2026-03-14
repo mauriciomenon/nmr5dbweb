@@ -444,3 +444,13 @@ The first stabilization slice is intentionally narrow:
   - continue reducing backend concentration in table/search implementation and record-tracking execution, not just request parsing
   - keep `output/` as a documented local validation area unless product requirements later demand a clearer sample-data convention
   - expand compare API payload-type validation if external callers send non-string fields today
+
+## Update 2026-03-14 - parser fallback slice
+
+- Applied minimal bugfix in `interface/access_parser_utils.py`:
+  - table-discovery fallbacks are now progressive (`if not tables`) instead of stopping early with `elif`.
+- Added regression coverage in `tests/test_access_parser_utils_tables.py` for empty `tables` with valid `table_names` fallback.
+- Focused validation passed:
+  - py_compile (touched files)
+  - ruff (touched files)
+  - pytest focused (`11 passed`)
