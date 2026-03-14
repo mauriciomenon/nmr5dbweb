@@ -5,6 +5,7 @@ async function restoreFromSavedState() {
     const raw = localStorage.getItem(compareDbState.compareStateKey);
     if (!raw) return;
     saved = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object') return;
   } catch (e) {
     console.warn('Estado salvo invalido, ignorando.', e);
     return;
@@ -114,6 +115,7 @@ async function handleFileUpload(side) {
     side === 'A' ? 'btnUploadA' : 'btnUploadB'
   );
   if (!input || !input.files || !input.files.length) return;
+  if (!nameSpan || !pathInput) return;
   const file = input.files[0];
   nameSpan.textContent = file.name;
 
@@ -172,7 +174,7 @@ async function handleFileUpload(side) {
       nameSpan.textContent = file.name + ' (carregado)';
       setUploadStatus(`Upload do Banco ${side} concluido com sucesso.`);
     }
-    const nextPath = pathInput && pathInput.value ? String(pathInput.value).trim() : '';
+    const nextPath = String(pathInput.value || '').trim();
     if (nextPath !== previousPath) {
       compareDbState.lastComparePayload = null;
       compareDbState.lastCompareMeta = null;
