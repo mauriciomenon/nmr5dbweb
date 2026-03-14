@@ -6,6 +6,13 @@ Map the current product structure in a stable way so future rounds can update th
 
 ## Latest Snapshot (2026-03-14)
 
+- Jackcess converter `ListTables` helper now uses valid standard Java braces and keeps argument-driven source path handling (`converters/convert_jackcess.py`).
+- Jackcess imported table naming now adds deterministic short hash suffix from original Access table name to reduce collision risk after sanitization (`converters/convert_jackcess.py`).
+- Modal overlay close now uses `click` only (no `pointerdown` close path) in bootstrap modal bindings (`static/app_bootstrap_modals.js`).
+- Search highlight token alternation now prefers longer tokens first, reducing partial-match overshadowing (`static/app_results.js`).
+- Export-table CSV error feedback now keeps user text generic while preserving detailed diagnostics in logs (`static/app_results.js`).
+- Access parser normalization now falls back to iterable/object conversion when `to_dict` fails instead of returning empty rows (`interface/access_parser_utils.py`).
+- Access conversion all-backend-failure path now preserves strict-mode message from any attempted backend before public sanitization (`access_convert.py`).
 - Access parser row normalization now prioritizes object `to_dict(orient="records")` conversion before generic iterable normalization (`interface/access_parser_utils.py`).
 - Access conversion final failure messaging now avoids concatenating backend internal errors in user-facing output while keeping strict-mode feedback and internal logs (`access_convert.py`).
 - Compare upload flow tolerates invalid/non-JSON upload responses and resets stale compare/overview state when DB A/B changes (`static/compare_dbs_upload.js`).

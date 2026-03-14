@@ -72,6 +72,16 @@ def _public_failure_message(primary_message: str) -> str:
     return "All conversion methods failed. See logs for details."
 
 
+def _select_primary_failure_message(*messages: str) -> str:
+    for msg in messages:
+        if isinstance(msg, str) and "strict mode" in msg.lower():
+            return msg
+    for msg in messages:
+        if isinstance(msg, str) and msg.strip():
+            return msg
+    return ""
+
+
 def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int = 50000, prefer_odbc: bool = True, progress_callback=None):
     """
     Convert an Access DB (.mdb or .accdb) to a DuckDB file.
@@ -510,7 +520,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             msg3,
             msg4,
         )
-        return False, _public_failure_message(msg)
+        primary = _select_primary_failure_message(msg, msg2, msg3, msg4)
+        return False, _public_failure_message(primary)
     else:
         # Non-ODBC preferred path (used in non-Windows runtime):
         # - .mdb: mdbtools first, then access-parser
@@ -536,7 +547,8 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 msg3,
                 msg4,
             )
-            return False, _public_failure_message(msg)
+            primary = _select_primary_failure_message(msg, msg2, msg3, msg4)
+            return False, _public_failure_message(primary)
 
         ok, msg = try_access_parser()
         if ok:
@@ -557,4 +569,5 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             msg3,
             msg4,
         )
-        return False, _public_failure_message(msg)
+        primary = _select_primary_failure_message(msg, msg2, msg3, msg4)
+        return False, _public_failure_message(primary)

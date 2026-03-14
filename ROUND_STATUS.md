@@ -1,5 +1,37 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, converter/ui strict handling)
+
+### Goal
+
+1. Continue on hard PR comments with real runtime risk and minimal patch.
+2. Keep layout and route contracts unchanged.
+
+### Applied
+
+1. `converters/convert_jackcess.py`
+   - fixed `ListTables` Java helper source with standard braces so helper compiles with valid Java syntax.
+   - hardened imported table naming with short deterministic suffix from original Access table name to reduce collision risk after sanitization.
+2. `static/app_bootstrap_modals.js`
+   - removed modal close binding on `pointerdown` for overlay and kept close on `click`.
+3. `static/app_results.js`
+   - highlight regex alternatives now sort by token length (desc) to prefer longest match first.
+   - export CSV error alert and banner now use generic user text; detailed cause remains in logs.
+4. `interface/access_parser_utils.py`
+   - when `to_dict(orient="records")` fails, normalization now falls back to iterable/object path instead of returning empty rows.
+5. `access_convert.py`
+   - final all-backend failure path now picks the first strict-mode message across backend attempts before applying public-message sanitization.
+
+### Validation After Changes
+
+- `uv run python -m py_compile access_convert.py interface/access_parser_utils.py converters/convert_jackcess.py`: passed.
+- `uv run ruff check access_convert.py interface/access_parser_utils.py converters/convert_jackcess.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: `11 passed`.
+- `pnpm -s eslint static/app_bootstrap_actions.js static/app_bootstrap_modals.js static/app_results.js`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_frontend_invalid_flows_browser.py -k "compare_page or compare_pagination_and_export"`: `2 passed, 16 deselected`.
+- `uv run ty check access_convert.py interface/access_parser_utils.py`: known unresolved-import diagnostics (`pyodbc`, `pypyodbc`) in this env.
+- `kluster_code_review_auto`: one medium issue found in upload transport-error handling and fixed in same slice; final rerun clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, main env + search error detail)
 
 ### Goal

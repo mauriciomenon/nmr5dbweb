@@ -109,7 +109,6 @@ function setupModalBindings() {
       e.stopPropagation();
       forceCloseModals();
     };
-    overlayEl.addEventListener('pointerdown', closeHandler, true);
     overlayEl.addEventListener('click', closeHandler, true);
   }
 

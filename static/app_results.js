@@ -80,7 +80,10 @@ function buildHighlightedFragment(text, tokens) {
     return fragment;
   }
   try {
-    const parts = tokens.map((t) => escapeRegExp(String(t))).filter(Boolean);
+    const parts = tokens
+      .map((t) => escapeRegExp(String(t)))
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length);
     if (!parts.length) {
       appendTextWithBreaks(fragment, source);
       return fragment;
@@ -899,9 +902,9 @@ async function exportTableCsv(tableEnc) {
     downloadCsv(`${table}.csv`, csvText);
   } catch (e) {
     const errMsg = e && e.message ? e.message : 'falha na requisicao';
-    alert('Erro ao exportar: ' + errMsg);
+    alert('Erro ao exportar');
     if (typeof setFlowBanner === 'function') {
-      setFlowBanner('Erro ao exportar tabela: ' + errMsg, 'error');
+      setFlowBanner('Erro ao exportar tabela.', 'error');
     }
     logUi('ERROR', 'export csv falhou: ' + errMsg);
   }

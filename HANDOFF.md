@@ -1,5 +1,27 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, hard comment continuation on converter/ui/parser)
+
+- `converters/convert_jackcess.py`
+  - `ListTables` Java helper source now uses standard Java braces and keeps argument-based DB path handling.
+  - imported table naming now adds a short deterministic hash suffix from original Access table name to reduce collision risk after identifier sanitization.
+- `static/app_bootstrap_modals.js`
+  - overlay close path now binds only `click` (removed `pointerdown` close) to avoid premature close gesture side effects.
+- `static/app_results.js`
+  - highlight alternation now prioritizes longer tokens first.
+  - export CSV user-facing error text is generic; detailed cause kept in logs.
+- `interface/access_parser_utils.py`
+  - parser row normalization no longer returns early-empty on `to_dict` failure; it now falls back to iterable/object normalization.
+- `access_convert.py`
+  - all-backend failure return now preserves strict-mode message from any attempted backend before sanitizing public output.
+- Focused validations:
+  - python compile + ruff on touched python files: passed
+  - parser/conversion focused pytest: `11 passed`
+  - frontend eslint on touched files: passed
+  - frontend compare browser subset: `2 passed`
+  - ty check still reports known optional-driver/import diagnostics in this environment (`pyodbc`/`pypyodbc`)
+  - kluster final status for this round: clean after one medium fix in upload transport-error handling.
+
 ## Latest Round Update (2026-03-14, main/search hard-comment mini slice)
 
 - `main.py` now uses one explicit `upload_folder_effective` value for env setup and startup banner output.

@@ -192,7 +192,6 @@ def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
                 return [dict(row) for row in data if isinstance(row, dict)]
         except Exception as exc:
             logger.warning("Failed converting parser rows via to_dict: %s", exc)
-            return []
     if isinstance(parsed, Iterable) and not isinstance(parsed, (str, bytes, bytearray)):
         items = list(parsed)
         if not items:

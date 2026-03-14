@@ -2,6 +2,7 @@
 
 import argparse
 import duckdb
+import hashlib
 import os
 import re
 import subprocess
@@ -51,16 +52,16 @@ def get_mdb_tables_jackcess(mdb_file: Path) -> List[str]:
         java_code = """
 import com.healthmarketscience.jackcess.*;
 import java.io.*;
-public class ListTables {{
-    public static void main(String[] args) throws Exception {{
+public class ListTables {
+    public static void main(String[] args) throws Exception {
         if (args.length < 1) throw new IllegalArgumentException("missing mdb path");
-        try (Database db = DatabaseBuilder.open(new File(args[0]))) {{
-            for (String tableName : db.getTableNames()) {{
+        try (Database db = DatabaseBuilder.open(new File(args[0]))) {
+            for (String tableName : db.getTableNames()) {
                 System.out.println(tableName);
-            }}
-        }}
-    }}
-}}
+            }
+        }
+    }
+}
 """
         temp_dir = Path("/tmp/mdb2sql_jackcess")
         temp_dir.mkdir(exist_ok=True)
@@ -215,10 +216,9 @@ def import_to_duckdb(
             csv_file.unlink()
             continue
 
-        base_name = re.sub(r"[^A-Za-z0-9_]", "_", str(table)).strip("_")
-        if not base_name:
-            base_name = "table"
-        table_with_date = f"{base_name}_{file_date.replace('-', '')}"
+        base_name = re.sub(r"[^A-Za-z0-9_]", "_", str(table)).strip("_") or "table"
+        table_suffix = hashlib.sha1(str(table).encode("utf-8")).hexdigest()[:8]
+        table_with_date = f"{base_name}_{table_suffix}_{file_date.replace('-', '')}"
 
         try:
             conn.execute(

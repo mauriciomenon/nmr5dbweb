@@ -4,8 +4,13 @@ Este diretório contém o backend Flask e utilitários para busca local em bases
 
 ## Atualizacao rapida (2026-03-14)
 
+- Fechamento de modal por overlay no bootstrap agora usa apenas evento `click` (sem fechamento em `pointerdown`) para reduzir comportamento de clique prematuro.
+- Destaque de termos na renderizacao de resultados agora prioriza tokens maiores antes dos menores para reduzir match parcial indevido.
+- Export CSV de tabela agora exibe erro generico para operador e mantem detalhe tecnico no log.
 - Normalizacao de linhas do parser Access agora prioriza objetos com `to_dict(orient="records")` antes do fallback generico de iteravel.
+- Quando `to_dict` falha, a normalizacao agora segue para fallback iteravel/objeto em vez de retornar vazio imediato.
 - Conversao Access->DuckDB agora evita concatenar detalhes internos de todos os backends no erro final exposto ao usuario; detalhes continuam em log interno.
+- Erro final de conversao agora preserva mensagem de strict mode de qualquer backend tentado antes da sanitizacao publica.
 - O cliente de comparacao agora trata resposta de upload invalida (nao JSON) sem quebrar o fluxo de erro na UI.
 - O cliente de comparacao agora reseta estado stale (payload/meta, tabelas e overview em cache) quando o par de DBs muda.
 - O smoke Windows de conversao Access remove arquivo temporario de saida quando a conversao falha ou nao gera tabelas de usuario.
