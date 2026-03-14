@@ -28,6 +28,7 @@ const OPEN_TABLE_CHUNK = 120;
 const OPEN_TABLE_EXPORT_CHUNK = 250;
 const DEFAULT_VISIBLE_COLUMNS = 12;
 const openTableStates = new Map();
+const openTableRequestSeq = new Map();
 const TABLE_COLUMN_GROUPS = [
   {
     name: 'IDENTIFICACAO',
@@ -645,19 +646,43 @@ function renderResults(q, results, per_table) {
     const header = document.createElement('div');
     header.className = 'result-card-header';
     const tagId = tableTagId(tbl);
-    header.innerHTML = `
-      <div>
-        <span id="${tagId}" class="priority-tag">PRIORITARIO</span>
-        <strong>${escapeHtml(tbl)}</strong> <span class="muted">(${results[tbl].length})</span>
-      </div>
-      <div class="result-card-actions">
-        <button class="btn ghost" onclick="openTable(event,'${encodeURIComponent(
-          tbl
-        )}')">Abrir</button>
-        <button class="btn ghost" onclick="exportTableCsv('${encodeURIComponent(
-          tbl
-        )}')">Export CSV</button>
-      </div>`;
+    const titleWrap = document.createElement('div');
+    const tag = document.createElement('span');
+    tag.id = tagId;
+    tag.className = 'priority-tag';
+    tag.textContent = 'PRIORITARIO';
+    const strong = document.createElement('strong');
+    strong.textContent = tbl;
+    const count = document.createElement('span');
+    count.className = 'muted';
+    count.textContent = `(${results[tbl].length})`;
+    titleWrap.appendChild(tag);
+    titleWrap.appendChild(document.createTextNode(' '));
+    titleWrap.appendChild(strong);
+    titleWrap.appendChild(document.createTextNode(' '));
+    titleWrap.appendChild(count);
+
+    const actions = document.createElement('div');
+    actions.className = 'result-card-actions';
+    const openBtn = document.createElement('button');
+    openBtn.className = 'btn ghost';
+    openBtn.type = 'button';
+    openBtn.textContent = 'Abrir';
+    openBtn.addEventListener('click', (event) =>
+      openTable(event, encodeURIComponent(tbl))
+    );
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'btn ghost';
+    exportBtn.type = 'button';
+    exportBtn.textContent = 'Export CSV';
+    exportBtn.addEventListener('click', () =>
+      exportTableCsv(encodeURIComponent(tbl))
+    );
+    actions.appendChild(openBtn);
+    actions.appendChild(exportBtn);
+
+    header.appendChild(titleWrap);
+    header.appendChild(actions);
     block.appendChild(header);
 
     const { cols, rowObjs } = collectRowObjects(results[tbl]);
@@ -817,6 +842,8 @@ async function loadOpenTable(table, options) {
     loading: true,
     offset,
   });
+  const requestSeq = (openTableRequestSeq.get(table) || 0) + 1;
+  openTableRequestSeq.set(table, requestSeq);
 
   try {
     const data = await apiJSON(
@@ -846,6 +873,9 @@ async function loadOpenTable(table, options) {
       dbEngine: data.db_engine || state.dbEngine,
       loading: false,
     });
+    if (openTableRequestSeq.get(table) !== requestSeq) {
+      return;
+    }
 
     const area = $('resultsArea');
     if (!area) return;
@@ -879,7 +909,9 @@ async function loadOpenTable(table, options) {
     logUi('ERROR', 'abrir tabela falhou');
     alert('Erro ao abrir tabela');
   } finally {
-    setOpenTableState(table, { loading: false });
+    if (openTableRequestSeq.get(table) === requestSeq) {
+      setOpenTableState(table, { loading: false });
+    }
   }
 }
 

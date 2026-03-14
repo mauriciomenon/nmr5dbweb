@@ -49,6 +49,8 @@ function Resolve-Repo() {
 function Pick-Python([string]$repo) {
     $venvPy = Join-Path $repo ".venv\Scripts\python.exe"
     if (Test-Path $venvPy) { return $venvPy }
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) { return "py -3" }
     $py = Get-Command python -ErrorAction SilentlyContinue
     if ($py) { return $py.Source }
     $py3 = Get-Command python3 -ErrorAction SilentlyContinue
@@ -64,6 +66,9 @@ s.bind(("127.0.0.1", 0))
 print(s.getsockname()[1])
 s.close()
 '@
+    if ($pythonExe -eq "py -3") {
+        return (& py -3 -c $code).Trim()
+    }
     return (& $pythonExe -c $code).Trim()
 }
 
@@ -78,21 +83,42 @@ Write-Host "Escolha navegador: [1] padrao [2] custom"
 $choice = Read-Host ">"
 if ($choice -eq "2") {
     $browserPath = Read-Host "Caminho do navegador custom"
-    if (Test-Path $browserPath) {
-        Start-Process -FilePath $browserPath -ArgumentList $url | Out-Null
-    } else {
-        Write-Host "Navegador custom invalido, usando padrao"
-        Start-Process $url | Out-Null
-    }
-} else {
-    Start-Process $url | Out-Null
 }
 
 Set-Location $repo
+
+Start-Job -ScriptBlock {
+    param($Port, $Url, $Choice, $BrowserPath)
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $client = New-Object System.Net.Sockets.TcpClient
+            $iar = $client.BeginConnect("127.0.0.1", [int]$Port, $null, $null)
+            $ok = $iar.AsyncWaitHandle.WaitOne(500, $false)
+            if ($ok -and $client.Connected) {
+                try { $client.EndConnect($iar) } catch {}
+                $client.Close()
+                break
+            }
+            $client.Close()
+        } catch {}
+        Start-Sleep -Milliseconds 250
+    }
+    if ($Choice -eq "2" -and $BrowserPath -and (Test-Path $BrowserPath)) {
+        Start-Process -FilePath $BrowserPath -ArgumentList $Url | Out-Null
+    } else {
+        Start-Process $Url | Out-Null
+    }
+} -ArgumentList $port, $url, $choice, $browserPath | Out-Null
+
 $uv = Get-Command uv -ErrorAction SilentlyContinue
-if ($uv) {
-    & $uv.Source run --python $pythonExe python main.py --host 127.0.0.1 --port $port
+if ($uv -and $pythonExe -ne "py -3") {
+    & $uv.Source run --python $pythonExe python main.py --host 127.0.0.1 --port $port --no-port-fallback
     exit $LASTEXITCODE
 }
-& $pythonExe main.py --host 127.0.0.1 --port $port
+if ($pythonExe -eq "py -3") {
+    py -3 main.py --host 127.0.0.1 --port $port --no-port-fallback
+} else {
+    & $pythonExe main.py --host 127.0.0.1 --port $port --no-port-fallback
+}
 exit $LASTEXITCODE

@@ -119,6 +119,9 @@ async function handleFileUpload(side) {
   const file = input.files[0];
   const lowName = String(file && file.name ? file.name : '').toLowerCase();
   if (!(lowName.endsWith('.duckdb') || lowName.endsWith('.db'))) {
+    pathInput.value = '';
+    compareDbState.lastComparePayload = null;
+    compareDbState.lastCompareMeta = null;
     nameSpan.textContent = file.name + ' (invalido)';
     setUploadStatus(
       `Arquivo invalido para Banco ${side}. Use apenas .duckdb ou .db.`,

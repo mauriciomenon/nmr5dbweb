@@ -317,6 +317,14 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             return False, f"mdb-tables failed: {e}"
         total = len(tbls)
         if total == 0:
+            try:
+                _ensure_clean_duckdb(duckdb_path)
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "Could not clear stale output %s after empty mdbtools source: %s",
+                    duckdb_path,
+                    cleanup_exc,
+                )
             return False, "No user tables found via mdbtools."
         _ensure_clean_duckdb(duckdb_path)
         dconn = duckdb.connect(duckdb_path)
@@ -341,7 +349,6 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     skipped_tables.append((str(t), str(e)))
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
-            dconn.close()
             if skipped_tables and not _access_parser_allow_skips():
                 sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
                 return (
@@ -358,16 +365,16 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 return True, f"converted via mdbtools (skipped={len(skipped_tables)})"
             return True, "converted via mdbtools"
         except Exception as e:
-            try:
-                dconn.close()
-            except Exception:
-                pass
             return False, f"mdbtools error: {e}"
         finally:
             try:
+                dconn.close()
+            except Exception as close_exc:
+                logger.warning("Failed to close DuckDB connection in mdbtools path: %s", close_exc)
+            try:
                 shutil.rmtree(tmpdir)
-            except Exception:
-                pass
+            except Exception as cleanup_exc:
+                logger.warning("Failed to cleanup mdbtools temp dir %s: %s", tmpdir, cleanup_exc)
 
     def try_access_parser():
         ap, mod_err = load_access_parser_module()

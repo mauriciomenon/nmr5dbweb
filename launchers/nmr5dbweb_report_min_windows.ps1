@@ -49,6 +49,8 @@ function Resolve-Repo() {
 function Pick-Python([string]$repo) {
     $venvPy = Join-Path $repo ".venv\Scripts\python.exe"
     if (Test-Path $venvPy) { return $venvPy }
+    $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+    if ($pyLauncher) { return "py -3" }
     $py = Get-Command python -ErrorAction SilentlyContinue
     if ($py) { return $py.Source }
     $py3 = Get-Command python3 -ErrorAction SilentlyContinue
@@ -61,9 +63,13 @@ $pythonExe = Pick-Python $repo
 Set-Location $repo
 
 $uv = Get-Command uv -ErrorAction SilentlyContinue
-if ($uv) {
-    & $uv.Source run --python $pythonExe python tools/run_min_compare_report.py
+if ($uv -and $pythonExe -ne "py -3") {
+    & $uv.Source run --python $pythonExe python -m tools.run_min_compare_report
     exit $LASTEXITCODE
 }
-& $pythonExe tools/run_min_compare_report.py
+if ($pythonExe -eq "py -3") {
+    py -3 -m tools.run_min_compare_report
+} else {
+    & $pythonExe -m tools.run_min_compare_report
+}
 exit $LASTEXITCODE

@@ -288,10 +288,10 @@ def connect_access(path: Path):
             errors.append(str(exc))
             conn = None
     if conn is None:
+        if errors:
+            raise RuntimeError("Falha ao conectar via ODBC: " + "; ".join(errors)) from last_err
         if last_err is not None:
             raise last_err
-        if errors:
-            raise RuntimeError("Falha ao conectar via ODBC: " + "; ".join(errors))
         raise RuntimeError("Falha ao conectar via ODBC")
     return conn
 

@@ -49,11 +49,14 @@ resolve_repo() {
   fi
 
   echo "Repo nao encontrado automaticamente."
-  read -r -p "Digite o caminho absoluto do repo nmr5dbweb: " manual
-  if [[ -z "$manual" ]] || ! is_repo_dir "$manual"; then
-    echo "Caminho invalido."
-    exit 2
-  fi
+  local manual=""
+  while true; do
+    read -r -p "Digite o caminho absoluto do repo nmr5dbweb: " manual
+    if [[ "$manual" = /* ]] && [[ -n "$manual" ]] && is_repo_dir "$manual"; then
+      break
+    fi
+    echo "Caminho invalido. Informe um caminho absoluto."
+  done
   printf '%s' "$manual" > "$CONFIG_PATH"
   echo "$manual"
 }
@@ -98,16 +101,20 @@ PY
   read -r -p "> " browser_choice
   if [[ "$browser_choice" == "2" ]]; then
     read -r -p "Caminho do navegador custom (app/exe): " custom_path
-    open -a "$custom_path" "$url" || true
+    if [[ -n "$custom_path" ]]; then
+      open -a "$custom_path" "$url" || open "$url" || true
+    else
+      open "$url" || true
+    fi
   else
     open "$url" || true
   fi
 
   cd "$repo"
   if command -v uv >/dev/null 2>&1; then
-    exec uv run --python "$py" python main.py --host 127.0.0.1 --port "$port"
+    exec uv run --python "$py" python main.py --host 127.0.0.1 --port "$port" --no-port-fallback
   else
-    exec "$py" main.py --host 127.0.0.1 --port "$port"
+    exec "$py" main.py --host 127.0.0.1 --port "$port" --no-port-fallback
   fi
 }
 

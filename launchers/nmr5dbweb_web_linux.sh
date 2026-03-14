@@ -97,6 +97,7 @@ open_url_custom() {
     nohup "$browser_path" "$url" >/dev/null 2>&1 || true
   else
     echo "Navegador custom invalido: $browser_path"
+    open_url_default "$url"
   fi
 }
 
@@ -129,9 +130,9 @@ PY
 
   cd "$repo"
   if command -v uv >/dev/null 2>&1; then
-    exec uv run --python "$py" python main.py --host 127.0.0.1 --port "$port"
+    exec uv run --python "$py" python main.py --host 127.0.0.1 --port "$port" --no-port-fallback
   else
-    exec "$py" main.py --host 127.0.0.1 --port "$port"
+    exec "$py" main.py --host 127.0.0.1 --port "$port" --no-port-fallback
   fi
 }
 

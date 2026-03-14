@@ -172,7 +172,7 @@ Exemplos de uso:
 
     args = parser.parse_args()
     if args.upload_folder:
-        resolved_upload_folder = args.upload_folder
+        resolved_upload_folder = str(Path(args.upload_folder).expanduser())
     else:
         resolved_upload_folder = os.environ.get("UPLOAD_FOLDER") or default_upload_dir
     args.upload_folder = resolved_upload_folder
