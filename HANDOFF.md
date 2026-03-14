@@ -466,3 +466,10 @@ The first stabilization slice is intentionally narrow:
 - `access_convert.py` now enforces strict fail for pyodbc/pypyodbc when no table is materialized.
 - Added regression coverage in `tests/test_access_convert_parser_strict.py`.
 - Focused validation passed (`py_compile`, `ruff`, `pytest`: `7 passed`).
+
+## Update 2026-03-14 - setup/runtime guidance slice
+
+- Kept as separate approved slice (option 1).
+- `main.py` now prints cross-platform `uv sync --all-groups` hint on ImportError.
+- Linux/macOS setup scripts now fail fast if `.venv/bin/python` is missing and include uv install guidance URL.
+- Validation passed (`py_compile`, `bash -n`).

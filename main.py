@@ -257,7 +257,7 @@ Exemplos de uso:
         print(f"{timestamp_exec} - MDB2SQL - Interface Principal")
         print(f"Erro ao importar o modulo Flask: {e}")
         print("Verifique se as dependencias estao instaladas:")
-        print("   uv sync --python .venv/bin/python --all-groups")
+        print("   uv sync --all-groups")
         sys.exit(1)
     except KeyboardInterrupt:
         print(f"\n{timestamp_exec} - MDB2SQL - Interface Principal")

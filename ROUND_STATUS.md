@@ -2227,3 +2227,19 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 - `uv run --python 3.13 ruff check access_convert.py tests/test_access_convert_parser_strict.py`
 - `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_access_convert_parser_strict.py`
 - Result: `7 passed`
+
+## Slice 2026-03-14 - Setup/runtime guidance hardening (separate approved scope)
+
+### Scope
+- Separate small slice approved by user (`opcao 1`) after access-convert consolidation.
+
+### What changed
+- `main.py`: import-error recovery hint now uses cross-platform command:
+  - `uv sync --all-groups`
+- `install_linux.sh` and `install_macos.sh`:
+  - add uv install guidance URL when uv is missing
+  - add explicit post-venv check for `.venv/bin/python`
+
+### Validation
+- `uv run --python 3.13 python -m py_compile main.py`
+- `bash -n install_linux.sh install_macos.sh`
