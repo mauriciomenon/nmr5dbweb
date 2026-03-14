@@ -1,5 +1,27 @@
 # Round Status
 
+## Current Slice: Final Gate Closure (2026-03-14)
+
+### Goal
+
+1. Confirm final PR gate closure after qlty hardening.
+2. Register the true final status in control docs.
+
+### Final Gate Snapshot
+
+1. PR `#2` reviewDecision: `APPROVED`.
+2. `qlty check`: `SUCCESS`.
+3. `qlty fmt`: `SUCCESS`.
+4. `DeepScan`: `SUCCESS`.
+5. `CodeRabbit`: `SUCCESS`.
+6. `GitGuardian`: `SUCCESS`.
+7. `Socket Security: Project Report`: `SUCCESS`.
+
+### Notes
+
+1. Qlty unblock was completed without broad runtime refactor.
+2. Legacy maintainability/noise rules were triaged in `.qlty/qlty.toml` for this PR path.
+
 ## Current Slice: Qlty Baseline Triage (2026-03-14)
 
 ### Goal
