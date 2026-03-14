@@ -115,6 +115,7 @@ async function handleFileUpload(side) {
   if (!input || !input.files || !input.files.length) return;
   if (!nameSpan || !pathInput) return;
   const file = input.files[0];
+  if (!file) return;
   const lowName = String(file && file.name ? file.name : '').toLowerCase();
   if (!(lowName.endsWith('.duckdb') || lowName.endsWith('.db'))) {
     pathInput.value = '';
