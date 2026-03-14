@@ -223,7 +223,7 @@ function setupIndexBindings() {
       }
     } catch (e) {
       const errMsg = e && e.message ? e.message : 'falha inesperada';
-      if (msg) msg.textContent = 'Erro ao iniciar indexacao: ' + errMsg;
+      if (msg) msg.textContent = 'Erro ao iniciar indexacao';
       logUi('ERROR', 'indexacao falhou: ' + errMsg);
     } finally {
       startIndexBtn.disabled = false;

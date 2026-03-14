@@ -117,6 +117,21 @@ async function handleFileUpload(side) {
   if (!input || !input.files || !input.files.length) return;
   if (!nameSpan || !pathInput) return;
   const file = input.files[0];
+  const lowName = String(file && file.name ? file.name : '').toLowerCase();
+  if (!(lowName.endsWith('.duckdb') || lowName.endsWith('.db'))) {
+    nameSpan.textContent = file.name + ' (invalido)';
+    setUploadStatus(
+      `Arquivo invalido para Banco ${side}. Use apenas .duckdb ou .db.`,
+      true
+    );
+    setFlowHint(
+      `Arquivo invalido no Banco ${side}. Selecione um DuckDB valido.`,
+      'warn'
+    );
+    setStepState('stepPickFiles', 'Arquivo invalido', 'warn');
+    input.value = '';
+    return;
+  }
   nameSpan.textContent = file.name;
 
   const fd = new FormData();

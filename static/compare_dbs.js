@@ -197,11 +197,26 @@ function setButtonBusy(btn, busyText, idleText) {
 }
 
 async function postJson(path, payload) {
-  const resp = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+  let resp = null;
+  try {
+    resp = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (networkError) {
+    const err = new Error(
+      'falha de rede ao chamar ' +
+        path +
+        ': ' +
+        (networkError && networkError.message
+          ? networkError.message
+          : String(networkError))
+    );
+    err.status = 0;
+    err.payload = null;
+    throw err;
+  }
   let data = null;
   try {
     data = await resp.json();

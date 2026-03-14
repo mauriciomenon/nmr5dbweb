@@ -61,9 +61,11 @@ def load_access_parser_module():
     try:
         return importlib.import_module("access_parser"), None
     except Exception as exc1:
+        logger.debug("access_parser import failed: %s", exc1)
         try:
             return importlib.import_module("access_parser_access"), None
         except Exception as exc2:
+            logger.debug("access_parser_access import failed: %s", exc2)
             return None, f"{exc1}; {exc2}"
 
 

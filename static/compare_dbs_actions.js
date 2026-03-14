@@ -421,6 +421,11 @@ async function fetchAllComparisonRows(basePayload, onProgress) {
     if (!meta) meta = data;
     allRows = allRows.concat(data.rows || []);
     totalPages = data.total_pages || 1;
+    if (totalPages > MAX_EXPORT_PAGES) {
+      throw new Error(
+        `exportacao muito grande (${totalPages} paginas). Ajuste filtros e tente novamente.`
+      );
+    }
     page += 1;
   }
   return { meta, allRows, totalPages };
@@ -927,6 +932,11 @@ async function toggleTablesOverview() {
   if (container && !compareDbState.tablesOverviewCache) {
     await generateTablesOverview();
   }
+  if (!compareDbState.tablesOverviewCache) {
+    compareDbState.tablesOverviewVisible = false;
+    updateTablesOverviewVisibility();
+    return;
+  }
   compareDbState.tablesOverviewVisible = true;
   updateTablesOverviewVisibility();
 }
@@ -993,3 +1003,4 @@ window.exportComparisonReport = exportComparisonReport;
 window.generateTablesOverview = generateTablesOverview;
 window.toggleTablesOverview = toggleTablesOverview;
 window.renderTablesOverview = renderTablesOverview;
+const MAX_EXPORT_PAGES = 200;

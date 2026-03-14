@@ -51,7 +51,9 @@ function escapeHtml(s) {
   return (s + '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function escapeAttr(s) {
@@ -902,7 +904,7 @@ async function exportTableCsv(tableEnc) {
     downloadCsv(`${table}.csv`, csvText);
   } catch (e) {
     const errMsg = e && e.message ? e.message : 'falha na requisicao';
-    alert('Erro ao exportar');
+    alert('Erro ao exportar tabela');
     if (typeof setFlowBanner === 'function') {
       setFlowBanner('Erro ao exportar tabela.', 'error');
     }

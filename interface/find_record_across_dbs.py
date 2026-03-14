@@ -274,6 +274,7 @@ def connect_access(path: Path):
         raise RuntimeError("pyodbc nao esta instalado")
     conn = None
     last_err: Optional[Exception] = None
+    errors: List[str] = []
     conn_strs = [
         rf"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={path};",
         rf"Driver={{Microsoft Access Driver (*.mdb)}};DBQ={path};",
@@ -284,10 +285,13 @@ def connect_access(path: Path):
             break
         except Exception as exc:  # pragma: no cover
             last_err = exc
+            errors.append(str(exc))
             conn = None
     if conn is None:
         if last_err is not None:
             raise last_err
+        if errors:
+            raise RuntimeError("Falha ao conectar via ODBC: " + "; ".join(errors))
         raise RuntimeError("Falha ao conectar via ODBC")
     return conn
 
