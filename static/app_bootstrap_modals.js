@@ -17,7 +17,8 @@ async function openStatusModal() {
     logUi('INFO', 'detalhes abertos');
   } catch (e) {
     renderStatusModal();
-    logUi('ERROR', 'detalhes falhou');
+    const errMsg = e && e.message ? e.message : 'falha';
+    logUi('ERROR', 'detalhes falhou: ' + errMsg);
   }
 }
 
@@ -108,12 +109,8 @@ function setupModalBindings() {
       e.stopPropagation();
       forceCloseModals();
     };
-    overlayEl.addEventListener('mousedown', closeHandler, true);
-    overlayEl.addEventListener('click', closeHandler, true);
-    overlayEl.onclick = closeHandler;
-    overlayEl.addEventListener('mouseup', closeHandler, true);
     overlayEl.addEventListener('pointerdown', closeHandler, true);
-    overlayEl.addEventListener('pointerup', closeHandler, true);
+    overlayEl.addEventListener('click', closeHandler, true);
   }
 
   [
