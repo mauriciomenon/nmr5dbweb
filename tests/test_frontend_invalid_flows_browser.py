@@ -168,7 +168,6 @@ def sample_data(tmp_path, monkeypatch, ui_server):
     shutil.copy2(search_db, uploaded_primary)
     shutil.copy2(search_db, uploaded_secondary)
 
-    monkeypatch.setitem(local_search.runtime_state, "db_path", str(search_db))
     monkeypatch.setitem(local_search.runtime_state, "db_path", str(uploaded_primary))
     monkeypatch.setitem(local_search.cfg, "db_path", str(uploaded_primary))
     return {
