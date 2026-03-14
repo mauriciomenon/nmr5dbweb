@@ -2206,3 +2206,24 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 ### Validation
 - `pnpm -s eslint static`
 - Result: pass with warnings (non-blocking)
+
+## Slice 2026-03-14 - Access conversion strict consistency
+
+### Scope
+- Final consistency pass on strict conversion semantics in `access_convert.py`.
+- Minimal patch only, no broad refactor.
+
+### What changed
+- In `try_pyodbc` and `try_pypyodbc`, conversion now fails when `materialized_tables == 0`.
+- Removed prior success path that reported conversion as ok with all tables empty.
+- Added focused regression test:
+  - `test_convert_access_to_duckdb_pyodbc_empty_tables_fail_strict`
+
+### Why
+- Keep strict behavior consistent: if no useful table is materialized by applicable backend, conversion must fail.
+
+### Validation
+- `uv run --python 3.13 python -m py_compile access_convert.py tests/test_access_convert_parser_strict.py`
+- `uv run --python 3.13 ruff check access_convert.py tests/test_access_convert_parser_strict.py`
+- `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_access_convert_parser_strict.py`
+- Result: `7 passed`

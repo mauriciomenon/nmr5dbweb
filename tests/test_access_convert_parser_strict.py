@@ -140,3 +140,40 @@ def test_convert_access_to_duckdb_hides_backend_details_on_total_failure(tmp_pat
     assert ok is False
     assert msg == "All conversion methods failed. See logs for details."
     assert "secret-path" not in msg
+
+
+def test_convert_access_to_duckdb_pyodbc_empty_tables_fail_strict(tmp_path, monkeypatch):
+    class _FakeCursor:
+        @staticmethod
+        def tables():
+            return [("x", "y", "T_EMPTY", "TABLE")]
+
+    class _FakeConn:
+        @staticmethod
+        def cursor():
+            return _FakeCursor()
+
+        @staticmethod
+        def close():
+            return None
+
+    class _PyodbcOk:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            return _FakeConn()
+
+    class _PyodbcFail:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            raise RuntimeError("driver unavailable")
+
+    monkeypatch.setattr(conv.pd, "read_sql_query", lambda *_a, **_k: [])
+    monkeypatch.setattr(conv, "load_access_parser_module", lambda: (None, "parser import fail"))
+    monkeypatch.setitem(sys.modules, "pyodbc", _PyodbcOk())
+    monkeypatch.setitem(sys.modules, "pypyodbc", _PyodbcFail())
+
+    out = tmp_path / "pyodbc_empty.duckdb"
+    ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=True)
+
+    assert ok is False
+    assert msg == "Conversion failed in strict mode. See logs for details."

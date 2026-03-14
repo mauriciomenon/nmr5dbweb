@@ -213,7 +213,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             if skipped_tables:
                 return True, f"converted via pyodbc (skipped={len(skipped_tables)})"
             if materialized_tables == 0:
-                return True, "converted via pyodbc (all tables empty)"
+                return False, "strict mode: no tables materialized via pyodbc"
             return True, "converted via pyodbc"
         except Exception as e:
             return False, f"pyodbc error: {e}"
@@ -291,7 +291,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             if skipped_tables:
                 return True, f"converted via pypyodbc (skipped={len(skipped_tables)})"
             if materialized_tables == 0:
-                return True, "converted via pypyodbc (all tables empty)"
+                return False, "strict mode: no tables materialized via pypyodbc"
             return True, "converted via pypyodbc"
         except Exception as e:
             return False, f"pypyodbc error: {e}"

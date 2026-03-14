@@ -460,3 +460,9 @@ The first stabilization slice is intentionally narrow:
 - `no-undef` moved from `off` to `warn` in the 3 ESLint configs.
 - This keeps current CI non-blocking while restoring visibility for undefined globals.
 - `pnpm -s eslint static` completed with warnings only.
+
+## Update 2026-03-14 - strict conversion consistency
+
+- `access_convert.py` now enforces strict fail for pyodbc/pypyodbc when no table is materialized.
+- Added regression coverage in `tests/test_access_convert_parser_strict.py`.
+- Focused validation passed (`py_compile`, `ruff`, `pytest`: `7 passed`).
