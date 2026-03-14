@@ -1,5 +1,24 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, track row render without innerHTML)
+
+### Goal
+
+1. Remove remaining row-render `innerHTML` dependency in track results table.
+2. Keep output and interaction behavior unchanged.
+
+### Applied
+
+1. `static/track_record.html`
+   - result-row rendering migrated from `tr.innerHTML` template string to explicit DOM node creation (`createElement` + `textContent`).
+   - dynamic values for path/date/size/engine/table/sample/error now flow only through safe text assignment.
+   - found/error pills are built as DOM nodes instead of raw HTML concatenation.
+
+### Validation After Changes
+
+- `PYTHONPATH=. uv run pytest -q tests/test_frontend_invalid_flows_browser.py -k "track_page or track_browse_modal_flow"`: `2 passed`.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, strict sanitize + jackcess uniqueness + track xss)
 
 ### Goal

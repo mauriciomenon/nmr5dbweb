@@ -1,5 +1,14 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, track row render hardening without innerHTML)
+
+- `static/track_record.html`
+  - replaced results-table row template string rendering (`tr.innerHTML`) with explicit DOM construction for all row cells and pills.
+  - dynamic values now use `textContent`/`title` assignment only, reducing html-injection exposure in this view.
+- Focused validation:
+  - track browser smoke subset: `2 passed`
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, strict sanitize, jackcess uniqueness, track xss hardening)
 
 - `access_convert.py`

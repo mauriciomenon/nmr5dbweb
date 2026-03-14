@@ -463,25 +463,58 @@
       summary.textContent = `Arquivos analisados: ${totalFiles} · Encontrado em ${foundCount} arquivo(s)`;
       payload.results.forEach(r => {
         const tr = document.createElement('tr');
-        const relpath = escapeHtml(r.relpath || r.filename || '');
-        const dateStr = escapeHtml(r.date || '');
-        const sizeKb = escapeHtml(
-          r.size_bytes != null ? (r.size_bytes / 1024).toFixed(1) + ' KB' : ''
-        );
-        const engine = escapeHtml(r.engine || '');
-        const tableName = escapeHtml(r.table || '');
-        const sample = escapeHtml(r.sample ? JSON.stringify(r.sample) : '');
-        const errorText = escapeHtml(r.error || '');
-        tr.innerHTML = `
-          <td class="mono">${relpath}</td>
-          <td>${dateStr}</td>
-          <td>${sizeKb}</td>
-          <td>${engine}</td>
-          <td>${r.found ? '<span class="pill ok">SIM</span>' : '<span class="pill">NÃO</span>'}</td>
-          <td class="mono">${tableName}</td>
-          <td class="mono sample" title="${sample}">${sample}</td>
-          <td>${errorText ? '<span class="pill err" title="' + errorText + '">' + errorText + '</span>' : ''}</td>
-        `;
+        const relpath = String(r.relpath || r.filename || '');
+        const dateStr = String(r.date || '');
+        const sizeKb = r.size_bytes != null ? (r.size_bytes / 1024).toFixed(1) + ' KB' : '';
+        const engine = String(r.engine || '');
+        const tableName = String(r.table || '');
+        const sample = r.sample ? JSON.stringify(r.sample) : '';
+        const errorText = String(r.error || '');
+
+        const tdPath = document.createElement('td');
+        tdPath.className = 'mono';
+        tdPath.textContent = relpath;
+        tr.appendChild(tdPath);
+
+        const tdDate = document.createElement('td');
+        tdDate.textContent = dateStr;
+        tr.appendChild(tdDate);
+
+        const tdSize = document.createElement('td');
+        tdSize.textContent = sizeKb;
+        tr.appendChild(tdSize);
+
+        const tdEngine = document.createElement('td');
+        tdEngine.textContent = engine;
+        tr.appendChild(tdEngine);
+
+        const tdFound = document.createElement('td');
+        const foundPill = document.createElement('span');
+        foundPill.className = r.found ? 'pill ok' : 'pill';
+        foundPill.textContent = r.found ? 'SIM' : 'NÃO';
+        tdFound.appendChild(foundPill);
+        tr.appendChild(tdFound);
+
+        const tdTable = document.createElement('td');
+        tdTable.className = 'mono';
+        tdTable.textContent = tableName;
+        tr.appendChild(tdTable);
+
+        const tdSample = document.createElement('td');
+        tdSample.className = 'mono sample';
+        tdSample.title = sample;
+        tdSample.textContent = sample;
+        tr.appendChild(tdSample);
+
+        const tdError = document.createElement('td');
+        if (errorText) {
+          const errPill = document.createElement('span');
+          errPill.className = 'pill err';
+          errPill.title = errorText;
+          errPill.textContent = errorText;
+          tdError.appendChild(errPill);
+        }
+        tr.appendChild(tdError);
         tbody.appendChild(tr);
       });
       card.style.display = 'block';
