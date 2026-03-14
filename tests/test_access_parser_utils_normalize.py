@@ -44,3 +44,20 @@ def test_normalize_access_parser_rows_accepts_mixed_list():
         {"col_0": 3, "col_1": "c"},
         {"value": "raw"},
     ]
+
+
+def test_normalize_access_parser_rows_prefers_to_dict_over_iterable():
+    class FakeFrame:
+        def __iter__(self):
+            yield "id"
+            yield "name"
+
+        def to_dict(self, orient="records"):
+            assert orient == "records"
+            return [{"id": 1, "name": "alpha"}, {"id": 2, "name": "beta"}]
+
+    rows = normalize_access_parser_rows(FakeFrame())
+    assert rows == [
+        {"id": 1, "name": "alpha"},
+        {"id": 2, "name": "beta"},
+    ]

@@ -4,8 +4,10 @@
 
 Map the current product structure in a stable way so future rounds can update this file instead of rediscovering the repo each time.
 
-## Latest Snapshot (2026-03-13)
+## Latest Snapshot (2026-03-14)
 
+- Access parser row normalization now prioritizes object `to_dict(orient="records")` conversion before generic iterable normalization (`interface/access_parser_utils.py`).
+- Access conversion final failure messaging now avoids concatenating backend internal errors in user-facing output while keeping strict-mode feedback and internal logs (`access_convert.py`).
 - Compare upload flow tolerates invalid/non-JSON upload responses and resets stale compare/overview state when DB A/B changes (`static/compare_dbs_upload.js`).
 - Compare export flow now neutralizes spreadsheet formula payloads on CSV output (`static/compare_dbs_actions.js`).
 - Compare row rendering now keeps explicit source-side routing for added/removed row value blocks (`static/compare_dbs_render.js`).

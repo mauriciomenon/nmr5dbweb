@@ -69,6 +69,7 @@ Track real product debt that should not be fixed in the current slice.
 37. Decide whether compare upload should treat empty success payload as hard error (`/admin/upload` response without usable path fields).
 38. Keep triaging `DeepScan` "2 new" findings and classify real bug vs analyzer limitation before broad refactor.
 39. Keep permanent docs free of transient PR/branch references to avoid stale operational guidance.
+40. `access_convert.py`: plan a dedicated decomposition slice for `convert_access_to_duckdb` (current large nested backend strategies) after PR-hardening phase, with behavior-lock tests first and no mixed feature work in the same round.
 
 ## Do Not Pull Into Slice 1
 

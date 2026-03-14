@@ -62,6 +62,16 @@ def _ensure_clean_duckdb(path):
     except Exception as e:
         logger.warning("Não foi possível remover %s: %s", path, e)
 
+
+def _public_failure_message(primary_message: str) -> str:
+    text = str(primary_message or "").strip()
+    if not text:
+        return "All conversion methods failed. See logs for details."
+    if "strict mode" in text.lower():
+        return text
+    return "All conversion methods failed. See logs for details."
+
+
 def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int = 50000, prefer_odbc: bool = True, progress_callback=None):
     """
     Convert an Access DB (.mdb or .accdb) to a DuckDB file.
@@ -493,7 +503,14 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         ok4, msg4 = try_access_parser()
         if ok4:
             return True, msg4
-        return False, f"All methods failed: pyodbc: {msg}; pypyodbc: {msg2}; mdbtools: {msg3}; access-parser: {msg4}"
+        logger.error(
+            "All conversion methods failed. pyodbc=%s; pypyodbc=%s; mdbtools=%s; access-parser=%s",
+            msg,
+            msg2,
+            msg3,
+            msg4,
+        )
+        return False, _public_failure_message(msg)
     else:
         # Non-ODBC preferred path (used in non-Windows runtime):
         # - .mdb: mdbtools first, then access-parser
@@ -512,7 +529,14 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             ok4, msg4 = try_pypyodbc()
             if ok4:
                 return True, msg4
-            return False, f"No method succeeded: mdbtools: {msg}; access-parser: {msg2}; pyodbc: {msg3}; pypyodbc: {msg4}"
+            logger.error(
+                "No conversion backend succeeded (.mdb path). mdbtools=%s; access-parser=%s; pyodbc=%s; pypyodbc=%s",
+                msg,
+                msg2,
+                msg3,
+                msg4,
+            )
+            return False, _public_failure_message(msg)
 
         ok, msg = try_access_parser()
         if ok:
@@ -526,4 +550,11 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         ok4, msg4 = try_pypyodbc()
         if ok4:
             return True, msg4
-        return False, f"No method succeeded: access-parser: {msg}; mdbtools: {msg2}; pyodbc: {msg3}; pypyodbc: {msg4}"
+        logger.error(
+            "No conversion backend succeeded (.accdb path). access-parser=%s; mdbtools=%s; pyodbc=%s; pypyodbc=%s",
+            msg,
+            msg2,
+            msg3,
+            msg4,
+        )
+        return False, _public_failure_message(msg)

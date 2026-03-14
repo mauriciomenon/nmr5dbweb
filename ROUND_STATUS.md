@@ -1,5 +1,39 @@
 # Round Status
 
+## Current Slice: Hard Backend Comment Closure (2026-03-14)
+
+### Goal
+
+1. Close hard backend PR comments with minimal-risk patches.
+2. Keep behavior stable and avoid broad refactor.
+3. Keep control docs synchronized with real repo state.
+
+### Applied
+
+1. `interface/access_parser_utils.py`
+   - moved `to_dict(orient="records")` handling before generic `Iterable` fallback.
+   - added explicit warning log when `to_dict` conversion fails, replacing silent swallow.
+2. `access_convert.py`
+   - replaced multi-backend error concatenation in final failure return with safer public message path.
+   - preserved explicit `strict mode` message visibility while logging backend details internally.
+3. Tests
+   - `tests/test_access_parser_utils_normalize.py`: added regression for iterable object with `to_dict` to ensure record-mode precedence.
+   - `tests/test_access_convert_parser_strict.py`: added regression to ensure total backend failure hides sensitive backend detail from public message.
+
+### Validation After Changes
+
+- `uv run python -m py_compile interface/access_parser_utils.py access_convert.py tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: passed.
+- `uv run ruff check interface/access_parser_utils.py access_convert.py tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_parser_utils_normalize.py tests/test_access_convert_parser_strict.py`: `11 passed`.
+- `kluster_code_review_auto`: one medium structural suggestion (legacy large-function decomposition) kept as deferred backlog item to avoid broad refactor in this slice.
+
+### Check Snapshot
+
+1. PR `#2` (`mauriciomenon/nmr5dbweb`): `APPROVED`.
+2. `DeepScan`: `SUCCESS`.
+3. `CodeRabbit`: `SUCCESS`.
+4. `qlty check`: pending.
+
 ## Current Slice: DeepScan Closure And Hard PR Continuation (2026-03-14)
 
 ### Goal

@@ -6,6 +6,8 @@ import os
 from collections.abc import Iterable, Mapping
 from typing import Any, Dict, List
 
+logger = logging.getLogger(__name__)
+
 
 def _access_parser_verbose_enabled() -> bool:
     return str(os.environ.get("NMR5DBWEB_ACCESS_PARSER_VERBOSE", "")).strip().lower() in (
@@ -183,16 +185,17 @@ def normalize_access_parser_rows(parsed: Any) -> List[Dict[str, Any]]:
         for row in parsed:
             normalized_rows.append(_normalize_access_row_object(row))
         return normalized_rows
-    if isinstance(parsed, Iterable) and not isinstance(parsed, (str, bytes, bytearray)):
-        items = list(parsed)
-        if not items:
-            return []
-        return [_normalize_access_row_object(row) for row in items]
     if hasattr(parsed, "to_dict"):
         try:
             data = parsed.to_dict(orient="records")
             if isinstance(data, list):
                 return [dict(row) for row in data if isinstance(row, dict)]
-        except Exception:
+        except Exception as exc:
+            logger.warning("Failed converting parser rows via to_dict: %s", exc)
             return []
+    if isinstance(parsed, Iterable) and not isinstance(parsed, (str, bytes, bytearray)):
+        items = list(parsed)
+        if not items:
+            return []
+        return [_normalize_access_row_object(row) for row in items]
     return []

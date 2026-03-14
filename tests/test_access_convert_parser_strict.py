@@ -1,4 +1,5 @@
 import types
+import sys
 
 import duckdb
 
@@ -116,3 +117,27 @@ def test_access_parser_complex_values_are_sanitized(tmp_path, monkeypatch):
     assert isinstance(row[0], str)
     assert '"a": 1' in row[0]
     assert row[1] == "0102"
+
+
+def test_convert_access_to_duckdb_hides_backend_details_on_total_failure(tmp_path, monkeypatch):
+    class _FakeProc:
+        returncode = 1
+        stdout = ""
+        stderr = "mdbtools unavailable"
+
+    class _PyodbcFail:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            raise RuntimeError("driver missing /tmp/secret-path")
+
+    monkeypatch.setattr(conv, "load_access_parser_module", lambda: (None, "parser import fail"))
+    monkeypatch.setattr(conv.subprocess, "run", lambda *_a, **_k: _FakeProc())
+    monkeypatch.setitem(sys.modules, "pyodbc", _PyodbcFail())
+    monkeypatch.setitem(sys.modules, "pypyodbc", _PyodbcFail())
+
+    out = tmp_path / "all_fail.duckdb"
+    ok, msg = conv.convert_access_to_duckdb("fake.accdb", str(out), prefer_odbc=False)
+
+    assert ok is False
+    assert msg == "All conversion methods failed. See logs for details."
+    assert "secret-path" not in msg

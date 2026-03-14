@@ -2,8 +2,10 @@
 
 Este diretório contém o backend Flask e utilitários para busca local em bases DuckDB (com fallback opcional para Access via ODBC) e a construção do índice `_fulltext`.
 
-## Atualizacao rapida (2026-03-13)
+## Atualizacao rapida (2026-03-14)
 
+- Normalizacao de linhas do parser Access agora prioriza objetos com `to_dict(orient="records")` antes do fallback generico de iteravel.
+- Conversao Access->DuckDB agora evita concatenar detalhes internos de todos os backends no erro final exposto ao usuario; detalhes continuam em log interno.
 - O cliente de comparacao agora trata resposta de upload invalida (nao JSON) sem quebrar o fluxo de erro na UI.
 - O cliente de comparacao agora reseta estado stale (payload/meta, tabelas e overview em cache) quando o par de DBs muda.
 - O smoke Windows de conversao Access remove arquivo temporario de saida quando a conversao falha ou nao gera tabelas de usuario.
