@@ -62,18 +62,53 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function highlightText(text, tokens) {
-  if (!text) return '';
-  if (!tokens || !tokens.length) return text;
+function appendTextWithBreaks(parent, text) {
+  const parts = String(text).split('\n');
+  parts.forEach((part, index) => {
+    parent.appendChild(document.createTextNode(part));
+    if (index < parts.length - 1) {
+      parent.appendChild(document.createElement('br'));
+    }
+  });
+}
+
+function buildHighlightedFragment(text, tokens) {
+  const fragment = document.createDocumentFragment();
+  const source = String(text || '');
+  if (!tokens || !tokens.length) {
+    appendTextWithBreaks(fragment, source);
+    return fragment;
+  }
   try {
-    const parts = tokens
-      .map((t) => escapeRegExp(escapeHtml(String(t))))
-      .filter(Boolean);
-    if (!parts.length) return text;
+    const parts = tokens.map((t) => escapeRegExp(String(t))).filter(Boolean);
+    if (!parts.length) {
+      appendTextWithBreaks(fragment, source);
+      return fragment;
+    }
     const re = new RegExp('(' + parts.join('|') + ')', 'ig');
-    return text.replace(re, (m) => `<mark>${m}</mark>`);
+    let cursor = 0;
+    let match;
+    while ((match = re.exec(source)) !== null) {
+      const matchText = match[0];
+      const start = match.index;
+      if (start > cursor) {
+        appendTextWithBreaks(fragment, source.slice(cursor, start));
+      }
+      const mark = document.createElement('mark');
+      mark.textContent = matchText;
+      fragment.appendChild(mark);
+      cursor = start + matchText.length;
+      if (matchText.length === 0) {
+        re.lastIndex += 1;
+      }
+    }
+    if (cursor < source.length) {
+      appendTextWithBreaks(fragment, source.slice(cursor));
+    }
+    return fragment;
   } catch (e) {
-    return text;
+    appendTextWithBreaks(fragment, source);
+    return fragment;
   }
 }
 
@@ -427,10 +462,7 @@ function buildTableCell(value, tokens, wide, extraClass) {
   const isMultiline = text.includes('\n') || text.length > 120;
   const content = document.createElement(isMultiline ? 'div' : 'span');
   content.className = `cell-text${isMultiline ? ' multiline' : ''}`;
-  content.innerHTML = highlightText(escapeHtml(text), tokens).replace(
-    /\n/g,
-    '<br>'
-  );
+  content.replaceChildren(buildHighlightedFragment(text, tokens));
   td.appendChild(content);
   return td;
 }
@@ -930,7 +962,6 @@ function backToResults() {
 window.escapeHtml = escapeHtml;
 window.escapeAttr = escapeAttr;
 window.escapeRegExp = escapeRegExp;
-window.highlightText = highlightText;
 window.renderResults = renderResults;
 window.openTable = openTable;
 window.exportTableCsv = exportTableCsv;

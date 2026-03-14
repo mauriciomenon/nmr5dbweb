@@ -192,17 +192,17 @@ async function savePriority() {
     'info'
   );
   try {
-    const res = await fetch('/admin/set_priority', {
+    const j = await apiJSON('/admin/set_priority', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ tables }),
     });
-    const j = await res.json();
     if (j && j.ok) {
       setPriorityStatus('Prioridades salvas: ' + tables.length, '');
       setModalBanner('priorityModalBanner', 'Ordem salva com sucesso.', 'info');
     } else {
-      setPriorityStatus('Erro ao salvar prioridades.', 'error');
+      const errText = (j && j.error) || 'falha';
+      setPriorityStatus('Erro ao salvar prioridades: ' + errText, 'error');
       setModalBanner(
         'priorityModalBanner',
         'Nao foi possivel salvar a ordem das tabelas.',
