@@ -1,5 +1,15 @@
 # Handoff
 
+## Latest Round Update (2026-03-14, conversion resource cleanup hardening)
+
+- `access_convert.py`
+  - `try_pyodbc` and `try_pypyodbc` now close both ODBC and DuckDB connections via guarded `finally` blocks.
+  - this covers success, early-return strict-mode paths, and exception paths with minimal behavior change.
+- Focused validation:
+  - py_compile + ruff on `access_convert.py`: passed
+  - `tests/test_access_convert_parser_strict.py`: `6 passed`
+  - kluster auto review: clean.
+
 ## Latest Round Update (2026-03-14, track row render hardening without innerHTML)
 
 - `static/track_record.html`

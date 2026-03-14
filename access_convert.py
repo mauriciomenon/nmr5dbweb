@@ -123,6 +123,7 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
         if conn is None:
             return False, f"ODBC connect failed: {last_err}"
 
+        dconn = None
         try:
             cur = conn.cursor()
             tables = []
@@ -197,8 +198,6 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
 
-            dconn.close()
-            conn.close()
             if skipped_tables and not _access_parser_allow_skips():
                 sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
                 return (
@@ -217,17 +216,26 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                 return True, "converted via pyodbc (all tables empty)"
             return True, "converted via pyodbc"
         except Exception as e:
+            return False, f"pyodbc error: {e}"
+        finally:
             try:
-                conn.close()
+                if dconn is not None:
+                    dconn.close()
             except Exception:
                 pass
-            return False, f"pyodbc error: {e}"
+            try:
+                if conn is not None:
+                    conn.close()
+            except Exception:
+                pass
 
     def try_pypyodbc():
         try:
             import pypyodbc as pyodbc
         except Exception as e:
             return False, f"pypyodbc not installed: {e}"
+        conn = None
+        dconn = None
         try:
             cs = fr"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={access_path};"
             conn = pyodbc.connect(cs)
@@ -268,8 +276,6 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
                     skipped_tables.append((str(t), str(e)))
                     _report(total_tables=total, processed_tables=i+1, current_table=str(t), percent=int(((i+1)/total)*100), msg=f"skipped:{e}")
                     continue
-            dconn.close()
-            conn.close()
             if skipped_tables and not _access_parser_allow_skips():
                 sample = "; ".join(f"{name}: {err}" for name, err in skipped_tables[:3])
                 return (
@@ -289,6 +295,17 @@ def convert_access_to_duckdb(access_path: str, duckdb_path: str, chunk_size: int
             return True, "converted via pypyodbc"
         except Exception as e:
             return False, f"pypyodbc error: {e}"
+        finally:
+            try:
+                if dconn is not None:
+                    dconn.close()
+            except Exception:
+                pass
+            try:
+                if conn is not None:
+                    conn.close()
+            except Exception:
+                pass
 
     def try_mdbtools():
         if not access_path.lower().endswith('.mdb'):

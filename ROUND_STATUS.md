@@ -1,5 +1,27 @@
 # Round Status
 
+## Current Slice: Hard Comment Continuation (2026-03-14, pyodbc/pypyodbc cleanup in finally)
+
+### Goal
+
+1. Eliminate connection-leak risk in ODBC conversion paths.
+2. Keep conversion semantics unchanged.
+
+### Applied
+
+1. `access_convert.py`
+   - `try_pyodbc` now uses `dconn`/`conn` guarded cleanup in `finally`.
+   - `try_pypyodbc` now uses `dconn`/`conn` guarded cleanup in `finally`.
+   - removed reliance on success-path close calls so early returns and exceptions also close resources.
+
+### Validation After Changes
+
+- `uv run python -m py_compile access_convert.py`: passed.
+- `uv run ruff check access_convert.py`: passed.
+- `PYTHONPATH=. uv run pytest -q tests/test_access_convert_parser_strict.py`: `6 passed`.
+- `uv run ty check access_convert.py`: known unresolved optional-driver diagnostics (`pyodbc`, `pypyodbc`) and one existing pandas type diagnostic.
+- `kluster_code_review_auto`: clean.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, track row render without innerHTML)
 
 ### Goal
