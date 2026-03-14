@@ -1,6 +1,11 @@
 async function openSearchWorkspace() {
   openModalById('searchModal');
-  await refreshStatus();
+  try {
+    await refreshStatus();
+  } catch (e) {
+    const errMsg = e && e.message ? e.message : 'falha';
+    logUi('ERROR', 'refresh status falhou ao abrir busca: ' + errMsg);
+  }
   const q = $('q');
   if (q && !q.disabled) {
     q.focus();

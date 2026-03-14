@@ -140,3 +140,33 @@ PR: #2
   - corrigido com patch e validacao local
   - falso positivo tecnico com mitigacao explicita ja presente
   - alerta estrutural sem risco real, marcado como fora de escopo deste sprint
+
+## Rodada adicional: codereviewbot-ai (2026-03-14, ciclo atual)
+- inventario: 37 threads ativos
+- assinaturas unicas: 35 (2 repetidas)
+
+### Correcao aplicada neste ciclo (baixo risco)
+1. `static/app_results.js`
+- bloqueio de exportacao parcial silenciosa quando estoura `maxPages`
+- modo compacto nao auto-oculta colunas durante busca ativa (`tokens`)
+
+2. `static/compare_dbs.js`
+- erro HTTP nao-JSON agora preserva trecho de resposta no detalhe
+- falha de `localStorage` publica aviso de estado nao persistido para operador
+
+3. `static/app_bootstrap_modals.js`
+- `openSearchWorkspace` com tratamento de falha em `refreshStatus`
+
+4. `interface/access_parser_utils.py`
+- falha em `list_access_tables_from_parser` passa a logar causa objetiva
+
+5. `launchers/nmr5dbweb_web_linux.sh` e `launchers/nmr5dbweb_report_min_linux.sh`
+- entrada manual de repo com retry
+- escrita do config protegida por check de permissao (mensagem clara quando nao gravar)
+
+### Itens classificados como sem acao de codigo neste ciclo
+- refactor amplo/generico sem bug concreto:
+  - complexidade, many params, many returns, similar-code
+- observacao estatico-seguranca sem exploracao no fluxo atual:
+  - SQL com `quote_identifier(...)` + bind de valores
+  - `token_mode` (`any/all`) nao e segredo

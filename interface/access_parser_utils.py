@@ -93,7 +93,8 @@ def list_access_tables_from_parser(parser) -> List[str]:
             values = parser.get_table_names()
             if isinstance(values, (list, tuple, set)):
                 tables = [str(name) for name in values]
-    except Exception:
+    except Exception as exc:
+        logger.warning("Failed to list access parser tables: %s", exc)
         tables = []
     seen = set()
     out = []

@@ -283,6 +283,7 @@ async function fetchAllTableRowsForExport(table) {
   }
 
   const maxPages = 500;
+  let maxPagesHit = true;
   for (let page = 0; page < maxPages; page += 1) {
     const data = await apiJSON(
       `/api/table?name=${encodeURIComponent(table)}&limit=${OPEN_TABLE_EXPORT_CHUNK}&offset=${offset}`
@@ -308,13 +309,21 @@ async function fetchAllTableRowsForExport(table) {
       expectedTotal = totalRows;
     }
     if (expectedTotal !== null && rows.length >= expectedTotal) {
+      maxPagesHit = false;
       break;
     }
     if (!rawRows.length || rawRows.length < OPEN_TABLE_EXPORT_CHUNK) {
+      maxPagesHit = false;
       break;
     }
 
     offset += rawRows.length;
+  }
+
+  if (maxPagesHit && expectedTotal !== null && rows.length < expectedTotal) {
+    throw new Error(
+      `exportacao parcial bloqueada: limite de ${maxPages} paginas atingido`
+    );
   }
 
   return { columns: Array.from(columnsSet), rows };
@@ -479,7 +488,7 @@ function buildResultsTable(tableName, rowObjs, rawColumns, options) {
   const pinnedCols = pickPinnedColumns(orderedCols);
   const pinnedSet = new Set(pinnedCols);
   const hiddenColumns = new Set();
-  if (orderedCols.length > DEFAULT_VISIBLE_COLUMNS) {
+  if (!tokens.length && orderedCols.length > DEFAULT_VISIBLE_COLUMNS) {
     orderedCols.forEach((column, index) => {
       if (index >= DEFAULT_VISIBLE_COLUMNS && !pinnedSet.has(column)) {
         hiddenColumns.add(column);

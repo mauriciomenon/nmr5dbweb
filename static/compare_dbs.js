@@ -218,14 +218,22 @@ async function postJson(path, payload) {
     throw err;
   }
   let data = null;
+  let rawText = '';
   try {
-    data = await resp.json();
+    rawText = await resp.text();
+    data = rawText ? JSON.parse(rawText) : null;
   } catch (error) {
     data = null;
   }
   if (!resp.ok) {
     const apiMsg = data && (data.message || data.error);
-    const err = new Error(apiMsg || 'resposta HTTP ' + resp.status);
+    const tail = rawText ? String(rawText).trim().slice(0, 180) : '';
+    const err = new Error(
+      apiMsg ||
+        (tail
+          ? `resposta HTTP ${resp.status}: ${tail}`
+          : 'resposta HTTP ' + resp.status)
+    );
     err.payload = data;
     err.status = resp.status;
     throw err;
@@ -290,6 +298,12 @@ function saveCompareState() {
     localStorage.setItem(compareDbState.compareStateKey, JSON.stringify(state));
   } catch (e) {
     console.warn('Nao foi possivel salvar estado da comparacao:', e);
+    try {
+      setFlowHint(
+        'Nao foi possivel salvar estado local da comparacao neste navegador.',
+        'warn'
+      );
+    } catch (ignore) {}
   }
 }
 

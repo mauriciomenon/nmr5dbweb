@@ -49,12 +49,19 @@ resolve_repo() {
   fi
 
   echo "Repo nao encontrado automaticamente."
-  read -r -p "Digite o caminho absoluto do repo nmr5dbweb: " manual
-  if [[ -z "$manual" ]] || ! is_repo_dir "$manual"; then
-    echo "Caminho invalido."
-    exit 2
+  local manual=""
+  while true; do
+    read -r -p "Digite o caminho absoluto do repo nmr5dbweb: " manual
+    if [[ -n "$manual" && -d "$manual" ]] && is_repo_dir "$manual"; then
+      break
+    fi
+    echo "Caminho invalido. Tente novamente."
+  done
+  if { [[ -e "$CONFIG_PATH" && -w "$CONFIG_PATH" ]] || [[ -w "$(dirname "$CONFIG_PATH")" ]]; }; then
+    printf '%s' "$manual" > "$CONFIG_PATH"
+  else
+    echo "Aviso: sem permissao para salvar $CONFIG_PATH; usando apenas nesta execucao."
   fi
-  printf '%s' "$manual" > "$CONFIG_PATH"
   echo "$manual"
 }
 
