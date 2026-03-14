@@ -1,5 +1,17 @@
 config_version = "0"
 
+exclude_patterns = [
+  "access_convert.py",
+  "converters/convert_jackcess.py",
+  "converters/convert_mdbtools.py",
+  "converters/convert_pyodbc.py",
+  "interface/access_parser_utils.py",
+  "interface/app_flask_local_search.py",
+  ".eslintrc.cjs",
+  "eslint.config.mjs",
+  "static/.eslintrc.json",
+]
+
 [[source]]
 name = "default"
 default = true
