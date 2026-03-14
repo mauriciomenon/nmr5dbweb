@@ -35,6 +35,11 @@ uv sync --all-groups
 uv run python main.py
 ```
 
+Atalho de duplo clique:
+- veja `launchers/README.md`
+- launchers web para mac/linux/debian/windows
+- launchers report minimo para mac/linux/debian/windows
+
 Servidor padrao:
 - `http://127.0.0.1:5000`
 
@@ -128,6 +133,22 @@ Modo direto sem menu:
 
 ```bash
 PYTHONPATH=. uv run python tools/auto_compare_report.py \
+  --db1 "documentos/2026-01-29 DB2.accdb" \
+  --db2 "documentos/2026-02-27 DB4.accdb"
+```
+
+## Comando Python separado para report minimo
+
+Gera report usando 2 fontes mais recentes quando `--db1/--db2` nao sao informados:
+
+```bash
+PYTHONPATH=. uv run python tools/run_min_compare_report.py
+```
+
+Modo direto:
+
+```bash
+PYTHONPATH=. uv run python tools/run_min_compare_report.py \
   --db1 "documentos/2026-01-29 DB2.accdb" \
   --db2 "documentos/2026-02-27 DB4.accdb"
 ```

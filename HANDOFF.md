@@ -473,3 +473,13 @@ The first stabilization slice is intentionally narrow:
 - `main.py` now prints cross-platform `uv sync --all-groups` hint on ImportError.
 - Linux/macOS setup scripts now fail fast if `.venv/bin/python` is missing and include uv install guidance URL.
 - Validation passed (`py_compile`, `bash -n`).
+
+## Update 2026-03-14 - launcher and helper slice
+
+- Added cross-platform double-click launchers under `launchers/` for:
+  - web startup
+  - minimal report generation
+- Added `tools/run_min_compare_report.py` for non-interactive minimal report generation.
+- Added tests in `tests/test_run_min_compare_report.py`.
+- Added `REVIEW_THREAD_TRIAGE.md` to separate fixed/real/deferred thread classes.
+- Focused validation passed (`2 passed`).

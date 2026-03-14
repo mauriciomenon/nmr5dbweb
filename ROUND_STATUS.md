@@ -2243,3 +2243,41 @@ Remove the highest-risk immediate-use issues in the Flask runtime/startup path, 
 ### Validation
 - `uv run --python 3.13 python -m py_compile main.py`
 - `bash -n install_linux.sh install_macos.sh`
+
+## Slice 2026-03-14 - Cross-platform launchers + minimal report helper
+
+### Scope
+- Add double-click launchers for web startup and minimal report generation.
+- Keep change additive and low risk.
+
+### Added
+- `launchers/`:
+  - `nmr5dbweb_web_mac.command`
+  - `nmr5dbweb_web_linux.sh`
+  - `nmr5dbweb_web_debian.desktop`
+  - `nmr5dbweb_web_windows.ps1`
+  - `nmr5dbweb_web_windows.bat`
+  - `nmr5dbweb_report_min_mac.command`
+  - `nmr5dbweb_report_min_linux.sh`
+  - `nmr5dbweb_report_min_debian.desktop`
+  - `nmr5dbweb_report_min_windows.ps1`
+  - `nmr5dbweb_report_min_windows.bat`
+  - `launchers/README.md`
+- New helper command:
+  - `tools/run_min_compare_report.py`
+- New focused tests:
+  - `tests/test_run_min_compare_report.py`
+- Triage record:
+  - `REVIEW_THREAD_TRIAGE.md`
+
+### Behavior notes
+- Launchers resolve repo from env/config/auto-discovery and ask path only when needed.
+- Web launchers pick a free local port and can open default or custom browser.
+- Minimal report launchers run `tools/run_min_compare_report.py` directly.
+
+### Validation
+- `bash -n` for shell launchers
+- `uv run --python 3.13 python -m py_compile tools/run_min_compare_report.py tests/test_run_min_compare_report.py`
+- `uv run --python 3.13 ruff check tools/run_min_compare_report.py tests/test_run_min_compare_report.py`
+- `PYTHONPATH=. uv run --python 3.13 pytest -q tests/test_run_min_compare_report.py`
+- result: `2 passed`

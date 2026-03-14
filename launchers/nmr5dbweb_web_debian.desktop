@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=nmr5dbweb Web
+Comment=Start nmr5dbweb web app
+Terminal=true
+Exec=sh -lc '"$(dirname "$1")/nmr5dbweb_web_linux.sh"' _ %k
+Icon=utilities-terminal
+Categories=Development;

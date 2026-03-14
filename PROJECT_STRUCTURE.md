@@ -22,6 +22,8 @@ Map the current product structure in a stable way so future rounds can update th
 - Auto compare report conversion now avoids deleting previous derivatives before source reopen/validation and keeps explicit sqlite handle close (`tools/auto_compare_report.py`).
 - Windows Access smoke path keeps temporary output cleanup on failure/no-table results and guards output==input (`tools/windows_access_smoke.py`).
 - Startup path distinguishes bind-in-use from generic OS startup errors (`main.py`).
+- Cross-platform launchers were added under `launchers/` for web startup and minimal report generation.
+- New helper `tools/run_min_compare_report.py` provides non-interactive minimal report generation.
 
 ## Top Level
 
@@ -40,6 +42,11 @@ Map the current product structure in a stable way so future rounds can update th
     - `tools/benchmark_validation_flows.py`
   - Includes operator compare report automation:
     - `tools/auto_compare_report.py` (interactive compare report exporter to HTML/MD/TXT)
+    - `tools/run_min_compare_report.py` (non-interactive minimal report wrapper)
+- `launchers/`
+  - Double-click launchers for macOS, Linux/Debian, and Windows:
+    - web app startup
+    - minimal report generation
 - `docs/`
   - End-user setup and usage guides.
 - `artifacts/`
