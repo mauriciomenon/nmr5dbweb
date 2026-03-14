@@ -2,6 +2,8 @@
 
 import argparse
 import duckdb
+import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +19,8 @@ try:
 except ModuleNotFoundError:
     from common import extract_date_from_filename, list_access_files, validate_cli_input
 
+_COMPILED_JAVA_HELPERS = set()
+
 
 def get_jackcess_classpath():
     base_dir = Path(__file__).resolve().parent.parent / "temp"
@@ -25,40 +29,46 @@ def get_jackcess_classpath():
         base_dir / "commons-lang3-3.14.0.jar",
         base_dir / "commons-logging-1.3.0.jar",
     ]
-    return ";".join(str(j) for j in jars)
+    return os.pathsep.join(str(j) for j in jars)
+
+
+def _compile_java_helper_once(temp_dir: Path, class_name: str, java_code: str, classpath: str):
+    if class_name in _COMPILED_JAVA_HELPERS:
+        return
+    java_file = temp_dir / f"{class_name}.java"
+    java_file.write_text(java_code)
+    subprocess.run(
+        ["javac", "-cp", classpath, str(java_file)],
+        check=True,
+        capture_output=True,
+    )
+    _COMPILED_JAVA_HELPERS.add(class_name)
 
 
 def get_mdb_tables_jackcess(mdb_file: Path) -> List[str]:
     try:
         classpath = get_jackcess_classpath()
-        java_code = f'''
+        java_code = """
 import com.healthmarketscience.jackcess.*;
 import java.io.*;
 public class ListTables {{
     public static void main(String[] args) throws Exception {{
-        try (Database db = DatabaseBuilder.open(new File("{mdb_file}"))) {{
+        if (args.length < 1) throw new IllegalArgumentException("missing mdb path");
+        try (Database db = DatabaseBuilder.open(new File(args[0]))) {{
             for (String tableName : db.getTableNames()) {{
                 System.out.println(tableName);
             }}
         }}
     }}
 }}
-'''
+"""
         temp_dir = Path("/tmp/mdb2sql_jackcess")
         temp_dir.mkdir(exist_ok=True)
 
-        java_file = temp_dir / "ListTables.java"
-        java_file.write_text(java_code)
-
-        subprocess.run([
-            "javac",
-            "-cp",
-            classpath,
-            str(java_file),
-        ], check=True, capture_output=True)
+        _compile_java_helper_once(temp_dir, "ListTables", java_code, classpath)
 
         result = subprocess.run(
-            ["java", "-cp", f"{classpath}{';'}{temp_dir}", "ListTables"],
+            ["java", "-cp", f"{classpath}{os.pathsep}{temp_dir}", "ListTables", str(mdb_file)],
             capture_output=True,
             text=True,
             check=True,
@@ -78,14 +88,21 @@ public class ListTables {{
 def export_table_jackcess(mdb_file: Path, table_name: str, output_csv: Path) -> bool:
     try:
         classpath = get_jackcess_classpath()
-        java_code = f'''
+        java_code = """
 import com.healthmarketscience.jackcess.*;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 public class ExportTable {{
     public static void main(String[] args) throws Exception {{
-        try (Database db = DatabaseBuilder.open(new File("{mdb_file}"));
-             PrintWriter writer = new PrintWriter(new FileWriter("{output_csv}"))) {{
-            Table table = db.getTable("{table_name}");
+        if (args.length < 3) throw new IllegalArgumentException("missing args");
+        String dbPath = args[0];
+        String outPath = args[1];
+        String tableName = args[2];
+        try (Database db = DatabaseBuilder.open(new File(dbPath));
+             PrintWriter writer = new PrintWriter(
+                 new OutputStreamWriter(new FileOutputStream(outPath), StandardCharsets.UTF_8)
+             )) {{
+            Table table = db.getTable(tableName);
             java.util.List columns = table.getColumns();
             boolean first = true;
             for (Object col : columns) {{
@@ -114,22 +131,22 @@ public class ExportTable {{
         }}
     }}
 }}
-'''
+"""
         temp_dir = Path("/tmp/mdb2sql_jackcess")
         temp_dir.mkdir(exist_ok=True)
 
-        java_file = temp_dir / "ExportTable.java"
-        java_file.write_text(java_code)
-
-        subprocess.run([
-            "javac",
-            "-cp",
-            classpath,
-            str(java_file),
-        ], check=True, capture_output=True)
+        _compile_java_helper_once(temp_dir, "ExportTable", java_code, classpath)
 
         subprocess.run(
-            ["java", "-cp", f"{classpath}{';'}{temp_dir}", "ExportTable"],
+            [
+                "java",
+                "-cp",
+                f"{classpath}{os.pathsep}{temp_dir}",
+                "ExportTable",
+                str(mdb_file),
+                str(output_csv),
+                table_name,
+            ],
             check=True,
             capture_output=True,
         )
@@ -198,18 +215,21 @@ def import_to_duckdb(
             csv_file.unlink()
             continue
 
-        table_with_date = f"{table}_{file_date.replace('-', '')}"
+        base_name = re.sub(r"[^A-Za-z0-9_]", "_", str(table)).strip("_")
+        if not base_name:
+            base_name = "table"
+        table_with_date = f"{base_name}_{file_date.replace('-', '')}"
 
         try:
             conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS "{table_with_date}" AS
-                SELECT * FROM read_csv_auto('{{csv_file}}',
+                SELECT * FROM read_csv_auto(?,
                     header=true,
-                    ignore_errors=true,
                     sample_size=100000
                 )
-            """
+            """,
+                [str(csv_file)],
             )
 
             result = conn.execute(f'SELECT COUNT(*) FROM "{table_with_date}"').fetchone()
@@ -236,7 +256,11 @@ def import_to_duckdb(
 
 
 def batch_import(input_dir: Path, duckdb_file: Path):
-    mdb_files = list_access_files(input_dir)
+    try:
+        mdb_files = list_access_files(input_dir)
+    except Exception as e:
+        print(f"Error accessing input directory {input_dir}: {e}")
+        return
 
     if not mdb_files:
         print(f"No MDB/ACCDB files found in {input_dir}")
