@@ -1353,6 +1353,7 @@ async function refreshStatus() {
       return;
     }
 
+    const conversionInfo = s.conversion || {};
     const indexerAvailable = s.indexer_available !== false;
     const indexerErr = s.indexer_error || '';
     const indexerStatus = $('indexerStatus');
@@ -1416,9 +1417,7 @@ async function refreshStatus() {
         'statusConvValue',
         'statusConvMeta',
         'Inativa',
-        s.conversion && s.conversion.msg
-          ? s.conversion.msg
-          : 'Nenhuma conversao'
+        conversionInfo.msg ? conversionInfo.msg : 'Nenhuma conversao'
       );
     }
     if (indexFlow === 'duckdb') {
@@ -1653,17 +1652,10 @@ async function refreshStatus() {
         $('convPercentText').textContent = '100%';
       } else {
         $('convStatusText').textContent =
-          s.conversion && s.conversion.msg
-            ? s.conversion.msg
-            : 'Nenhuma conversao em andamento';
-        $('convBar').style.width =
-          s.conversion && s.conversion.percent
-            ? s.conversion.percent + '%'
-            : '0%';
-        $('convPercentText').textContent =
-          s.conversion && s.conversion.percent
-            ? s.conversion.percent + '%'
-            : '0%';
+          conversionInfo.msg ? conversionInfo.msg : 'Nenhuma conversao em andamento';
+        const percentText = conversionInfo.percent ? conversionInfo.percent + '%' : '0%';
+        $('convBar').style.width = percentText;
+        $('convPercentText').textContent = percentText;
       }
       const topHint = $('convTopHint');
       if (topHint) {
