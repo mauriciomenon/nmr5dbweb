@@ -33,7 +33,7 @@
      - `Conversion failed in strict mode. See logs for details.`
    - backend detail remains in server logs only.
 2. `converters/convert_jackcess.py`
-   - table suffix hash now includes source file name and table name (`{mdb_file.name}:{table}`) to avoid cross-file same-date table collision.
+   - table suffix hash now includes normalized absolute source path and table name (`{source_key}:{table}`) to avoid cross-file same-date table collision.
 3. `static/track_record.html`
    - added HTML escaping helper for dynamic values rendered in results rows.
    - escaped relpath/filename, date, size, engine, table, sample, and error in row HTML.

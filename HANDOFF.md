@@ -14,7 +14,7 @@
 - `access_convert.py`
   - strict-mode failure text exposed to callers is now sanitized (`Conversion failed in strict mode. See logs for details.`), with full detail retained in logs.
 - `converters/convert_jackcess.py`
-  - destination table-name hash now includes source file name and table name to avoid cross-file table collisions on same date.
+  - destination table-name hash now includes normalized absolute source path and table name to avoid cross-file table collisions on same date.
 - `static/track_record.html`
   - result row rendering now escapes dynamic fields before `innerHTML` composition, reducing stored-xss risk from backend/file/table/error content.
 - tests:
