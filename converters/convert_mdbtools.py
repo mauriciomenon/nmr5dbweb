@@ -14,7 +14,9 @@ try:
         list_access_files,
         validate_cli_input,
     )
-except ModuleNotFoundError:
+except ModuleNotFoundError as e:
+    if e.name not in {"converters", "converters.common"}:
+        raise
     from common import extract_date_from_filename, list_access_files, validate_cli_input
 
 
@@ -116,12 +118,13 @@ def import_to_duckdb(
             conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS "{table_with_date}" AS 
-                SELECT * FROM read_csv_auto('{{csv_file}}', 
+                SELECT * FROM read_csv_auto(?, 
                     header=true, 
                     ignore_errors=true,
                     sample_size=100000
                 )
-            """
+            """,
+                [str(csv_file)],
             )
 
             result = conn.execute(f'SELECT COUNT(*) FROM "{table_with_date}"').fetchone()
