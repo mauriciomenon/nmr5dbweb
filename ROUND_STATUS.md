@@ -1,5 +1,24 @@
 # Round Status
 
+## Current Slice: Conversation Migration Prep (2026-03-15)
+
+### Goal
+
+1. Prepare markdown control files for safe conversation migration.
+2. Keep repository behavior unchanged (docs-only update).
+
+### Applied
+
+1. Updated `HANDOFF.md` with current branch/commit/diff snapshot and local untracked artifacts.
+2. Added `MIGRATION_HANDOFF.md` with a compact handoff package for next operator/agent.
+3. Added `CONVERSA_MIGRACAO_STATUS.md` with checklist and guardrails for session continuation.
+
+### Validation After Changes
+
+- Documentation-only patch.
+- No source code, config runtime, or GUI layout changes.
+- Pending: mandatory kluster auto review for modified files.
+
 ## Current Slice: Hard Comment Continuation (2026-03-14, jackcess cli top-level exception)
 
 ### Goal

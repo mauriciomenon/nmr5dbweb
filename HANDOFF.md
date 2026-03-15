@@ -1,5 +1,26 @@
 # Handoff
 
+## Latest Round Update (2026-03-15, conversation migration prep on master)
+
+- Scope in this round:
+  - review sync and migration prep only (documentation update).
+  - no code edits and no runtime behavior changes.
+- Repository state snapshot:
+  - branch: `master`
+  - head: `fd6ee13`
+  - diff vs merge-base `fd6ee13e2b56dce2a1914f7f13e298e8bc3af588`: empty
+  - local untracked operational artifacts:
+    - `.qlty/logs`
+    - `.qlty/out`
+    - `.qlty/plugin_cachedir`
+    - `.qlty/results`
+- Migration handoff artifacts added:
+  - `MIGRATION_HANDOFF.md`
+  - `CONVERSA_MIGRACAO_STATUS.md`
+- Decision log:
+  - keep patch minimal and docs-only.
+  - avoid touching source files without a new approved implementation plan.
+
 ## Latest Round Update (2026-03-14, jackcess cli top-level exception handling)
 
 - `converters/convert_jackcess.py`
