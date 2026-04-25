@@ -40,7 +40,7 @@ function bindClick(id, handler) {
 function setupModalBindings() {
   bindClick('openConfig', () => {
     openModalById('configModal');
-    refreshUiState({ sync: true });
+    refreshUiState();
   });
   bindClick('openPriority', () => {
     openModalById('priorityModal');
@@ -60,7 +60,7 @@ function setupModalBindings() {
   bindClick('openSelectInline', (ev) => {
     ev.preventDefault();
     openModalById('configModal');
-    refreshUiState({ sync: true });
+    refreshUiState();
   });
   bindClick('openConvertInline', async (ev) => {
     ev.preventDefault();

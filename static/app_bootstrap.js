@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupBootstrapGlobalHandlers();
     setFlowHint('', false);
     logUi('INFO', 'modal exists=' + !!$('configModal'));
-    refreshUiState({ sync: true });
+    refreshUiState();
     scheduleStatusPoll();
   } catch (e) {
     const msg = e && e.message ? e.message : 'erro de inicializacao';

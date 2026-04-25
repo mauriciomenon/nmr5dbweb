@@ -158,3 +158,33 @@ def test_main_preserva_upload_folder_do_env_quando_sem_flag(monkeypatch):
     assert exc.value.code == 0
     assert app_main.os.environ["UPLOAD_FOLDER"] == "/tmp/upload-env"
     assert calls["kwargs"]["port"] == 5000
+
+
+def test_main_usa_runtime_dir_fora_do_repo_por_padrao(monkeypatch, tmp_path):
+    calls = {}
+    runtime_dir = tmp_path / "runtime"
+
+    monkeypatch.setattr(sys, "argv", ["main.py"])
+    monkeypatch.delenv("UPLOAD_FOLDER", raising=False)
+    monkeypatch.setenv("NMR5DBWEB_DATA_DIR", str(runtime_dir))
+    monkeypatch.setattr(app_main, "validar_configuracao", lambda _args: [])
+    monkeypatch.setattr(app_main, "verificar_porta_disponivel", lambda _host, _port: True)
+    monkeypatch.setattr(app_main, "configurar_logging", lambda: None)
+
+    class FakeApp:
+        config = {}
+
+        def run(self, **kwargs):
+            calls["kwargs"] = kwargs
+            raise KeyboardInterrupt
+
+    fake_module = types.ModuleType("interface.app_flask_local_search")
+    fake_module.app = FakeApp()
+    monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
+
+    with pytest.raises(SystemExit) as exc:
+        app_main.main()
+
+    assert exc.value.code == 0
+    assert app_main.os.environ["UPLOAD_FOLDER"] == str(runtime_dir / "documentos")
+    assert calls["kwargs"]["port"] == 5000

@@ -63,6 +63,44 @@ def test_admin_upload_db_seleciona_imediatamente(tmp_path, monkeypatch):
     assert saved_path.read_bytes() == b"duck"
 
 
+def test_admin_upload_accdb_nao_sobrescreve_duckdb_derivado(tmp_path, monkeypatch):
+    client = app.test_client()
+    started = {}
+    (tmp_path / "sample.duckdb").write_bytes(b"existing-duckdb")
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    monkeypatch.setattr(local_search, "set_db_path", lambda _path: None)
+    monkeypatch.setattr(local_search, "convert_access_to_duckdb", object())
+    monkeypatch.setattr(
+        local_search,
+        "evaluate_access_conversion_support",
+        lambda _ext: {"ready": True, "reason": "", "odbc": {}, "access_parser_available": True},
+    )
+    monkeypatch.setattr(
+        local_search,
+        "start_access_conversion",
+        lambda src, out, _converter: started.update({"src": str(src), "out": str(out)}),
+    )
+    monkeypatch.setitem(local_search.convert_status, "running", False)
+
+    resp = client.post(
+        "/admin/upload",
+        data={"file": (BytesIO(b"access"), "sample.accdb")},
+        content_type="multipart/form-data",
+    )
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    assert payload["status"] == "converting"
+    assert (tmp_path / "sample_1.accdb").read_bytes() == b"access"
+    assert (tmp_path / "sample.duckdb").read_bytes() == b"existing-duckdb"
+    assert payload["input"] == str(tmp_path / "sample_1.accdb")
+    assert payload["output"] == str(tmp_path / "sample_1.duckdb")
+    assert started == {
+        "src": str(tmp_path / "sample_1.accdb"),
+        "out": str(tmp_path / "sample_1.duckdb"),
+    }
+
+
 def test_admin_upload_accdb_rejeita_quando_precheck_falha(tmp_path, monkeypatch):
     client = app.test_client()
     monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
@@ -98,6 +136,33 @@ def test_admin_upload_accdb_rejeita_quando_precheck_falha(tmp_path, monkeypatch)
     assert payload["reason"] == "pyodbc missing"
     assert payload["precheck"]["ready"] is False
     assert list(tmp_path.iterdir()) == []
+
+
+def test_load_config_ignora_db_path_do_config_legado(tmp_path, monkeypatch):
+    legacy_config = tmp_path / "config.json"
+    runtime_config = tmp_path / "runtime" / "config.json"
+    old_db = tmp_path / "old.duckdb"
+    old_db.write_bytes(b"duck")
+    legacy_config.write_text(
+        json.dumps(
+            {
+                "db_path": str(old_db),
+                "priority_tables": ["T1"],
+                "auto_index_after_convert": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(local_search, "LEGACY_CONFIG_FILE", legacy_config)
+    monkeypatch.setattr(local_search, "CONFIG_FILE", runtime_config)
+    monkeypatch.setattr(local_search, "startup_warnings", [])
+
+    cfg = local_search.load_config()
+
+    assert cfg["db_path"] == ""
+    assert cfg["priority_tables"] == ["T1"]
+    assert cfg["auto_index_after_convert"] is False
+    assert "db_path antigo" in local_search.startup_warnings[-1]
 
 
 def test_admin_list_uploads_retorna_metadados_basicos(tmp_path, monkeypatch):
@@ -201,8 +266,10 @@ def test_admin_delete_remove_db_convertido_derivado(tmp_path, monkeypatch):
     client = app.test_client()
     source = tmp_path / "sample.accdb"
     derived = tmp_path / "sample.duckdb"
+    derived_sqlite = tmp_path / "sample.sqlite"
     source.write_bytes(b"accdb")
     derived.write_bytes(b"duck")
+    derived_sqlite.write_bytes(b"sqlite")
     monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
     monkeypatch.setattr(local_search, "get_db_path", lambda: str(source))
     monkeypatch.setattr(local_search, "clear_db_path", lambda: None)
@@ -212,6 +279,7 @@ def test_admin_delete_remove_db_convertido_derivado(tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert not source.exists()
     assert not derived.exists()
+    assert not derived_sqlite.exists()
 
 
 def test_admin_start_index_rejeita_chunk_invalido(tmp_path, monkeypatch):
@@ -264,10 +332,10 @@ def test_api_search_rejeita_per_table_acima_do_maximo():
 def test_api_search_rejeita_candidate_limit_acima_do_maximo():
     client = app.test_client()
 
-    resp = client.get("/api/search?q=test&candidate_limit=20001")
+    resp = client.get("/api/search?q=test&candidate_limit=2001")
 
     assert resp.status_code == 400
-    assert resp.get_json()["error"] == "candidate_limit must be <= 20000"
+    assert resp.get_json()["error"] == "candidate_limit must be <= 2000"
 
 
 def test_api_search_rejeita_total_limit_acima_do_maximo():
@@ -632,6 +700,21 @@ def test_api_table_rejeita_limit_acima_do_maximo(tmp_path, monkeypatch):
     assert resp.get_json()["error"] == "limit must be <= 1000"
 
 
+def test_api_table_rejeita_limit_zero(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(db_path))
+    conn.execute("CREATE TABLE alpha (id INTEGER)")
+    conn.execute("INSERT INTO alpha VALUES (1)")
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/table?name=alpha&limit=0")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "limit must be >= 1"
+
+
 def test_api_tables_detecta_sqlite_em_extensao_db(tmp_path, monkeypatch):
     client = app.test_client()
     db_path = tmp_path / "sample.db"
@@ -705,6 +788,35 @@ def test_api_search_busca_textual_duckdb_prioriza_tabela(tmp_path, monkeypatch):
     payload = resp.get_json()
     assert payload["search_backend"] == "duckdb_fulltext"
     assert list(payload["results"].keys())[0] == "alpha"
+
+
+def test_api_search_duckdb_token_mode_any_nao_exige_ultimo_token(tmp_path, monkeypatch):
+    client = app.test_client()
+    db_path = tmp_path / "sample.duckdb"
+    conn = duckdb.connect(str(db_path))
+    conn.execute(
+        "CREATE TABLE _fulltext (table_name VARCHAR, pk_col VARCHAR, pk_value VARCHAR, row_offset BIGINT, content_norm VARCHAR, row_json VARCHAR)"
+    )
+    conn.executemany(
+        "INSERT INTO _fulltext VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            ("alpha", "id", "1", 0, "alpha only", '{"id": 1, "name": "alpha only"}'),
+            ("beta", "id", "2", 0, "omega only", '{"id": 2, "name": "omega only"}'),
+        ],
+    )
+    conn.close()
+    monkeypatch.setattr(local_search, "get_db_path", lambda: str(db_path))
+
+    resp = client.get("/api/search?q=alpha omega&token_mode=any")
+
+    assert resp.status_code == 200
+    payload = resp.get_json()
+    names = {
+        item["row"]["name"]
+        for rows in payload["results"].values()
+        for item in rows
+    }
+    assert names == {"alpha only", "omega only"}
 
 
 def test_api_search_access_driver_error_retorna_503(tmp_path, monkeypatch):

@@ -14,4 +14,4 @@
 
 ## Output
 
-- csv: `/Users/menon/git/nmr5dbweb/artifacts/validation/reports/benchmark_times.csv`
+- csv: `artifacts/validation/reports/benchmark_times.csv`

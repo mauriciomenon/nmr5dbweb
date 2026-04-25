@@ -23,6 +23,7 @@ import threading
 import importlib.util
 import math
 import hashlib
+import uuid
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
@@ -30,6 +31,7 @@ from flask import Flask, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import duckdb
 from rapidfuzz import fuzz
+from platformdirs import user_data_dir
 
 from interface.find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
 from interface.compare_dbs import (
@@ -50,7 +52,7 @@ from interface.access_parser_utils import (
 OPTIONAL_IMPORT_ERRORS = {}
 pyodbc: Any | None = None
 try:
-    import pyodbc as _pyodbc
+    import pyodbc as _pyodbc  # ty: ignore[unresolved-import]
 except Exception as exc:
     OPTIONAL_IMPORT_ERRORS["pyodbc"] = str(exc)
 else:
@@ -87,12 +89,18 @@ except Exception:
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
-# Pasta de documentos da interface web (padrao: <repo>/documentos).
-# O endpoint /admin/upload grava e lista os arquivos usados na pesquisa.
-DEFAULT_UPLOAD_DIR = PROJECT_ROOT / "documentos"
+RUNTIME_ROOT = Path(
+    os.environ.get("NMR5DBWEB_DATA_DIR")
+    or user_data_dir("nmr5dbweb", "nmr5dbweb")
+).expanduser().resolve()
+RUNTIME_ROOT.mkdir(parents=True, exist_ok=True)
+DEFAULT_UPLOAD_DIR = RUNTIME_ROOT / "documentos"
 UPLOAD_DIR = Path(os.environ.get("UPLOAD_FOLDER") or DEFAULT_UPLOAD_DIR).expanduser().resolve()
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-CONFIG_FILE = BASE_DIR / "config.json"
+LEGACY_CONFIG_FILE = BASE_DIR / "config.json"
+CONFIG_FILE = Path(
+    os.environ.get("NMR5DBWEB_CONFIG_FILE") or RUNTIME_ROOT / "config.json"
+).expanduser().resolve()
 ALLOWED_EXTENSIONS = {".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"}
 ACCESS_EXTENSIONS = {".mdb", ".accdb"}
 SQLITE_EXTENSIONS = {".sqlite", ".sqlite3"}
@@ -101,11 +109,12 @@ COMPARE_PAGE_SIZE_DEFAULT = 100
 COMPARE_PAGE_SIZE_MAX = 1000
 TABLE_PAGE_LIMIT_MAX = 1000
 SEARCH_PER_TABLE_MAX = 200
-SEARCH_CANDIDATE_LIMIT_MAX = 20000
+SEARCH_CANDIDATE_LIMIT_MAX = 2000
 SEARCH_TOTAL_LIMIT_MAX = 5000
 SEARCH_TABLES_FILTER_MAX = 200
 ERR_FILENAME_REQUIRED = "filename required"
 ERR_INVALID_FILENAME_OR_PATH = "invalid filename or path"
+UPLOAD_NAME_NUMERIC_ATTEMPTS = 1000
 
 # Conversion & index state
 convert_lock = threading.Lock()
@@ -182,11 +191,22 @@ def load_config():
             cfg = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         except Exception:
             cfg = {}
+    elif LEGACY_CONFIG_FILE.exists():
+        try:
+            cfg = json.loads(LEGACY_CONFIG_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            cfg = {}
+        if cfg.get("db_path"):
+            startup_warnings.append(
+                "db_path antigo em interface/config.json foi ignorado; selecione o DB novamente"
+            )
+            cfg["db_path"] = ""
     else:
         cfg = {}
     return ensure_config_defaults(cfg)
 
 def save_config(cfg):
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 cfg = sanitize_loaded_config(load_config())
@@ -407,12 +427,11 @@ def build_admin_status():
         if index_thread and index_thread.is_alive():
             status["indexing"] = True
     with convert_lock:
-        status["conversion"] = dict(convert_status)
-    runtime_validation = status.get("conversion", {}).get("validation") or {}
-    runtime_validation_report = status.get("conversion", {}).get(
-        "validation_report", ""
-    )
-    if runtime_validation:
+        conversion_state = dict(convert_status)
+    status["conversion"] = conversion_state
+    runtime_validation = conversion_state.get("validation") or {}
+    runtime_validation_report = conversion_state.get("validation_report", "")
+    if isinstance(runtime_validation, dict) and runtime_validation:
         status["conversion_validation"] = dict(runtime_validation)
         status["conversion_validation_report"] = str(runtime_validation_report or "")
         status["conversion_validation_source"] = "runtime"
@@ -429,7 +448,7 @@ def build_admin_status():
             status["conversion_validation_report"] = ""
             status["conversion_validation_source"] = "none"
     status["conversion_backend_last"] = parse_conversion_backend_from_msg(
-        status.get("conversion", {}).get("msg")
+        conversion_state.get("msg")
     )
     status["priority_tables"] = cfg.get("priority_tables", [])
     status["auto_index_after_convert"] = cfg.get("auto_index_after_convert", True)
@@ -705,7 +724,7 @@ def parse_table_request_args(args):
             args.get("limit", 50),
             "limit",
             default=50,
-            minimum=0,
+            minimum=1,
             maximum=TABLE_PAGE_LIMIT_MAX,
         )
         offset = parse_int_query_arg(args.get("offset", 0), "offset", default=0, minimum=0)
@@ -1010,15 +1029,32 @@ def next_upload_dest(filename):
         raise ValueError(f"extensão não permitida: {ext}")
 
     candidate = UPLOAD_DIR / safe_filename
-    if not candidate.exists():
+    if upload_candidate_available(candidate, ext.lower()):
         return candidate
 
-    for idx in range(1, 1000):
+    for idx in range(1, UPLOAD_NAME_NUMERIC_ATTEMPTS):
         alt_name = f"{base}_{idx}{ext}"
         candidate = UPLOAD_DIR / alt_name
-        if not candidate.exists():
+        if upload_candidate_available(candidate, ext.lower()):
+            return candidate
+
+    for _ in range(16):
+        alt_name = f"{base}_{uuid.uuid4().hex[:12]}{ext}"
+        candidate = UPLOAD_DIR / alt_name
+        if upload_candidate_available(candidate, ext.lower()):
             return candidate
     raise ValueError("não foi possivel encontrar nome unico para upload")
+
+
+def upload_candidate_available(candidate, extension):
+    if candidate.exists():
+        return False
+    if extension in ACCESS_EXTENSIONS:
+        return not (
+            build_access_conversion_output(candidate.name).exists()
+            or build_access_conversion_sqlite_output(candidate.name).exists()
+        )
+    return True
 
 
 def should_select_uploaded_db(extension):
@@ -1306,16 +1342,16 @@ def validate_conversion_output(source_path, duckdb_path, sqlite_path):
                 report["issues"].append(f"column_mismatch:{table}")
                 report["tables"].append(table_report)
                 continue
-            duck_count = int(
-                dconn.execute(  # nosec B608
-                    f"SELECT COUNT(*) FROM {quote_identifier(table)}"
-                ).fetchone()[0]
-            )
-            sqlite_count = int(
-                sconn.execute(  # nosec B608
-                    f"SELECT COUNT(*) FROM {quote_identifier(table)}"
-                ).fetchone()[0]
-            )
+            duck_count_row = dconn.execute(  # nosec B608
+                f"SELECT COUNT(*) FROM {quote_identifier(table)}"
+            ).fetchone()
+            sqlite_count_row = sconn.execute(  # nosec B608
+                f"SELECT COUNT(*) FROM {quote_identifier(table)}"
+            ).fetchone()
+            if duck_count_row is None or sqlite_count_row is None:
+                raise RuntimeError(f"count query failed for table: {table}")
+            duck_count = int(duck_count_row[0])
+            sqlite_count = int(sqlite_count_row[0])
             table_report["row_count_duckdb"] = duck_count
             table_report["row_count_sqlite"] = sqlite_count
             if duck_count != sqlite_count:
@@ -1458,15 +1494,17 @@ def start_access_conversion(source_path, output_path, converter):
 
 def delete_upload_target(target):
     current = get_db_path()
-    if current and Path(current).resolve() == target.resolve():
+    targets = [target]
+    if target.suffix.lower() in ACCESS_EXTENSIONS:
+        targets.extend([
+            build_access_conversion_output(target.name),
+            build_access_conversion_sqlite_output(target.name),
+        ])
+    if current and any(Path(current).resolve() == item.resolve() for item in targets):
         clear_db_path()
-    target.unlink()
-    derived_duckdb = build_access_conversion_output(target.name)
-    if derived_duckdb.exists():
-        try:
-            derived_duckdb.unlink()
-        except Exception:
-            pass
+    for item in targets:
+        if item.exists():
+            item.unlink()
 
 app = Flask(__name__, static_folder=str(PROJECT_ROOT / "static"), static_url_path="")
 
@@ -2669,16 +2707,9 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
     tokens = [t for t in q_norm.split() if t]
     if tokens:
         if token_mode == "any":
-            # Modo "qualquer": pelo menos um token precisa bater, mas o
-            # último termo digitado pelo usuário é tratado como obrigatório.
-            # Isso evita resultados que ignorem completamente, por exemplo,
-            # o "SVP" em "AUX_UNIDAD SVP".
             where_parts = ["content_norm LIKE ?" for _ in tokens]
-            base_where = " OR ".join(where_parts)
+            where_sql = "(" + " OR ".join(where_parts) + ")"
             params = [f"%{t}%" for t in tokens]
-            last_tok = tokens[-1]
-            where_sql = f"({base_where}) AND content_norm LIKE ?"
-            params.append(f"%{last_tok}%")
         else:
             where_parts = ["content_norm LIKE ?" for _ in tokens]
             where_sql = " AND ".join(where_parts)
@@ -2686,21 +2717,26 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
     else:
         where_sql = "content_norm LIKE ?"
         params = [f"%{q_norm}%"]
-    # Ao montar os candidatos SQL, já priorizamos as tabelas marcadas em priority_tables
+    allowed_tables = {str(t).strip() for t in tables or [] if str(t).strip()}
+    if tables:
+        if allowed_tables:
+            table_placeholders = ",".join(["?"] * len(allowed_tables))
+            where_sql = f"({where_sql}) AND table_name IN ({table_placeholders})"
+            params.extend(sorted(allowed_tables))
+
     priority_tables = cfg.get("priority_tables", []) or []
     if priority_tables:
         in_placeholders = ",".join(["?"] * len(priority_tables))
         sql = (
-            "SELECT table_name, pk_col, pk_value, row_offset, content_norm, row_json "
+            "SELECT table_name, pk_col, pk_value, row_offset, content_norm "
             f"FROM _fulltext WHERE {where_sql} "
             f"ORDER BY CASE WHEN table_name IN ({in_placeholders}) THEN 0 ELSE 1 END, table_name "
             f"LIMIT {candidate_limit}"
         )
-        # Atenção: os parâmetros do WHERE vêm primeiro, depois os do IN, na ordem dos placeholders.
         sql_params = params + list(priority_tables)
     else:
         sql = (
-            "SELECT table_name, pk_col, pk_value, row_offset, content_norm, row_json "
+            "SELECT table_name, pk_col, pk_value, row_offset, content_norm "
             f"FROM _fulltext WHERE {where_sql} LIMIT {candidate_limit}"
         )
         sql_params = params
@@ -2717,17 +2753,9 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
             except Exception:
                 pass
 
-    # Filtro opcional por lista de tabelas (tables=[...])
-    allowed_tables = None
-    if tables:
-        allowed_tables = {str(t).strip() for t in tables if str(t).strip()}
-        if allowed_tables:
-            rows = [r for r in rows if r[0] in allowed_tables]
     candidates = []
     for r in rows:
-        table_name, pk_col, pk_value, row_offset, content_norm, row_json = r
-        # Score principal: similaridade fuzzy entre a query normalizada e o
-        # conteúdo normalizado da linha inteira.
+        table_name, pk_col, pk_value, row_offset, content_norm = r
         scored = score_search_content(q_norm, tokens, content_norm, min_score)
         if scored is None:
             continue
@@ -2738,14 +2766,17 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
             "table": table_name,
             "pk_col": pk_col,
             "pk_value": pk_value,
-            "row_json": row_json,
+            "row_offset": row_offset,
         })
-    # Ordena dando prioridade para linhas que contenham TODOS os tokens da
-    # consulta, depois maior cobertura e, por fim, maior score fuzzy.
     candidates.sort(key=lambda x: (x.get("has_all", 0), x.get("coverage", 0), x["score"]), reverse=True)
     grouped = {}
     table_max = {}
     total_count = 0
+    selected_entries = []
+    best_candidate_by_table = {}
+    for c in candidates:
+        best_candidate_by_table.setdefault(c["table"], c)
+
     for c in candidates:
         if total_count >= total_limit:
             break
@@ -2755,40 +2786,77 @@ def api_search_duckdb(db_path, q, per_table, candidate_limit, total_limit, token
             table_max[t] = c["score"]
         if per_table > 0 and len(grouped[t]) >= per_table:
             continue
-        try:
-            row_obj = json.loads(c["row_json"])
-        except Exception:
-            row_obj = None
-        grouped[t].append({"score": c["score"], "row": row_obj})
+        entry = {"score": c["score"], "row": None}
+        grouped[t].append(entry)
+        selected_entries.append((c, entry))
         if c["score"] > table_max.get(t, 0):
             table_max[t] = c["score"]
         total_count += 1
 
-    # Garante que cada tabela prioritária com candidatos apareça pelo menos com 1 linha,
-    # mesmo que tenha ficado de fora pelo corte de total_limit acima.
     priority_tables = cfg.get("priority_tables", []) or []
     if priority_tables:
         for p in priority_tables:
+            if total_count >= total_limit:
+                break
             if allowed_tables and p not in allowed_tables:
                 continue
             if p in grouped:
                 continue
-            best = None
-            for c in candidates:
-                if c["table"] == p:
-                    # mesmo critério de ordenação usado acima (has_all, coverage, score)
-                    if best is None or (c.get("has_all", 0), c.get("coverage", 0), c["score"]) > (best.get("has_all", 0), best.get("coverage", 0), best["score"]):
-                        best = c
+            best = best_candidate_by_table.get(p)
             if best is not None:
-                try:
-                    row_obj = json.loads(best["row_json"])
-                except Exception:
-                    row_obj = None
-                grouped[p] = [{"score": best["score"], "row": row_obj}]
+                entry = {"score": best["score"], "row": None}
+                grouped[p] = [entry]
+                selected_entries.append((best, entry))
                 table_max[p] = best["score"]
                 total_count += 1
 
+    if selected_entries:
+        row_conn = None
+        try:
+            row_sql, row_params = build_search_row_payload_query(selected_entries)
+            row_conn = duckdb_connect(db_path)
+            payload_rows = row_conn.execute(row_sql, row_params).fetchall()
+            payload_by_ord = {int(row[0]): row[1] for row in payload_rows}
+            for idx, (_candidate, entry) in enumerate(selected_entries):
+                row_json = payload_by_ord.get(idx)
+                try:
+                    entry["row"] = json.loads(row_json) if row_json else None
+                except (TypeError, json.JSONDecodeError):
+                    entry["row"] = None
+        except Exception as e:
+            return {"error": f"search row fetch failed: {e}"}
+        finally:
+            if row_conn is not None:
+                try:
+                    row_conn.close()
+                except Exception:
+                    pass
+
     return build_search_response(q, q_norm, len(candidates), total_count, grouped, table_max)
+
+
+def build_search_row_payload_query(selected_entries):
+    values_sql = ",".join(["(?, ?, ?, ?, ?)"] * len(selected_entries))
+    row_params = []
+    for idx, (candidate, _entry) in enumerate(selected_entries):
+        row_params.extend([
+            candidate["table"],
+            candidate["pk_col"],
+            candidate["pk_value"],
+            candidate["row_offset"],
+            idx,
+        ])
+    sql = (
+        "WITH wanted(table_name, pk_col, pk_value, row_offset, ord) AS "
+        f"(VALUES {values_sql}) "
+        "SELECT wanted.ord, _fulltext.row_json "
+        "FROM wanted LEFT JOIN _fulltext "
+        "ON _fulltext.table_name = wanted.table_name "
+        "AND COALESCE(_fulltext.pk_col, '') = COALESCE(wanted.pk_col, '') "
+        "AND COALESCE(_fulltext.pk_value, '') = COALESCE(wanted.pk_value, '') "
+        "AND _fulltext.row_offset = wanted.row_offset"
+    )
+    return sql, row_params
 
 # Fallback search for Access DBs via ODBC (pyodbc)
 def fallback_search_access(

@@ -1,5 +1,6 @@
 import types
 import sys
+import subprocess
 
 import duckdb
 
@@ -177,3 +178,48 @@ def test_convert_access_to_duckdb_pyodbc_empty_tables_fail_strict(tmp_path, monk
 
     assert ok is False
     assert msg == "Conversion failed in strict mode. See logs for details."
+
+
+def test_ensure_clean_duckdb_falha_quando_saida_existente_nao_pode_ser_removida(tmp_path, monkeypatch):
+    out = tmp_path / "locked.duckdb"
+    out.write_bytes(b"old")
+
+    def fail_remove(_path):
+        raise PermissionError("locked")
+
+    monkeypatch.setattr(conv.os, "remove", fail_remove)
+
+    try:
+        conv._ensure_clean_duckdb(str(out))
+    except RuntimeError as exc:
+        assert "could not clear existing duckdb output" in str(exc)
+    else:
+        raise AssertionError("_ensure_clean_duckdb deveria falhar")
+
+
+def test_mdbtools_usa_timeout_para_evitar_limpo_indefinido(tmp_path, monkeypatch):
+    calls = []
+
+    class _PyodbcFail:
+        @staticmethod
+        def connect(*_args, **_kwargs):
+            raise RuntimeError("driver unavailable")
+
+    def fake_run(args, **kwargs):
+        calls.append((args[0], kwargs.get("timeout")))
+        raise subprocess.TimeoutExpired(args, kwargs.get("timeout"))
+
+    monkeypatch.setattr(conv.subprocess, "run", fake_run)
+    monkeypatch.setattr(conv, "load_access_parser_module", lambda: (None, "parser import fail"))
+    monkeypatch.setitem(sys.modules, "pyodbc", _PyodbcFail())
+    monkeypatch.setitem(sys.modules, "pypyodbc", _PyodbcFail())
+
+    ok, msg = conv.convert_access_to_duckdb(
+        "fake.mdb",
+        str(tmp_path / "timeout.duckdb"),
+        prefer_odbc=False,
+    )
+
+    assert ok is False
+    assert msg == "All conversion methods failed. See logs for details."
+    assert calls == [("mdb-tables", conv.MDBTOOLS_TIMEOUT_SECONDS)]

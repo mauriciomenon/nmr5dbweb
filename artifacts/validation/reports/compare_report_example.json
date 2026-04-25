@@ -1,7 +1,7 @@
 {
   "table": "items",
-  "db1": "/Users/menon/git/nmr5dbweb/output/smoke/compare_a.duckdb",
-  "db2": "/Users/menon/git/nmr5dbweb/output/smoke/compare_b.duckdb",
+  "db1": "output/smoke/compare_a.duckdb",
+  "db2": "output/smoke/compare_b.duckdb",
   "key_columns": [
     "id"
   ],

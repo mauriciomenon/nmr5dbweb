@@ -139,7 +139,7 @@ const SEARCH_UI_LIMITS = {
   per_table: { min: 1, max: 200, fallback: 10, label: 'por tabela' },
   candidate_limit: {
     min: 1,
-    max: 20000,
+    max: 2000,
     fallback: 1000,
     label: 'candidatos SQL',
   },
@@ -1007,30 +1007,6 @@ function setFilesPanelOpen(open) {
   }
 }
 
-function apiJSONSync(path) {
-  const req = new XMLHttpRequest();
-  try {
-    req.open('GET', path, false);
-    req.send(null);
-  } catch (e) {
-    setServerOnline(false, e && e.message ? e.message : 'fetch error');
-    throw e;
-  }
-  if (!serverOnline) setServerOnline(true);
-  let data = null;
-  try {
-    data = JSON.parse(req.responseText || '{}');
-  } catch (e) {
-    logUi('ERROR', 'json parse fail ' + path);
-    throw e;
-  }
-  if (req.status < 200 || req.status >= 300) {
-    const errMsg = data && data.error ? data.error : 'http ' + req.status;
-    logUi('ERROR', path + ' ' + errMsg);
-  }
-  return data;
-}
-
 function filterUploadsByFlow(list, flow) {
   if (!Array.isArray(list)) return [];
   const normalized = normalizeFlow(flow);
@@ -1200,10 +1176,7 @@ function renderSelectedInfo() {
 
 async function refreshUiState(opts) {
   try {
-    const useSync = opts && opts.sync === true;
-    const uploads = useSync
-      ? apiJSONSync('/admin/list_uploads')
-      : await apiJSON('/admin/list_uploads');
+    const uploads = await apiJSON('/admin/list_uploads');
     currentDb = uploads.current_db || '';
     priorityTables = uploads.priority_tables || [];
     lastUploads = uploads.uploads || [];
@@ -1694,15 +1667,12 @@ async function refreshStatus() {
       // Dispara um refresh completo de UI apos conversao, em paralelo,
       // para atualizar lista de uploads, abas de DB e tabelas.
       if (ok) {
-        try {
-          setTimeout(() => {
-            try {
-              refreshUiState();
-            } catch (e) {}
-          }, 0);
-        } catch (e) {
-          /* ignored */
-        }
+        setTimeout(() => {
+          refreshUiState().catch((err) => {
+            const errMsg = err && err.message ? err.message : 'erro';
+            logUi('ERROR', 'refresh apos conversao falhou: ' + errMsg);
+          });
+        }, 0);
       }
     } else if (!conversionRunning) {
       setModalBanner('convModalBanner', '', '');

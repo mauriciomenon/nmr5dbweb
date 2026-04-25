@@ -14,6 +14,7 @@ import socket
 import subprocess
 from pathlib import Path
 from datetime import datetime
+from platformdirs import user_data_dir
 
 
 def verificar_porta_disponivel(host, porta):
@@ -127,7 +128,11 @@ def configurar_logging():
 
 
 def main():
-    default_upload_dir = str((Path(__file__).parent / "documentos").resolve())
+    runtime_root = Path(
+        os.environ.get("NMR5DBWEB_DATA_DIR")
+        or user_data_dir("nmr5dbweb", "nmr5dbweb")
+    ).expanduser().resolve()
+    default_upload_dir = str(runtime_root / "documentos")
     parser = argparse.ArgumentParser(
         description="MDB2SQL - Interface Web Flask",
         formatter_class=argparse.RawDescriptionHelpFormatter,
