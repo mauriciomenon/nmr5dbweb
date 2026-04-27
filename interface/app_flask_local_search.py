@@ -991,7 +991,7 @@ def compare_bad_request(exc):
 
 def compare_internal_error(route_name, exc):
     app.logger.exception("Erro em %s", route_name)
-    return jsonify({"error": str(exc)}), 500
+    return json_error("erro interno", 500)
 
 
 def run_compare_json_route(route_name, payload_builder):
@@ -1004,7 +1004,10 @@ def run_compare_json_route(route_name, payload_builder):
 
 
 def json_error(message, status_code=400, **extra):
-    payload = {"error": str(message)}
+    if status_code >= 500:
+        payload = {"error": "erro interno"}
+    else:
+        payload = {"error": str(message)}
     if extra:
         payload.update(extra)
     return jsonify(payload), status_code
@@ -2112,9 +2115,10 @@ def fallback_search_access_parser(
             if is_access_parser_no_data_error(err_text):
                 no_data_tables += 1
                 continue
+            app.logger.warning("erro ao ler tabela Access com parser %s: %s", table_name, err_text)
             error_tables += 1
             if len(error_samples) < 3:
-                error_samples.append(f"{table_name}: {err_text}")
+                error_samples.append(f"{table_name}: erro ao ler tabela")
             continue
         rows = normalize_access_parser_rows(parsed)
         if not rows:
@@ -2348,8 +2352,9 @@ def api_browse_dirs():
         return jsonify(list_child_directories(base))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 500
+    except RuntimeError:
+        app.logger.exception("Erro ao listar diretorios")
+        return json_error("erro interno", 500)
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
@@ -2493,8 +2498,9 @@ def admin_delete():
     try:
         delete_upload_target(target)
         return jsonify({"ok": True, "deleted": str(target.name)})
-    except Exception as e:
-        return jsonify({"error": f"falha ao apagar: {e}"}), 500
+    except Exception:
+        app.logger.exception("Falha ao apagar arquivo")
+        return json_error("erro interno", 500)
 
 
 @app.route("/admin/set_auto_index", methods=["POST"])
@@ -2691,20 +2697,19 @@ def api_compare_db_rows():
         # Caso mais comum em Windows: arquivo já aberto por outro processo
         if "File is already open" in msg or "já está sendo usado" in msg:
             friendly = (
-                "Não foi possível abrir um dos bancos DuckDB porque o arquivo "
-                "já está em uso por outro processo. Feche a outra janela/instância "
-                "que está usando o arquivo e tente novamente. Detalhes técnicos: "
-                f"{msg}"
+                "Nao foi possivel abrir um dos bancos DuckDB porque o arquivo "
+                "ja esta em uso por outro processo. Feche a outra janela/instancia "
+                "que esta usando o arquivo e tente novamente."
             )
             app.logger.warning("Banco em uso em api_compare_db_rows: %s", msg)
             return jsonify({"error": "banco_em_uso", "message": friendly}), 409
         app.logger.exception("DuckDB IOException em api_compare_db_rows")
-        return jsonify({"error": "duckdb_io", "message": msg}), 500
+        return json_error("erro interno", 500)
     except ValueError as exc:
         return compare_bad_request(exc)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_rows")
-        return jsonify({"error": "erro_interno", "message": str(exc)}), 500
+        return json_error("erro interno", 500)
 
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
