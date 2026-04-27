@@ -35,7 +35,7 @@ from rapidfuzz import fuzz
 from platformdirs import user_data_dir
 
 from interface.find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
-from interface.sql_identifiers import quote_engine_identifier, quote_identifier
+from interface.sql_identifiers import quote_engine_identifier, quote_identifier, select_known_identifier
 from interface.compare_dbs import (
     list_common_tables,
     list_table_columns,
@@ -1776,19 +1776,21 @@ def get_table_columns_sqlite_conn(conn, table):
 def build_table_filter_clause(columns, col, q, cast_type):
     if not col or not q:
         return "", []
-    if col not in columns:
+    matched_col = select_known_identifier(col, columns)
+    if matched_col is None:
         raise ValueError(f"column not found: {col}")
     if cast_type == "duckdb":
-        return f"WHERE CAST({quote_identifier(col)} AS VARCHAR) ILIKE ?", [f"%{q}%"]
-    return f"WHERE CAST({quote_identifier(col)} AS TEXT) LIKE ? COLLATE NOCASE", [f"%{q}%"]
+        return f"WHERE CAST({quote_identifier(matched_col)} AS VARCHAR) ILIKE ?", [f"%{q}%"]
+    return f"WHERE CAST({quote_identifier(matched_col)} AS TEXT) LIKE ? COLLATE NOCASE", [f"%{q}%"]
 
 
 def build_table_order_clause(columns, sort, order):
     if not sort:
         return ""
-    if sort not in columns:
+    matched_sort = select_known_identifier(sort, columns)
+    if matched_sort is None:
         raise ValueError(f"sort column not found: {sort}")
-    return f"ORDER BY {quote_identifier(sort)} {order}"
+    return f"ORDER BY {quote_identifier(matched_sort)} {order}"
 
 
 def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sort, order, cast_type, bind_limit):
@@ -1825,10 +1827,11 @@ def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
     conn = duckdb_connect(path)
     try:
         tables = list_tables_duckdb_conn(conn)
-        if table not in tables:
+        matched_table = select_known_identifier(table, tables)
+        if matched_table is None:
             raise LookupError(f"table not found: {table}")
-        quoted_table = quote_identifier(table)
-        cols = get_table_columns_duckdb_conn(conn, table)
+        quoted_table = quote_identifier(matched_table)
+        cols = get_table_columns_duckdb_conn(conn, matched_table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -1851,10 +1854,11 @@ def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
     conn = sqlite_connect(path)
     try:
         tables = list_tables_sqlite_conn(conn)
-        if table not in tables:
+        matched_table = select_known_identifier(table, tables)
+        if matched_table is None:
             raise LookupError(f"table not found: {table}")
-        quoted_table = quote_identifier(table)
-        cols = get_table_columns_sqlite_conn(conn, table)
+        quoted_table = quote_identifier(matched_table)
+        cols = get_table_columns_sqlite_conn(conn, matched_table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -2194,12 +2198,14 @@ def fallback_search_sqlite(
                 continue
             where_sql, params = build_sqlite_search_where(cols, tokens, token_mode)
             sql = f"SELECT * FROM {quote_identifier(table_name)}"
+            query_params = list(params)
             if where_sql:
                 sql += f" {where_sql}"
-            sql += f" LIMIT {max_rows_per_table}"
+            sql += " LIMIT ?"
+            query_params.append(max_rows_per_table)
             # Table and column identifiers are allow-listed and quoted; values are bound.
             # codeql[py/sql-injection]
-            rows = conn.execute(sql, params).fetchall()
+            rows = conn.execute(sql, query_params).fetchall()
             if not rows:
                 continue
 
