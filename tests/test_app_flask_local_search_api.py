@@ -1451,10 +1451,12 @@ def test_start_access_conversion_falha_quando_validacao_reprova(tmp_path, monkey
     assert "db_path" not in calls
     assert local_search.convert_status["ok"] is False
     assert local_search.convert_status["msg"] == "conversion_validation_failed"
-    assert local_search.convert_status["validation"]["status"] == "failed"
-    assert local_search.convert_status["validation_report"].endswith(
-        "validation_failed.json"
-    )
+    validation = local_search.convert_status["validation"]
+    assert isinstance(validation, dict)
+    assert validation["status"] == "failed"
+    validation_report = local_search.convert_status["validation_report"]
+    assert isinstance(validation_report, str)
+    assert validation_report.endswith("validation_failed.json")
 
 
 def test_validate_conversion_output_sucesso_em_base_minima(tmp_path):

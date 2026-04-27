@@ -35,7 +35,7 @@ else:
 
 pyodbc: Any | None = None
 try:
-    import pyodbc as _pyodbc
+    import pyodbc as _pyodbc  # ty: ignore[unresolved-import]
 except Exception:
     pass
 else:

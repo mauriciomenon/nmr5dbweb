@@ -114,6 +114,7 @@ def test_access_parser_complex_values_are_sanitized(tmp_path, monkeypatch):
         row = conn.execute('SELECT meta, raw FROM "t_ok"').fetchone()
     finally:
         conn.close()
+    assert row is not None
     assert isinstance(row[0], str)
     assert '"a": 1' in row[0]
     assert row[1] == "0102"
@@ -206,8 +207,10 @@ def test_mdbtools_usa_timeout_para_evitar_limpo_indefinido(tmp_path, monkeypatch
             raise RuntimeError("driver unavailable")
 
     def fake_run(args, **kwargs):
-        calls.append((args[0], kwargs.get("timeout")))
-        raise subprocess.TimeoutExpired(args, kwargs.get("timeout"))
+        timeout = kwargs.get("timeout")
+        assert isinstance(timeout, (int, float))
+        calls.append((args[0], timeout))
+        raise subprocess.TimeoutExpired(args, timeout)
 
     monkeypatch.setattr(conv.subprocess, "run", fake_run)
     monkeypatch.setattr(conv, "load_access_parser_module", lambda: (None, "parser import fail"))

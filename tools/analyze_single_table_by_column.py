@@ -60,16 +60,24 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import random
 import numpy as np
+from typing import Any
 
 # opcionais
+duckdb: Any | None = None
 try:
-    import duckdb
+    import duckdb as _duckdb
 except Exception:
-    duckdb = None
+    pass
+else:
+    duckdb = _duckdb
+
+pyodbc: Any | None = None
 try:
-    import pyodbc
+    import pyodbc as _pyodbc  # ty: ignore[unresolved-import]
 except Exception:
-    pyodbc = None
+    pass
+else:
+    pyodbc = _pyodbc
 
 # ---------------- estatística (Welford) ----------------
 class Welford:
@@ -229,7 +237,9 @@ def open_conn(db_path: Path, engine: str):
                 return pyodbc.connect(cs, autocommit=True, timeout=30)
             except Exception as e:
                 last = e
-        raise last
+        if last is not None:
+            raise last
+        raise RuntimeError("nenhum driver Access respondeu")
     raise RuntimeError("engine desconhecida: " + str(engine))
 
 def list_columns(db_path: Path, table: str, engine: str):
@@ -380,7 +390,7 @@ def stream_column_values(db_path: Path, table: str, col: str, engine: str, batch
             pass
 
 # ---------------- principal ----------------
-def analyze_table(db_path: Path, table: str, outdir: Path, engine: str = None, top: int = 20,
+def analyze_table(db_path: Path, table: str, outdir: Path, engine: str | None = None, top: int = 20,
                   sample_size: int = 5000, distinct_cap: int = 200000, verbose: bool = False):
     db_path = Path(db_path)
     engine = engine or detect_engine(db_path)

@@ -25,7 +25,7 @@ def test_main_port_fallback_automatico(monkeypatch):
             raise KeyboardInterrupt
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:
@@ -66,7 +66,7 @@ def test_main_port_livre_mantem_porta(monkeypatch):
             raise KeyboardInterrupt
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:
@@ -97,7 +97,7 @@ def test_main_bind_error_porta_em_uso(monkeypatch, capsys):
             raise OSError(errno.EADDRINUSE, "Address already in use")
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:
@@ -121,7 +121,7 @@ def test_main_bind_error_generico(monkeypatch, capsys):
             raise OSError(errno.EACCES, "Permission denied")
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:
@@ -149,7 +149,7 @@ def test_main_preserva_upload_folder_do_env_quando_sem_flag(monkeypatch):
             raise KeyboardInterrupt
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:
@@ -179,7 +179,7 @@ def test_main_usa_runtime_dir_fora_do_repo_por_padrao(monkeypatch, tmp_path):
             raise KeyboardInterrupt
 
     fake_module = types.ModuleType("interface.app_flask_local_search")
-    fake_module.app = FakeApp()
+    setattr(fake_module, "app", FakeApp())
     monkeypatch.setitem(sys.modules, "interface.app_flask_local_search", fake_module)
 
     with pytest.raises(SystemExit) as exc:

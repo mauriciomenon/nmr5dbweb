@@ -3,8 +3,9 @@ from pathlib import Path
 
 _SCRIPT_PATH = Path(__file__).resolve().parents[1] / "tools" / "run_min_compare_report.py"
 _SPEC = spec_from_file_location("run_min_compare_report", _SCRIPT_PATH)
+assert _SPEC is not None
+assert _SPEC.loader is not None
 mod = module_from_spec(_SPEC)
-assert _SPEC and _SPEC.loader
 _SPEC.loader.exec_module(mod)
 
 
