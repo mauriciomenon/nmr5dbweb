@@ -1,0 +1,47 @@
+converters/convert_pyodbc.py
+  ed5784b6fd4d23c6 8-15,28-29,156,161-162,234-240
+tests/test_main_port_fallback.py
+  ed5784b6fd4d23c6 28,69,100,124,152,182
+interface/create_fulltext.py
+  ed5784b6fd4d23c6 13,65-68,73-77,155
+tools/encontrar_registro_em_bds.py
+  ed5784b6fd4d23c6 38
+tools/inspect_search_order.py
+  ed5784b6fd4d23c6 1,5-16
+tools/windows_access_smoke.py
+  ed5784b6fd4d23c6 62
+tests/test_app_flask_local_search_api.py
+  ed5784b6fd4d23c6 1454-1459
+tests/test_frontend_invalid_flows_browser.py
+  ed5784b6fd4d23c6 9-11,13,16-17,19
+tools/build_global_report_from_analyses.py
+  ed5784b6fd4d23c6 53-56,64-65,67-68,85-92
+tests/test_run_min_compare_report.py
+  ed5784b6fd4d23c6 6-7
+tools/analyze_single_table_by_column.py
+  ed5784b6fd4d23c6 63,66,68,70-74,76,78-80,240-242,393
+interface/check_progress.py
+  ed5784b6fd4d23c6 2,6,20,23-26,28-30,33-42,45,47,52-56,61
+tests/test_access_convert_parser_strict.py
+  ed5784b6fd4d23c6 117,210-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c3f50e3827eb794e00340e8b473e7825fa43383a",
+  "prompts": {
+    "ed5784b6fd4d23c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc0e5-3693-7b71-8cdc-196a748271cd",
+        "model": "gpt-5.5"
+      },
+      "human_author": "unknown",
+      "messages": [],
+      "total_additions": 138,
+      "total_deletions": 79,
+      "accepted_lines": 134,
+      "overriden_lines": 0
+    }
+  }
+}
