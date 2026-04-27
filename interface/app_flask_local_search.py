@@ -565,8 +565,7 @@ def resolve_allowed_path(raw_path, *, expected):
     if "\x00" in raw_path:
         raise ValueError("caminho possui caractere invalido")
     # Raw path is allowed only after canonicalization and allowed-root checks below.
-    # codeql[py/path-injection]
-    path = Path(raw_path).expanduser().resolve(strict=False)
+    path = Path(raw_path).expanduser().resolve(strict=False)  # codeql[py/path-injection]
     if not is_path_under_allowed_root(path):
         raise ValueError("caminho fora dos diretorios permitidos")
     if expected == "dir" and (not path.exists() or not path.is_dir()):
@@ -1801,8 +1800,7 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
     if where_clause:
         count_sql += f" {where_clause}"
     # Table and column identifiers are allow-listed and quoted; values are bound.
-    # codeql[py/sql-injection]
-    total = conn.execute(count_sql, params).fetchone()[0]
+    total = conn.execute(count_sql, params).fetchone()[0]  # codeql[py/sql-injection]
 
     data_sql = f"SELECT * FROM {quoted_table}"  # nosec B608
     data_params = list(params)
@@ -1818,8 +1816,7 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
             data_sql += f" LIMIT {limit} OFFSET {offset}"
 
     # Table and column identifiers are allow-listed and quoted; values are bound.
-    # codeql[py/sql-injection]
-    rows = conn.execute(data_sql, data_params).fetchall()
+    rows = conn.execute(data_sql, data_params).fetchall()  # codeql[py/sql-injection]
     return rows, int(total)
 
 
@@ -2204,8 +2201,7 @@ def fallback_search_sqlite(
             sql += " LIMIT ?"
             query_params.append(max_rows_per_table)
             # Table and column identifiers are allow-listed and quoted; values are bound.
-            # codeql[py/sql-injection]
-            rows = conn.execute(sql, query_params).fetchall()
+            rows = conn.execute(sql, query_params).fetchall()  # codeql[py/sql-injection]
             if not rows:
                 continue
 
@@ -3028,8 +3024,10 @@ def fallback_search_access(
                 sql = f"SELECT TOP {max_rows_per_table} * FROM {quoted_table}"
             try:
                 # Table and column identifiers come from Access metadata; values are bound.
-                # codeql[py/sql-injection]
-                rows = cur.execute(sql, params).fetchall() if params else cur.execute(sql).fetchall()
+                if params:
+                    rows = cur.execute(sql, params).fetchall()  # codeql[py/sql-injection]
+                else:
+                    rows = cur.execute(sql).fetchall()  # codeql[py/sql-injection]
             except Exception as exc:
                 app.logger.warning("falha ao buscar tabela Access %s com filtro: %s", t, exc)
                 try:
@@ -3181,8 +3179,7 @@ def api_search():
         app.logger.warning("Busca falhou: %s", error_text)
         error_text = "busca indisponivel" if status_code == 503 else "busca falhou"
     # JSON response is consumed as textContent by the frontend, not as HTML.
-    # codeql[py/reflective-xss]
-    return json_error(error_text, status_code, **{
+    return json_error(error_text, status_code, **{  # codeql[py/reflective-xss]
         k: v for k, v in payload.items() if k != "error"
     })
 
