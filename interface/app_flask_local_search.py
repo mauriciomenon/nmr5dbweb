@@ -29,6 +29,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
 from flask import Flask, request, jsonify, send_from_directory
+from werkzeug.security import safe_join
 from werkzeug.utils import secure_filename
 import duckdb
 from rapidfuzz import fuzz
@@ -564,9 +565,23 @@ def resolve_allowed_path(raw_path, *, expected):
         raise ValueError("caminho deve ser texto")
     if "\x00" in raw_path:
         raise ValueError("caminho possui caractere invalido")
-    # Raw path is allowed only after canonicalization and allowed-root checks below.
-    path = Path(raw_path).expanduser().resolve(strict=False)  # codeql[py/path-injection]
-    if not is_path_under_allowed_root(path):
+    raw_abs = os.path.abspath(os.path.expanduser(raw_path))
+    path = None
+    for root in iter_allowed_path_roots():
+        try:
+            rel_path = os.path.relpath(raw_abs, str(root))
+        except ValueError:
+            continue
+        if rel_path == os.pardir or rel_path.startswith(os.pardir + os.sep):
+            continue
+        joined = safe_join(str(root), rel_path)
+        if joined is None:
+            continue
+        path = Path(joined).resolve(strict=False)
+        if is_path_under_allowed_root(path):
+            break
+        path = None
+    if path is None:
         raise ValueError("caminho fora dos diretorios permitidos")
     if expected == "dir" and (not path.exists() or not path.is_dir()):
         raise ValueError(f"diretorio invalido: {path}")
@@ -3177,11 +3192,16 @@ def api_search():
     error_text = payload.get("error", "busca falhou")
     if status_code >= 500:
         app.logger.warning("Busca falhou: %s", error_text)
-        error_text = "busca indisponivel" if status_code == 503 else "busca falhou"
-    # JSON response is consumed as textContent by the frontend, not as HTML.
-    return json_error(error_text, status_code, **{  # codeql[py/reflective-xss]
-        k: v for k, v in payload.items() if k != "error"
-    })
+    if status_code == 503:
+        public_error = "busca indisponivel"
+    elif status_code >= 500:
+        public_error = "busca falhou"
+    else:
+        public_error = "solicitacao invalida"
+    extra = {}
+    if status_code == 503 and payload.get("hint"):
+        extra["hint"] = "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro."
+    return json_error(public_error, status_code, **extra)
 
 if __name__ == "__main__":
     debug_enabled = os.environ.get("NMR5DBWEB_FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}
