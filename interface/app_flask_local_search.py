@@ -3198,8 +3198,8 @@ def api_search():
             "hint": "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro.",
         }), 503
     if status_code >= 500:
-        return jsonify({"error": "busca falhou"}), status_code
-    return jsonify({"error": "solicitacao invalida"}), status_code
+        return jsonify({"error": "busca falhou"}), 500
+    return jsonify({"error": "solicitacao invalida"}), 400
 
 if __name__ == "__main__":
     debug_enabled = os.environ.get("NMR5DBWEB_FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}
