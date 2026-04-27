@@ -3,6 +3,6 @@ Type=Application
 Name=nmr5dbweb Report Min
 Comment=Generate minimal compare report
 Terminal=true
-Exec=/bin/bash -lc "$(dirname \"$1\")/nmr5dbweb_report_min_linux.sh" _ %k
+Exec=sh -c "exec \\$(dirname \"\\$1\")/nmr5dbweb_report_min_linux.sh" _ %k
 Icon=utilities-terminal
 Categories=Development;
