@@ -22,7 +22,7 @@ def test_admin_upload_rejeita_nome_invalido_sem_gravar(tmp_path, monkeypatch):
     )
 
     assert resp.status_code == 400
-    assert resp.get_json()["error"] == "nome de arquivo inválido"
+    assert resp.get_json()["error"] == "nome de arquivo invalido"
     assert list(tmp_path.iterdir()) == []
 
 
@@ -38,7 +38,7 @@ def test_admin_upload_rejeita_extensao_nao_permitida_sem_gravar(tmp_path, monkey
     )
 
     assert resp.status_code == 400
-    assert "extensão não permitida" in resp.get_json()["error"]
+    assert "extensao nao permitida" in resp.get_json()["error"]
     assert list(tmp_path.iterdir()) == []
 
 
@@ -61,6 +61,17 @@ def test_admin_upload_db_seleciona_imediatamente(tmp_path, monkeypatch):
     assert payload["db_path"] == str(saved_path)
     assert selected == [str(saved_path)]
     assert saved_path.read_bytes() == b"duck"
+
+
+def test_uploaded_file_rejeita_path_traversal(tmp_path, monkeypatch):
+    client = app.test_client()
+    monkeypatch.setattr(local_search, "UPLOAD_DIR", tmp_path)
+    (tmp_path / "sample.duckdb").write_bytes(b"duck")
+
+    resp = client.get("/uploads/..%2Fsample.duckdb")
+
+    assert resp.status_code == 400
+    assert resp.get_json()["error"] == "nome de arquivo invalido"
 
 
 def test_admin_upload_accdb_nao_sobrescreve_duckdb_derivado(tmp_path, monkeypatch):
@@ -834,8 +845,8 @@ def test_api_search_access_driver_error_retorna_503(tmp_path, monkeypatch):
 
     assert resp.status_code == 503
     payload = resp.get_json()
-    assert "pyodbc not installed" in payload["error"]
-    assert "Convert to DuckDB first" in payload["hint"]
+    assert payload["error"] == "busca indisponivel"
+    assert "Converta para DuckDB primeiro" in payload["hint"]
 
 
 def test_api_search_duckdb_internal_error_retorna_500(tmp_path, monkeypatch):
@@ -853,7 +864,7 @@ def test_api_search_duckdb_internal_error_retorna_500(tmp_path, monkeypatch):
 
     assert resp.status_code == 500
     payload = resp.get_json()
-    assert "forced" in payload["error"]
+    assert payload["error"] == "busca falhou"
 
 
 def test_api_search_sqlite_internal_error_retorna_500(tmp_path, monkeypatch):
@@ -871,7 +882,7 @@ def test_api_search_sqlite_internal_error_retorna_500(tmp_path, monkeypatch):
 
     assert resp.status_code == 500
     payload = resp.get_json()
-    assert "sqlite fallback failed" in payload["error"]
+    assert payload["error"] == "busca falhou"
 
 
 def test_api_search_access_com_duckdb_derivado_usa_duckdb(tmp_path, monkeypatch):
@@ -1231,7 +1242,7 @@ def test_admin_select_access_sem_derivado_rejeita_conversao_em_execucao(tmp_path
     resp = client.post("/admin/select", json={"filename": "sample.accdb"})
 
     assert resp.status_code == 409
-    assert resp.get_json()["error"] == "Já existe uma conversão em execução"
+    assert resp.get_json()["error"] == "Ja existe uma conversao em execucao"
 
 
 def test_start_access_conversion_repassa_prefer_odbc_false(tmp_path, monkeypatch):
@@ -1593,7 +1604,7 @@ def test_api_compare_db_tables_rejeita_arquivo_ausente(tmp_path):
     resp = client.post("/api/compare_db_tables", json={"db1_path": str(db1), "db2_path": str(db2)})
 
     assert resp.status_code == 400
-    assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]
+    assert "arquivo(s) nao encontrado(s)" in resp.get_json()["error"]
 
 
 def test_api_compare_db_table_content_rejeita_arquivo_ausente(tmp_path):
@@ -1607,7 +1618,7 @@ def test_api_compare_db_table_content_rejeita_arquivo_ausente(tmp_path):
     )
 
     assert resp.status_code == 400
-    assert "arquivo(s) não encontrado(s)" in resp.get_json()["error"]
+    assert "arquivo(s) nao encontrado(s)" in resp.get_json()["error"]
 
 
 def test_api_compare_db_overview_sucesso(tmp_path):

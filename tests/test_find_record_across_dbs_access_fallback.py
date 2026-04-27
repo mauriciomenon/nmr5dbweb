@@ -116,6 +116,31 @@ def test_detect_engine_db_duckdb_quando_nao_sqlite(tmp_path):
     assert track.detect_engine(db_path) == "duckdb"
 
 
+def test_search_in_table_sqlite_rejeita_tabela_fora_allowlist(tmp_path):
+    db_path = tmp_path / "sample.sqlite3"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE safe (id INTEGER)")
+    conn.execute("INSERT INTO safe VALUES (1)")
+    conn.commit()
+    conn.close()
+
+    found, sample, err = track.search_in_table(
+        "sqlite",
+        db_path,
+        'safe"; DROP TABLE safe; --',
+        [("id", 1)],
+    )
+
+    assert found is False
+    assert sample is None
+    assert "tabela" in (err or "")
+    conn = sqlite3.connect(db_path)
+    try:
+        assert conn.execute("SELECT COUNT(*) FROM safe").fetchone()[0] == 1
+    finally:
+        conn.close()
+
+
 def test_find_record_across_dbs_continua_apos_erro_de_tabela(tmp_path, monkeypatch):
     db_path = tmp_path / "2026-03-14_sample.duckdb"
     db_path.write_bytes(b"duck")
@@ -124,7 +149,7 @@ def test_find_record_across_dbs_continua_apos_erro_de_tabela(tmp_path, monkeypat
     monkeypatch.setattr(track, "detect_engine", lambda _path: "duckdb")
     monkeypatch.setattr(track, "list_tables_for_engine", lambda _engine, _path: ["bad", "good"])
 
-    def _search(_engine, _path, table, _filters):
+    def _search(_engine, _path, table, _filters, **_kwargs):
         if table == "bad":
             return False, None, "forced table error"
         return True, {"RTUNO": 1}, None
@@ -139,3 +164,26 @@ def test_find_record_across_dbs_continua_apos_erro_de_tabela(tmp_path, monkeypat
     assert row["table"] == "good"
     assert row["sample"] == {"RTUNO": 1}
     assert row["error"] is None
+
+
+def test_find_record_across_dbs_informa_limite_de_arquivos(tmp_path, monkeypatch):
+    first = tmp_path / "2026-03-14_a.duckdb"
+    second = tmp_path / "2026-03-15_b.duckdb"
+    first.write_bytes(b"duck")
+    second.write_bytes(b"duck")
+
+    monkeypatch.setattr(track, "list_db_files", lambda _base: [first, second])
+    monkeypatch.setattr(track, "detect_engine", lambda _path: "duckdb")
+    monkeypatch.setattr(track, "list_tables_for_engine", lambda _engine, _path: ["alpha"])
+    monkeypatch.setattr(
+        track,
+        "search_in_table",
+        lambda *_args, **_kwargs: (False, None, None),
+    )
+
+    out = track.find_record_across_dbs(tmp_path, "RTUNO=1", max_files=1)
+
+    assert out["total_files"] == 2
+    assert out["files_scanned"] == 1
+    assert out["limit_reached"] is True
+    assert len(out["results"]) == 1

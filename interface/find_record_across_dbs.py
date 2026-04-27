@@ -28,6 +28,7 @@ from interface.access_parser_utils import (
     list_access_tables_from_parser,
     normalize_access_parser_rows,
 )
+from interface.sql_identifiers import quote_engine_identifier
 
 try:  # opcionais
     import duckdb
@@ -35,9 +36,10 @@ except Exception:  # pragma: no cover
     duckdb = None  # type: ignore
 
 try:
-    import pyodbc
+    import pyodbc as _pyodbc  # ty: ignore[unresolved-import]
+    pyodbc: Any = _pyodbc
 except Exception:  # pragma: no cover
-    pyodbc = None  # type: ignore
+    pyodbc = None
 
 
 SUPPORTED_EXTS = [".duckdb", ".db", ".sqlite", ".sqlite3", ".mdb", ".accdb"]
@@ -167,7 +169,7 @@ def list_columns_sqlite(path: Path, table: str) -> List[str]:
     conn = sqlite3.connect(str(path))
     try:
         cur = conn.cursor()
-        cur.execute(f'SELECT * FROM "{table}" LIMIT 0')
+        cur.execute(f"SELECT * FROM {quote_engine_identifier('sqlite', table)} LIMIT 0")
         return [d[0] for d in cur.description]
     finally:
         conn.close()
@@ -189,7 +191,7 @@ def list_columns_duckdb(path: Path, table: str) -> List[str]:
         raise RuntimeError("duckdb nao esta instalado")
     conn = duckdb.connect(str(path))
     try:
-        cur = conn.execute(f'SELECT * FROM "{table}" LIMIT 0')
+        cur = conn.execute(f"SELECT * FROM {quote_engine_identifier('duckdb', table)} LIMIT 0")
         return [c[0] for c in cur.description]
     finally:
         conn.close()
@@ -246,7 +248,7 @@ def list_columns_access(path: Path, table: str) -> List[str]:
                             cols.append(name)
                 except Exception:
                     cur = conn.cursor()
-                    cur.execute(f"SELECT TOP 0 * FROM [{table}]")
+                    cur.execute(f"SELECT TOP 0 * FROM {quote_engine_identifier('access', table)}")
                     cols = [d[0] for d in cur.description]
                 return cols
             finally:
@@ -390,26 +392,36 @@ def build_engine_where_parts(engine: str, filters: List[Tuple[str, Any]], column
         real = column_lookup.get(col.lower())
         if not real:
             raise ValueError(f"coluna '{col}' nao encontrada na tabela {table}")
-        if engine in ("sqlite", "duckdb"):
-            where_parts.append(f'"{real}" = ?')
-        else:
-            where_parts.append(f"[{real}] = ?")
+        where_parts.append(f"{quote_engine_identifier(engine, real)} = ?")
         params.append(val)
     if not where_parts:
         raise ValueError("nenhum filtro informado")
     return where_parts, params
 
 
-def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str, Any]]) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+def search_in_table(
+    engine: str,
+    path: Path,
+    table: str,
+    filters: List[Tuple[str, Any]],
+    known_tables: Optional[List[str]] = None,
+) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
     """Retorna (found, sample_row_dict, error).
 
     - found: True/False se algum registro foi encontrado
-    - sample_row_dict: dicionário simples com alguns campos da linha encontrada
+    - sample_row_dict: dicionario simples com a linha encontrada
     - error: mensagem de erro (se algo deu errado ao acessar o arquivo/tabela)
     """
     if engine == "access" and pyodbc is None:
         # Fast path on non-Windows without ODBC: parse table once.
         return search_in_table_access_parser(path, table, filters)
+
+    try:
+        tables = known_tables if known_tables is not None else list_tables_for_engine(engine, path)
+        if table not in tables:
+            return False, None, f"tabela '{table}' nao encontrada"
+    except Exception as exc:
+        return False, None, f"erro ao validar tabela: {exc}"
 
     try:
         cols = list_columns_for_engine(engine, path, table)
@@ -423,7 +435,11 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
 
     if engine == "sqlite":
         conn = sqlite3.connect(str(path))
-        sql = f'SELECT * FROM "{table}" WHERE ' + " AND ".join(where_parts) + " LIMIT 1"
+        sql = (
+            f"SELECT * FROM {quote_engine_identifier(engine, table)} WHERE "
+            + " AND ".join(where_parts)
+            + " LIMIT 1"
+        )
         try:
             cur = conn.cursor()
             cur.execute(sql, params)
@@ -437,7 +453,11 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
         if duckdb is None:
             return False, None, "duckdb nao instalado"
         conn = duckdb.connect(str(path))
-        sql = f'SELECT * FROM "{table}" WHERE ' + " AND ".join(where_parts) + " LIMIT 1"
+        sql = (
+            f"SELECT * FROM {quote_engine_identifier(engine, table)} WHERE "
+            + " AND ".join(where_parts)
+            + " LIMIT 1"
+        )
         try:
             cur = conn.execute(sql, params)
             rows = cur.fetchall()
@@ -455,7 +475,8 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
             try:
                 cur = conn.cursor()
                 sql = (
-                    "SELECT TOP 1 * FROM [" + table + "] WHERE " + " AND ".join(where_parts)
+                    f"SELECT TOP 1 * FROM {quote_engine_identifier(engine, table)} WHERE "
+                    + " AND ".join(where_parts)
                 )
                 cur.execute(sql, params)
                 row = cur.fetchone()
@@ -473,12 +494,9 @@ def search_in_table(engine: str, path: Path, table: str, filters: List[Tuple[str
                 return False, None, f"falha ODBC: {exc}; falha access-parser: {parser_err}"
             return found, sample, None
 
-    # converte linha em dict simples, mas limitando a alguns campos mais úteis
+    # Converte a linha em dict simples preservando as colunas retornadas.
     row_dict: Dict[str, Any] = {}
-    for i, cname in enumerate(desc):
-        if i >= len(row):
-            break
-        v = row[i]
+    for cname, v in zip(desc, row):
         # serialização simples; a interface pode decidir o que exibir
         if isinstance(v, (datetime.date, datetime.datetime)):
             row_dict[cname] = v.isoformat()
@@ -508,7 +526,7 @@ def find_record_across_dbs(
             "size_bytes": 123456,
             "found": true/false,
             "table": "RANGER_SOSTAT" ou tabela em que achou,
-            "sample": {..linha..} ou null,
+            "sample": {..linha completa..} ou null,
             "error": "msg" ou null
           }, ...
         ]
@@ -529,10 +547,12 @@ def find_record_across_dbs(
     if not files:
         return {"error": "nenhum arquivo de banco encontrado"}
 
+    files_scanned = 0
     results: List[Dict[str, Any]] = []
     for idx, f in enumerate(files, start=1):
         if idx > max_files:
             break
+        files_scanned += 1
         engine = detect_engine(f)
         dt = extract_date_from_filename(f.name)
         relpath = str(f.relative_to(base_dir))
@@ -548,16 +568,12 @@ def find_record_across_dbs(
             "error": None,
         }
         try:
-            # determina tabela(s) a examinar
-            tables: List[str]
-            if table:
-                tables = [table]
-            else:
-                tables = list_tables_for_engine(engine, f)
+            available_tables = list_tables_for_engine(engine, f)
+            tables: List[str] = [table] if table else available_tables
 
             table_errors: List[str] = []
             for t in tables:
-                found, sample, err = search_in_table(engine, f, t, filters)
+                found, sample, err = search_in_table(engine, f, t, filters, known_tables=available_tables)
                 if err is not None:
                     # erro especifico de tabela; registra e segue para as demais
                     if len(table_errors) < 3:
@@ -575,4 +591,10 @@ def find_record_across_dbs(
             info["error"] = str(exc)
         results.append(info)
 
-    return {"dir": str(base_dir), "total_files": len(files), "results": results}
+    return {
+        "dir": str(base_dir),
+        "total_files": len(files),
+        "files_scanned": files_scanned,
+        "limit_reached": len(files) > max_files,
+        "results": results,
+    }

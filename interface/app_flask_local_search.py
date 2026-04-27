@@ -24,6 +24,7 @@ import importlib.util
 import math
 import hashlib
 import uuid
+import tempfile
 from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
@@ -34,6 +35,7 @@ from rapidfuzz import fuzz
 from platformdirs import user_data_dir
 
 from interface.find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
+from interface.sql_identifiers import quote_engine_identifier, quote_identifier
 from interface.compare_dbs import (
     list_common_tables,
     list_table_columns,
@@ -112,8 +114,8 @@ SEARCH_PER_TABLE_MAX = 200
 SEARCH_CANDIDATE_LIMIT_MAX = 2000
 SEARCH_TOTAL_LIMIT_MAX = 5000
 SEARCH_TABLES_FILTER_MAX = 200
-ERR_FILENAME_REQUIRED = "filename required"
-ERR_INVALID_FILENAME_OR_PATH = "invalid filename or path"
+ERR_FILENAME_REQUIRED = "nome de arquivo obrigatorio"
+ERR_INVALID_FILENAME_OR_PATH = "nome ou caminho de arquivo invalido"
 UPLOAD_NAME_NUMERIC_ATTEMPTS = 1000
 
 # Conversion & index state
@@ -263,12 +265,12 @@ def get_access_odbc_status():
         "error": "",
     }
     if pyodbc is None:
-        status["error"] = OPTIONAL_IMPORT_ERRORS.get("pyodbc", "pyodbc not installed")
+        status["error"] = OPTIONAL_IMPORT_ERRORS.get("pyodbc", "pyodbc nao instalado")
         return status
     try:
         drivers = [str(d) for d in pyodbc.drivers()]
     except Exception as exc:
-        status["error"] = f"cannot list ODBC drivers: {exc}"
+        status["error"] = f"nao foi possivel listar drivers ODBC: {exc}"
         return status
     status["drivers"] = drivers
     status["access_driver_available"] = any(
@@ -276,7 +278,7 @@ def get_access_odbc_status():
         for d in drivers
     )
     if not status["access_driver_available"]:
-        status["error"] = "Access ODBC driver not found"
+        status["error"] = "driver ODBC Access nao encontrado"
     return status
 
 
@@ -534,16 +536,46 @@ def list_directory_roots():
     return [{"name": root, "path": root, "has_db": False} for root in roots]
 
 
-def list_child_directories(base_path):
-    if not isinstance(base_path, str):
-        raise ValueError("base_path deve ser texto")
-    if "\x00" in base_path:
-        raise ValueError("base_path possui caractere invalido")
+def iter_allowed_path_roots():
+    roots = [str(PROJECT_ROOT), str(RUNTIME_ROOT), str(UPLOAD_DIR), tempfile.gettempdir()]
+    roots.extend(str(record["path"]) for record in RECORD_DIRS.values())
+    extra_paths = os.environ.get("NMR5DBWEB_ALLOWED_PATHS", "")
+    if extra_paths:
+        roots.extend(part for part in extra_paths.split(os.pathsep) if part)
+    for root in roots:
+        try:
+            yield Path(root).expanduser().resolve(strict=False)
+        except (OSError, RuntimeError, ValueError):
+            continue
 
-    path = Path(base_path).expanduser()
-    path = path.resolve(strict=False)
-    if not path.exists() or not path.is_dir():
-        raise ValueError(f"diretorio invalido: {base_path}")
+
+def is_path_under_allowed_root(path):
+    for root in iter_allowed_path_roots():
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def resolve_allowed_path(raw_path, *, expected):
+    if not isinstance(raw_path, str):
+        raise ValueError("caminho deve ser texto")
+    if "\x00" in raw_path:
+        raise ValueError("caminho possui caractere invalido")
+    path = Path(raw_path).expanduser().resolve(strict=False)
+    if not is_path_under_allowed_root(path):
+        raise ValueError("caminho fora dos diretorios permitidos")
+    if expected == "dir" and (not path.exists() or not path.is_dir()):
+        raise ValueError(f"diretorio invalido: {path}")
+    if expected == "file" and (not path.exists() or not path.is_file()):
+        raise ValueError(f"arquivo invalido: {path}")
+    return path
+
+
+def list_child_directories(base_path):
+    path = resolve_allowed_path(base_path, expected="dir")
 
     parent = str(path.parent) if path.parent != path else None
     entries = []
@@ -578,18 +610,18 @@ def validate_compare_db_inputs(db1_path, db2_path, route_name, *, allowed_engine
         allowed_engines = {"duckdb"}
     allowed_engines = {str(engine).strip().lower() for engine in allowed_engines if str(engine).strip()}
 
-    raw_paths = {
-        "db1_path": Path(db1_path).expanduser().resolve(strict=False),
-        "db2_path": Path(db2_path).expanduser().resolve(strict=False),
+    validated_paths = {
+        "db1_path": resolve_allowed_path(db1_path, expected="path"),
+        "db2_path": resolve_allowed_path(db2_path, expected="path"),
     }
-    if raw_paths["db1_path"] == raw_paths["db2_path"]:
+    if validated_paths["db1_path"] == validated_paths["db2_path"]:
         message = "db1_path e db2_path nao podem ser o mesmo arquivo"
         app.logger.warning("%s: %s", route_name, message)
         raise ValueError(message)
     missing = []
     not_files = []
     unsupported = []
-    for field, path in raw_paths.items():
+    for field, path in validated_paths.items():
         if not path.exists():
             missing.append(str(path))
             continue
@@ -602,7 +634,7 @@ def validate_compare_db_inputs(db1_path, db2_path, route_name, *, allowed_engine
             unsupported.append(f"{field}={path} ({engine_name})")
 
     if missing:
-        message = "arquivo(s) não encontrado(s): " + ", ".join(missing)
+        message = "arquivo(s) nao encontrado(s): " + ", ".join(missing)
         app.logger.warning("%s: %s", route_name, message)
         raise FileNotFoundError(message)
     if not_files:
@@ -618,7 +650,7 @@ def validate_compare_db_inputs(db1_path, db2_path, route_name, *, allowed_engine
         app.logger.warning("%s: %s", route_name, message)
         raise ValueError(message)
 
-    return raw_paths["db1_path"], raw_paths["db2_path"]
+    return validated_paths["db1_path"], validated_paths["db2_path"]
 
 
 def get_current_db_context_response(*, require_selected=False, require_exists=False, allowed_engines=None):
@@ -761,9 +793,7 @@ def parse_track_request_args(data):
     if max_files <= 0:
         raise ValueError("max_files deve ser > 0")
 
-    base_dir = Path(custom_path).expanduser().resolve()
-    if not base_dir.exists() or not base_dir.is_dir():
-        raise ValueError(f"diretorio invalido: {base_dir}")
+    base_dir = resolve_allowed_path(custom_path, expected="dir")
 
     return {
         "base_dir": base_dir,
@@ -1021,12 +1051,12 @@ def resolve_upload_target(filename, *, required=False):
 def next_upload_dest(filename):
     safe_filename = sanitize_filename(filename)
     if not safe_filename:
-        raise ValueError("invalid filename")
+        raise ValueError("nome de arquivo invalido")
 
     base = Path(safe_filename).stem
     ext = Path(safe_filename).suffix
     if ext.lower() not in ALLOWED_EXTENSIONS:
-        raise ValueError(f"extensão não permitida: {ext}")
+        raise ValueError(f"extensao nao permitida: {ext}")
 
     candidate = UPLOAD_DIR / safe_filename
     if upload_candidate_available(candidate, ext.lower()):
@@ -1604,7 +1634,13 @@ def admin_logs():
 
 @app.route("/uploads/<path:filename>")
 def uploaded_file(filename):
-    return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
+    safe_filename = sanitize_filename(filename)
+    if not safe_filename or safe_filename != filename:
+        return json_error("nome de arquivo invalido", 400)
+    target = UPLOAD_DIR / safe_filename
+    if not target.is_file():
+        return json_error("arquivo nao encontrado", 404)
+    return send_from_directory(UPLOAD_DIR, safe_filename, as_attachment=True)
 
 # ---------------- Helpers ----------------
 def duckdb_connect(path):
@@ -1615,10 +1651,6 @@ def sqlite_connect(path):
     conn = sqlite3.connect(str(path))
     conn.row_factory = None
     return conn
-
-
-def quote_identifier(identifier):
-    return '"' + str(identifier).replace('"', '""') + '"'
 
 
 def get_priority_tables():
@@ -1708,7 +1740,7 @@ def list_tables_for_path(path):
         return list_tables_sqlite(path)
     if engine == "access":
         return list_tables_access(path)
-    raise ValueError(f"Unsupported DB format: {path}")
+    raise ValueError(f"formato de banco nao suportado: {path}")
 
 
 def get_table_columns_duckdb(path, table):
@@ -2295,19 +2327,19 @@ def api_browse_dirs():
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
     if 'file' not in request.files:
-        return jsonify({"error": "arquivo não enviado"}), 400
+        return jsonify({"error": "arquivo nao enviado"}), 400
     f = request.files['file']
     if f.filename == '':
-        return jsonify({"error": "nome de arquivo inválido"}), 400
+        return jsonify({"error": "nome de arquivo invalido"}), 400
     filename = sanitize_filename(f.filename)
     if not filename:
-        return jsonify({"error": "nome de arquivo inválido"}), 400
+        return jsonify({"error": "nome de arquivo invalido"}), 400
     ext = Path(filename).suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
-        return jsonify({"error": f"extensão não permitida: {ext}"}), 400
+        return jsonify({"error": f"extensao nao permitida: {ext}"}), 400
     converter = convert_access_to_duckdb
     if ext in (".mdb", ".accdb") and converter is None:
-        return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
+        return jsonify({"error": "Conversao nao disponivel: access_convert.py ausente ou dependencias nao instaladas"}), 500
     if ext in (".mdb", ".accdb"):
         precheck = evaluate_access_conversion_support(ext)
         if not precheck.get("ready"):
@@ -2327,10 +2359,10 @@ def admin_upload():
     if ext in (".mdb", ".accdb"):
         with convert_lock:
             if convert_status.get("running"):
-                return jsonify({"error": "Já existe uma conversão em execução"}), 409
+                return jsonify({"error": "Ja existe uma conversao em execucao"}), 409
             active_converter = converter
             if active_converter is None:
-                return jsonify({"error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"}), 500
+                return jsonify({"error": "Conversao nao disponivel: access_convert.py ausente ou dependencias nao instaladas"}), 500
             out_duckdb = build_access_conversion_output(dest.name)
             convert_status.update({
                 "running": True, "ok": None, "msg": "started",
@@ -2340,7 +2372,7 @@ def admin_upload():
             })
             start_access_conversion(dest, out_duckdb, active_converter)
         return jsonify({"ok": True, "status": "converting", "input": str(dest), "output": str(out_duckdb)})
-    return jsonify({"error": f"extensão não permitida: {ext}"}), 400
+    return jsonify({"error": f"extensao nao permitida: {ext}"}), 400
 
 
 @app.route("/admin/access_precheck", methods=["GET"])
@@ -2382,11 +2414,11 @@ def admin_select():
                 }), 503
             with convert_lock:
                 if convert_status.get("running"):
-                    return jsonify({"error": "Já existe uma conversão em execução"}), 409
+                    return jsonify({"error": "Ja existe uma conversao em execucao"}), 409
                 active_converter = convert_access_to_duckdb
                 if active_converter is None:
                     return jsonify({
-                        "error": "Conversão não disponível: access_convert.py ausente ou dependências não instaladas"
+                        "error": "Conversao nao disponivel: access_convert.py ausente ou dependencias nao instaladas"
                     }), 500
                 out_duckdb = build_access_conversion_output(fpath.name)
                 convert_status.update({
@@ -2907,27 +2939,41 @@ def fallback_search_access(
             if isinstance(parser_payload, dict):
                 parser_err = str(parser_payload.get("error") or "")
             if parser_err:
-                return {"error": f"ODBC connect failed: {last_err}; parser fallback failed: {parser_err}"}
-            return {"error": f"ODBC connect failed: {last_err}"}
+                return {"error": f"falha conexao ODBC: {last_err}; falha parser: {parser_err}"}
+            return {"error": f"falha conexao ODBC: {last_err}"}
         cur = conn.cursor()
         table_names = list_access_user_tables_cursor(cur)
         if not table_names:
-            return {"error": "No user tables found in Access DB."}
+            return {"error": "nenhuma tabela de usuario encontrada no banco Access"}
         if requested_tables is not None:
             table_names = [name for name in table_names if name in requested_tables]
         if not table_names:
             return build_empty_search_response(q, q_norm)
         table_names = table_names[:max_tables]
+
         def build_where_for_columns(cols):
             if not tokens:
-                return None
+                return None, []
+            quoted_cols = [quote_engine_identifier("access", col) for col in cols]
+            params = []
+            if token_mode == "any":
+                parts = []
+                for quoted_col in quoted_cols:
+                    token_parts = []
+                    for tok in tokens:
+                        token_parts.append(f"{quoted_col} LIKE ?")
+                        params.append(f"%{tok}%")
+                    parts.append(" OR ".join(token_parts))
+                return ("(" + " OR ".join(parts) + ")" if parts else None), params
             parts = []
-            for col in cols:
-                if token_mode == "any":
-                    parts.append(" OR ".join([f"{col} LIKE ?" for _ in tokens]))
-                else:
-                    parts.append(" AND ".join([f"{col} LIKE ?" for _ in tokens]))
-            return "(" + " OR ".join(parts) + ")" if parts else None
+            for tok in tokens:
+                token_parts = []
+                for quoted_col in quoted_cols:
+                    token_parts.append(f"{quoted_col} LIKE ?")
+                    params.append(f"%{tok}%")
+                parts.append("(" + " OR ".join(token_parts) + ")")
+            return (" AND ".join(parts) if parts else None), params
+
         for t in table_names:
             if candidate_count >= candidate_limit or returned_count >= total_limit:
                 break
@@ -2943,36 +2989,42 @@ def fallback_search_access(
                         data_type = None
                     if col_name:
                         cols.append((col_name, str(data_type).upper() if data_type else ""))
-            except Exception:
+            except Exception as exc:
+                app.logger.warning("falha ao listar colunas Access para tabela %s: %s", t, exc)
                 try:
-                    sample = cur.execute(f"SELECT TOP 1 * FROM [{t}]").fetchone()
+                    quoted_table = quote_engine_identifier("access", t)
+                    sample = cur.execute(f"SELECT TOP 1 * FROM {quoted_table}").fetchone()
                     if sample is not None:
                         desc = [d[0] for d in cur.description]
                         cols = [(name, "") for name in desc]
-                except Exception:
+                except Exception as sample_exc:
+                    app.logger.warning("falha ao amostrar tabela Access %s: %s", t, sample_exc)
                     cols = []
             search_cols = select_access_search_columns(cols) if cols else []
             if not search_cols:
                 continue
-            where_sql = build_where_for_columns(search_cols)
-            params = []
+            where_sql, params = build_where_for_columns(search_cols)
             if where_sql:
-                for _ in search_cols:
-                    for tok in tokens:
-                        params.append(f"%{tok}%")
-                sql = f"SELECT TOP {max_rows_per_table} * FROM [{t}] WHERE {where_sql}"
+                quoted_table = quote_engine_identifier("access", t)
+                sql = f"SELECT TOP {max_rows_per_table} * FROM {quoted_table} WHERE {where_sql}"
             else:
-                sql = f"SELECT TOP {max_rows_per_table} * FROM [{t}]"
+                quoted_table = quote_engine_identifier("access", t)
+                sql = f"SELECT TOP {max_rows_per_table} * FROM {quoted_table}"
             try:
                 rows = cur.execute(sql, params).fetchall() if params else cur.execute(sql).fetchall()
-            except Exception:
+            except Exception as exc:
+                app.logger.warning("falha ao buscar tabela Access %s com filtro: %s", t, exc)
                 try:
-                    rows = cur.execute(f"SELECT TOP {max_rows_per_table} * FROM [{t}]").fetchall()
-                except Exception:
+                    quoted_table = quote_engine_identifier("access", t)
+                    rows = cur.execute(f"SELECT TOP {max_rows_per_table} * FROM {quoted_table}").fetchall()
+                except Exception as fallback_exc:
+                    app.logger.warning("falha ao buscar tabela Access %s sem filtro: %s", t, fallback_exc)
                     rows = []
             if not rows:
                 continue
             desc = [d[0] for d in cur.description] if cur.description else []
+            lower_desc = [c.lower() for c in desc]
+            id_index = lower_desc.index("id") if "id" in lower_desc else None
             table_results = []
             for r in rows:
                 row_text = build_access_row_text(r)
@@ -2981,16 +3033,12 @@ def fallback_search_access(
                     continue
                 pk_col = None
                 pk_val = None
-                try:
-                    if "id" in [c.lower() for c in desc]:
-                        idx = [c.lower() for c in desc].index("id")
-                        pk_col = desc[idx]
-                        pk_val = r[idx]
-                    else:
-                        pk_col = desc[0] if desc else None
-                        pk_val = r[0] if len(r) > 0 else None
-                except Exception:
-                    pass
+                if id_index is not None and id_index < len(r):
+                    pk_col = desc[id_index]
+                    pk_val = r[id_index]
+                else:
+                    pk_col = desc[0] if desc else None
+                    pk_val = r[0] if len(r) > 0 else None
                 row_json = build_access_row_payload(r, desc)
                 table_results.append({"score": scored["score"], "pk_col": pk_col, "pk_value": pk_val, "row": row_json})
                 candidate_count += 1
@@ -3016,8 +3064,8 @@ def fallback_search_access(
         if conn is not None:
             try:
                 conn.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                app.logger.debug("falha ao fechar conexao Access ODBC: %s", exc)
 
 
 def dispatch_search_by_engine(db_engine, db_path, search_args):
@@ -3091,12 +3139,12 @@ def run_search_for_context(ctx, search_args):
             if "pyodbc" in lowered or "odbc" in lowered or "driver" in lowered:
                 return {
                     "error": error_text,
-                    "hint": "Access search unavailable in this environment. Convert to DuckDB first.",
+                    "hint": "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro.",
                 }, 503
             return {"error": error_text}, 500
         backend = payload.get("search_backend") if isinstance(payload, dict) else None
         return attach_search_backend(payload, backend or "access_odbc"), None
-    return {"error": f"Unsupported DB format: {ctx['db_path']}"}, 400
+    return {"error": f"formato de banco nao suportado: {ctx['db_path']}"}, 400
 
 @app.route("/api/search", methods=["GET"])
 def api_search():
@@ -3110,9 +3158,14 @@ def api_search():
     payload, status_code = run_search_for_context(ctx, search_args)
     if status_code is None:
         return jsonify(payload)
-    return json_error(payload.get("error", "search failed"), status_code, **{
+    error_text = payload.get("error", "busca falhou")
+    if status_code >= 500:
+        app.logger.warning("Busca falhou: %s", error_text)
+        error_text = "busca indisponivel" if status_code == 503 else "busca falhou"
+    return json_error(error_text, status_code, **{
         k: v for k, v in payload.items() if k != "error"
     })
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    debug_enabled = os.environ.get("NMR5DBWEB_FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}
+    app.run(host="127.0.0.1", port=5000, debug=debug_enabled)
