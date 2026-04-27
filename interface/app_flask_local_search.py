@@ -3193,15 +3193,13 @@ def api_search():
     if status_code >= 500:
         app.logger.warning("Busca falhou: %s", error_text)
     if status_code == 503:
-        public_error = "busca indisponivel"
-    elif status_code >= 500:
-        public_error = "busca falhou"
-    else:
-        public_error = "solicitacao invalida"
-    extra = {}
-    if status_code == 503 and payload.get("hint"):
-        extra["hint"] = "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro."
-    return json_error(public_error, status_code, **extra)
+        return jsonify({
+            "error": "busca indisponivel",
+            "hint": "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro.",
+        }), 503
+    if status_code >= 500:
+        return jsonify({"error": "busca falhou"}), status_code
+    return jsonify({"error": "solicitacao invalida"}), status_code
 
 if __name__ == "__main__":
     debug_enabled = os.environ.get("NMR5DBWEB_FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}

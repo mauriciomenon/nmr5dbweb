@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import csv
 import datetime
+import os
 import re
 import sqlite3
 from interface.access_parser_utils import (
@@ -120,9 +121,12 @@ def extract_date_from_filename(name: str) -> Optional[datetime.date]:
 
 def list_db_files(base_dir: Path) -> List[Path]:
     files: List[Path] = []
-    for p in base_dir.rglob("*"):
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS:
-            files.append(p)
+    for root, _dirs, names in os.walk(base_dir):
+        root_path = Path(root)
+        for name in names:
+            path = root_path / name
+            if path.suffix.lower() in SUPPORTED_EXTS:
+                files.append(path)
 
     # ordena preferindo datas no nome; se não tiver data, ordena por nome
     def sort_key(p: Path):
@@ -558,10 +562,6 @@ def find_record_across_dbs(
         ]
       }
     """
-    base_dir = base_dir.resolve()
-    if not base_dir.exists() or not base_dir.is_dir():
-        return {"error": f"diretorio invalido: {base_dir}"}
-
     try:
         filters = parse_filters_string(filters_str)
     except Exception as exc:
