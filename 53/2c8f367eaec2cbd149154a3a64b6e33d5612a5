@@ -1,0 +1,27 @@
+interface/find_record_across_dbs.py
+  ed5784b6fd4d23c6 31,168-172,178,195,198-201,204,246-250,259,267,278,393-398,400,402,404,438-439,444-447,449,454,461,481,502,518
+interface/sql_identifiers.py
+  ed5784b6fd4d23c6 15-21
+interface/app_flask_local_search.py
+  ed5784b6fd4d23c6 38,1779-1780,1783-1784,1790-1791,1793,1830-1831,1833-1834,1857-1858,1860-1861,2201,2204-2205,2208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "532c8f367eaec2cbd149154a3a64b6e33d5612a5",
+  "prompts": {
+    "ed5784b6fd4d23c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc0e5-3693-7b71-8cdc-196a748271cd",
+        "model": "gpt-5.5"
+      },
+      "human_author": "unknown",
+      "messages": [],
+      "total_additions": 89,
+      "total_deletions": 58,
+      "accepted_lines": 71,
+      "overriden_lines": 0
+    }
+  }
+}
