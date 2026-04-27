@@ -1,0 +1,23 @@
+interface/app_flask_local_search.py
+  ed5784b6fd4d23c6 568,1803,1819,2204,3027-3030,3182
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "b1e541e622bac014fbeeff601fed8b2de41c9000",
+  "prompts": {
+    "ed5784b6fd4d23c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc0e5-3693-7b71-8cdc-196a748271cd",
+        "model": "gpt-5.5"
+      },
+      "human_author": "unknown",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 12,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    }
+  }
+}
