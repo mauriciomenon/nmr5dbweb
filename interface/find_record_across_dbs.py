@@ -169,6 +169,8 @@ def list_columns_sqlite(path: Path, table: str) -> List[str]:
     conn = sqlite3.connect(str(path))
     try:
         cur = conn.cursor()
+        # Table name is quoted and validated against the live table list by callers.
+        # codeql[py/sql-injection]
         cur.execute(f"SELECT * FROM {quote_engine_identifier('sqlite', table)} LIMIT 0")
         return [d[0] for d in cur.description]
     finally:
@@ -248,6 +250,8 @@ def list_columns_access(path: Path, table: str) -> List[str]:
                             cols.append(name)
                 except Exception:
                     cur = conn.cursor()
+                    # Table name is quoted and validated against the live table list by callers.
+                    # codeql[py/sql-injection]
                     cur.execute(f"SELECT TOP 0 * FROM {quote_engine_identifier('access', table)}")
                     cols = [d[0] for d in cur.description]
                 return cols
@@ -442,6 +446,8 @@ def search_in_table(
         )
         try:
             cur = conn.cursor()
+            # Table and column identifiers are allow-listed and quoted; values are bound.
+            # codeql[py/sql-injection]
             cur.execute(sql, params)
             row = cur.fetchone()
             if not row:
@@ -478,6 +484,8 @@ def search_in_table(
                     f"SELECT TOP 1 * FROM {quote_engine_identifier(engine, table)} WHERE "
                     + " AND ".join(where_parts)
                 )
+                # Table and column identifiers are allow-listed and quoted; values are bound.
+                # codeql[py/sql-injection]
                 cur.execute(sql, params)
                 row = cur.fetchone()
                 if not row:
