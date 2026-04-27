@@ -1,0 +1,31 @@
+interface/app_flask_local_search.py
+  ed5784b6fd4d23c6 27,38,117-118,268,273,281,539-560,562-578,613-615,617,624,637,653,796,1054,1059,1637-1643,1743,2330,2333,2336,2339,2342,2362,2365,2375,2417,2421,2942-2943,2947,2953,2956-2967,2969-2976,2992-2993,2995-2996,3000-3001,3006,3008-3009,3011-3012,3015-3016,3018-3021,3026-3027,3036-3041,3067-3068,3142,3147,3161-3165,3170-3171
+interface/find_record_across_dbs.py
+  ed5784b6fd4d23c6 31,39-40,42,172,194,251,395,402-408,412,419-425,438-442,456-460,478-479,497,499,529,550,555,571-572,576,594-600
+interface/sql_identifiers.py
+  ed5784b6fd4d23c6 1-14
+tests/test_find_record_across_dbs_access_fallback.py
+  ed5784b6fd4d23c6 119-143,152,167-189
+tests/test_app_flask_local_search_api.py
+  ed5784b6fd4d23c6 25,41,66-76,848-849,867,885,1245,1607,1621
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "e94d1c36970fef1684343da6b415b7f8d255062d",
+  "prompts": {
+    "ed5784b6fd4d23c6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dc0e5-3693-7b71-8cdc-196a748271cd",
+        "model": "gpt-5.5"
+      },
+      "human_author": "unknown",
+      "messages": [],
+      "total_additions": 351,
+      "total_deletions": 203,
+      "accepted_lines": 284,
+      "overriden_lines": 0
+    }
+  }
+}
