@@ -1,18 +1,26 @@
+exclude: ^(node_modules|dist|build|artifacts|htmlcov|\.venv|__pycache__|docs/archive)/
+
 repos:
 - repo: https://github.com/gitleaks/gitleaks
-  rev: v8.16.3
+  rev: v8.30.1
   hooks:
   - id: gitleaks
+    args: [--redact]
 - repo: https://github.com/jumanjihouse/pre-commit-hooks
   rev: 3.0.0
   hooks:
   - id: shellcheck
-- repo: https://github.com/pre-commit/mirrors-eslint
-  rev: v8.38.0
+    files: \.(sh|bash)$
+- repo: local
   hooks:
-  - id: eslint
+  - id: eslint-static
+    name: eslint static assets
+    entry: pnpm exec eslint static
+    language: system
+    pass_filenames: false
+    files: ^static/.*\.js$
 - repo: https://github.com/pre-commit/pre-commit-hooks
-  rev: v4.4.0
+  rev: v6.0.0
   hooks:
   - id: end-of-file-fixer
   - id: trailing-whitespace
