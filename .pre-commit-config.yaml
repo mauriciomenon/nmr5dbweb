@@ -10,7 +10,7 @@ repos:
   rev: 3.0.0
   hooks:
   - id: shellcheck
-    files: \.(sh|bash)$
+    types: [shell]
 - repo: local
   hooks:
   - id: eslint-static
