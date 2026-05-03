@@ -64,13 +64,7 @@ class _KeyedComparePlan:
 
 
 def _resolve_duckdb_compare_paths(db1: Path, db2: Path) -> tuple[Path, Path]:
-    db1 = db1.resolve()
-    db2 = db2.resolve()
-    if not db1.exists():
-        raise FileNotFoundError(db1)
-    if not db2.exists():
-        raise FileNotFoundError(db2)
-    return db1, db2
+    return Path(db1), Path(db2)
 
 
 def _resolve_common_table_columns(db1: Path, db2: Path, table: str) -> list[str]:
@@ -264,13 +258,6 @@ def compare_table_content_duckdb(db1: Path, db2: Path, table: str) -> dict:
             "diff_count": int,  # número de linhas diferentes (ignorando ordem)
         }
     """
-
-    db1 = db1.resolve()
-    db2 = db2.resolve()
-    if not db1.exists():
-        raise FileNotFoundError(db1)
-    if not db2.exists():
-        raise FileNotFoundError(db2)
 
     # Conexões em modo somente leitura para minimizar conflitos de lock em Windows.
     conn1 = duckdb.connect(str(db1), read_only=True)
@@ -467,9 +454,6 @@ def compare_tables_overview_duckdb(
 
 def list_tables(db_path: Path) -> List[str]:
     """Lista tabelas de um arquivo DuckDB."""
-    db_path = db_path.resolve()
-    if not db_path.exists():
-        raise FileNotFoundError(db_path)
     conn = duckdb.connect(str(db_path))
     try:
         rows = conn.execute("SHOW TABLES").fetchall()
@@ -487,9 +471,6 @@ def list_common_tables(db1: Path, db2: Path) -> List[str]:
 
 def list_table_columns(db_path: Path, table: str) -> List[str]:
     """Lista colunas de uma tabela DuckDB via information_schema."""
-    db_path = db_path.resolve()
-    if not db_path.exists():
-        raise FileNotFoundError(db_path)
     conn = duckdb.connect(str(db_path))
     try:
         rows = conn.execute(

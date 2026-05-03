@@ -29,13 +29,14 @@ from pathlib import Path
 from datetime import datetime
 from typing import Any, Callable
 from flask import Flask, request, jsonify, send_from_directory
+from werkzeug.security import safe_join
 from werkzeug.utils import secure_filename
 import duckdb
 from rapidfuzz import fuzz
 from platformdirs import user_data_dir
 
 from interface.find_record_across_dbs import find_record_across_dbs, SUPPORTED_EXTS
-from interface.sql_identifiers import quote_engine_identifier, quote_identifier
+from interface.sql_identifiers import quote_engine_identifier, quote_identifier, select_known_identifier
 from interface.compare_dbs import (
     list_common_tables,
     list_table_columns,
@@ -564,8 +565,23 @@ def resolve_allowed_path(raw_path, *, expected):
         raise ValueError("caminho deve ser texto")
     if "\x00" in raw_path:
         raise ValueError("caminho possui caractere invalido")
-    path = Path(raw_path).expanduser().resolve(strict=False)
-    if not is_path_under_allowed_root(path):
+    raw_abs = os.path.abspath(os.path.expanduser(raw_path))
+    path = None
+    for root in iter_allowed_path_roots():
+        try:
+            rel_path = os.path.relpath(raw_abs, str(root))
+        except ValueError:
+            continue
+        if rel_path == os.pardir or rel_path.startswith(os.pardir + os.sep):
+            continue
+        joined = safe_join(str(root), rel_path)
+        if joined is None:
+            continue
+        path = Path(joined).resolve(strict=False)
+        if is_path_under_allowed_root(path):
+            break
+        path = None
+    if path is None:
         raise ValueError("caminho fora dos diretorios permitidos")
     if expected == "dir" and (not path.exists() or not path.is_dir()):
         raise ValueError(f"diretorio invalido: {path}")
@@ -975,7 +991,7 @@ def compare_bad_request(exc):
 
 def compare_internal_error(route_name, exc):
     app.logger.exception("Erro em %s", route_name)
-    return jsonify({"error": str(exc)}), 500
+    return json_error("erro interno", 500)
 
 
 def run_compare_json_route(route_name, payload_builder):
@@ -988,7 +1004,10 @@ def run_compare_json_route(route_name, payload_builder):
 
 
 def json_error(message, status_code=400, **extra):
-    payload = {"error": str(message)}
+    if status_code >= 500:
+        payload = {"error": "erro interno"}
+    else:
+        payload = {"error": str(message)}
     if extra:
         payload.update(extra)
     return jsonify(payload), status_code
@@ -1765,6 +1784,8 @@ def get_table_columns_duckdb_conn(conn, table):
 
 
 def get_table_columns_sqlite_conn(conn, table):
+    # Table name is quoted and callers validate it against the live table list.
+    # codeql[py/sql-injection]
     cur = conn.execute(f"SELECT * FROM {quote_identifier(table)} LIMIT 0")  # nosec B608
     return [desc[0] for desc in cur.description or []]
 
@@ -1772,19 +1793,21 @@ def get_table_columns_sqlite_conn(conn, table):
 def build_table_filter_clause(columns, col, q, cast_type):
     if not col or not q:
         return "", []
-    if col not in columns:
+    matched_col = select_known_identifier(col, columns)
+    if matched_col is None:
         raise ValueError(f"column not found: {col}")
     if cast_type == "duckdb":
-        return f"WHERE CAST({quote_identifier(col)} AS VARCHAR) ILIKE ?", [f"%{q}%"]
-    return f"WHERE CAST({quote_identifier(col)} AS TEXT) LIKE ? COLLATE NOCASE", [f"%{q}%"]
+        return f"WHERE CAST({quote_identifier(matched_col)} AS VARCHAR) ILIKE ?", [f"%{q}%"]
+    return f"WHERE CAST({quote_identifier(matched_col)} AS TEXT) LIKE ? COLLATE NOCASE", [f"%{q}%"]
 
 
 def build_table_order_clause(columns, sort, order):
     if not sort:
         return ""
-    if sort not in columns:
+    matched_sort = select_known_identifier(sort, columns)
+    if matched_sort is None:
         raise ValueError(f"sort column not found: {sort}")
-    return f"ORDER BY {quote_identifier(sort)} {order}"
+    return f"ORDER BY {quote_identifier(matched_sort)} {order}"
 
 
 def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sort, order, cast_type, bind_limit):
@@ -1794,7 +1817,8 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
     count_sql = f"SELECT COUNT(*) FROM {quoted_table}"  # nosec B608
     if where_clause:
         count_sql += f" {where_clause}"
-    total = conn.execute(count_sql, params).fetchone()[0]
+    # Table and column identifiers are allow-listed and quoted; values are bound.
+    total = conn.execute(count_sql, params).fetchone()[0]  # codeql[py/sql-injection]
 
     data_sql = f"SELECT * FROM {quoted_table}"  # nosec B608
     data_params = list(params)
@@ -1809,7 +1833,8 @@ def run_table_page_query(conn, quoted_table, columns, limit, offset, col, q, sor
         else:
             data_sql += f" LIMIT {limit} OFFSET {offset}"
 
-    rows = conn.execute(data_sql, data_params).fetchall()
+    # Table and column identifiers are allow-listed and quoted; values are bound.
+    rows = conn.execute(data_sql, data_params).fetchall()  # codeql[py/sql-injection]
     return rows, int(total)
 
 
@@ -1817,10 +1842,11 @@ def read_table_page_duckdb(path, table, limit, offset, col, q, sort, order):
     conn = duckdb_connect(path)
     try:
         tables = list_tables_duckdb_conn(conn)
-        if table not in tables:
+        matched_table = select_known_identifier(table, tables)
+        if matched_table is None:
             raise LookupError(f"table not found: {table}")
-        quoted_table = quote_identifier(table)
-        cols = get_table_columns_duckdb_conn(conn, table)
+        quoted_table = quote_identifier(matched_table)
+        cols = get_table_columns_duckdb_conn(conn, matched_table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -1843,10 +1869,11 @@ def read_table_page_sqlite(path, table, limit, offset, col, q, sort, order):
     conn = sqlite_connect(path)
     try:
         tables = list_tables_sqlite_conn(conn)
-        if table not in tables:
+        matched_table = select_known_identifier(table, tables)
+        if matched_table is None:
             raise LookupError(f"table not found: {table}")
-        quoted_table = quote_identifier(table)
-        cols = get_table_columns_sqlite_conn(conn, table)
+        quoted_table = quote_identifier(matched_table)
+        cols = get_table_columns_sqlite_conn(conn, matched_table)
         rows, total = run_table_page_query(
             conn,
             quoted_table,
@@ -2088,9 +2115,10 @@ def fallback_search_access_parser(
             if is_access_parser_no_data_error(err_text):
                 no_data_tables += 1
                 continue
+            app.logger.warning("erro ao ler tabela Access com parser %s: %s", table_name, err_text)
             error_tables += 1
             if len(error_samples) < 3:
-                error_samples.append(f"{table_name}: {err_text}")
+                error_samples.append(f"{table_name}: erro ao ler tabela")
             continue
         rows = normalize_access_parser_rows(parsed)
         if not rows:
@@ -2186,10 +2214,13 @@ def fallback_search_sqlite(
                 continue
             where_sql, params = build_sqlite_search_where(cols, tokens, token_mode)
             sql = f"SELECT * FROM {quote_identifier(table_name)}"
+            query_params = list(params)
             if where_sql:
                 sql += f" {where_sql}"
-            sql += f" LIMIT {max_rows_per_table}"
-            rows = conn.execute(sql, params).fetchall()
+            sql += " LIMIT ?"
+            query_params.append(max_rows_per_table)
+            # Table and column identifiers are allow-listed and quoted; values are bound.
+            rows = conn.execute(sql, query_params).fetchall()  # codeql[py/sql-injection]
             if not rows:
                 continue
 
@@ -2321,8 +2352,9 @@ def api_browse_dirs():
         return jsonify(list_child_directories(base))
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
-    except RuntimeError as exc:
-        return jsonify({"error": str(exc)}), 500
+    except RuntimeError:
+        app.logger.exception("Erro ao listar diretorios")
+        return json_error("erro interno", 500)
 
 @app.route("/admin/upload", methods=["POST"])
 def admin_upload():
@@ -2466,8 +2498,9 @@ def admin_delete():
     try:
         delete_upload_target(target)
         return jsonify({"ok": True, "deleted": str(target.name)})
-    except Exception as e:
-        return jsonify({"error": f"falha ao apagar: {e}"}), 500
+    except Exception:
+        app.logger.exception("Falha ao apagar arquivo")
+        return json_error("erro interno", 500)
 
 
 @app.route("/admin/set_auto_index", methods=["POST"])
@@ -2664,20 +2697,19 @@ def api_compare_db_rows():
         # Caso mais comum em Windows: arquivo já aberto por outro processo
         if "File is already open" in msg or "já está sendo usado" in msg:
             friendly = (
-                "Não foi possível abrir um dos bancos DuckDB porque o arquivo "
-                "já está em uso por outro processo. Feche a outra janela/instância "
-                "que está usando o arquivo e tente novamente. Detalhes técnicos: "
-                f"{msg}"
+                "Nao foi possivel abrir um dos bancos DuckDB porque o arquivo "
+                "ja esta em uso por outro processo. Feche a outra janela/instancia "
+                "que esta usando o arquivo e tente novamente."
             )
             app.logger.warning("Banco em uso em api_compare_db_rows: %s", msg)
             return jsonify({"error": "banco_em_uso", "message": friendly}), 409
         app.logger.exception("DuckDB IOException em api_compare_db_rows")
-        return jsonify({"error": "duckdb_io", "message": msg}), 500
+        return json_error("erro interno", 500)
     except ValueError as exc:
         return compare_bad_request(exc)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         app.logger.exception("Erro em api_compare_db_rows")
-        return jsonify({"error": "erro_interno", "message": str(exc)}), 500
+        return json_error("erro interno", 500)
 
 # ---------------- Search + table endpoints ----------------
 @app.route("/api/tables", methods=["GET"])
@@ -3011,7 +3043,11 @@ def fallback_search_access(
                 quoted_table = quote_engine_identifier("access", t)
                 sql = f"SELECT TOP {max_rows_per_table} * FROM {quoted_table}"
             try:
-                rows = cur.execute(sql, params).fetchall() if params else cur.execute(sql).fetchall()
+                # Table and column identifiers come from Access metadata; values are bound.
+                if params:
+                    rows = cur.execute(sql, params).fetchall()  # codeql[py/sql-injection]
+                else:
+                    rows = cur.execute(sql).fetchall()  # codeql[py/sql-injection]
             except Exception as exc:
                 app.logger.warning("falha ao buscar tabela Access %s com filtro: %s", t, exc)
                 try:
@@ -3161,10 +3197,14 @@ def api_search():
     error_text = payload.get("error", "busca falhou")
     if status_code >= 500:
         app.logger.warning("Busca falhou: %s", error_text)
-        error_text = "busca indisponivel" if status_code == 503 else "busca falhou"
-    return json_error(error_text, status_code, **{
-        k: v for k, v in payload.items() if k != "error"
-    })
+    if status_code == 503:
+        return jsonify({
+            "error": "busca indisponivel",
+            "hint": "Busca Access indisponivel neste ambiente. Converta para DuckDB primeiro.",
+        }), 503
+    if status_code >= 500:
+        return jsonify({"error": "busca falhou"}), 500
+    return jsonify({"error": "solicitacao invalida"}), 400
 
 if __name__ == "__main__":
     debug_enabled = os.environ.get("NMR5DBWEB_FLASK_DEBUG", "").lower() in {"1", "true", "yes", "on"}

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import csv
 import datetime
+import os
 import re
 import sqlite3
 from interface.access_parser_utils import (
@@ -28,7 +29,7 @@ from interface.access_parser_utils import (
     list_access_tables_from_parser,
     normalize_access_parser_rows,
 )
-from interface.sql_identifiers import quote_engine_identifier
+from interface.sql_identifiers import quote_engine_identifier, select_known_identifier
 
 try:  # opcionais
     import duckdb
@@ -120,9 +121,12 @@ def extract_date_from_filename(name: str) -> Optional[datetime.date]:
 
 def list_db_files(base_dir: Path) -> List[Path]:
     files: List[Path] = []
-    for p in base_dir.rglob("*"):
-        if p.is_file() and p.suffix.lower() in SUPPORTED_EXTS:
-            files.append(p)
+    for root, _dirs, names in os.walk(base_dir):
+        root_path = Path(root)
+        for name in names:
+            path = root_path / name
+            if path.suffix.lower() in SUPPORTED_EXTS:
+                files.append(path)
 
     # ordena preferindo datas no nome; se não tiver data, ordena por nome
     def sort_key(p: Path):
@@ -165,11 +169,17 @@ def list_tables_sqlite(path: Path) -> List[str]:
         conn.close()
 
 
-def list_columns_sqlite(path: Path, table: str) -> List[str]:
+def list_columns_sqlite(path: Path, table: str, known_tables: Optional[List[str]] = None) -> List[str]:
+    tables = known_tables if known_tables is not None else list_tables_sqlite(path)
+    matched_table = select_known_identifier(table, tables)
+    if matched_table is None:
+        raise RuntimeError(f"tabela nao encontrada: {table}")
     conn = sqlite3.connect(str(path))
     try:
         cur = conn.cursor()
-        cur.execute(f"SELECT * FROM {quote_engine_identifier('sqlite', table)} LIMIT 0")
+        # Table name is quoted and validated against the live table list by callers.
+        # codeql[py/sql-injection]
+        cur.execute(f"SELECT * FROM {quote_engine_identifier('sqlite', matched_table)} LIMIT 0")
         return [d[0] for d in cur.description]
     finally:
         conn.close()
@@ -186,12 +196,16 @@ def list_tables_duckdb(path: Path) -> List[str]:
         conn.close()
 
 
-def list_columns_duckdb(path: Path, table: str) -> List[str]:
+def list_columns_duckdb(path: Path, table: str, known_tables: Optional[List[str]] = None) -> List[str]:
     if duckdb is None:
         raise RuntimeError("duckdb nao esta instalado")
+    tables = known_tables if known_tables is not None else list_tables_duckdb(path)
+    matched_table = select_known_identifier(table, tables)
+    if matched_table is None:
+        raise RuntimeError(f"tabela nao encontrada: {table}")
     conn = duckdb.connect(str(path))
     try:
-        cur = conn.execute(f"SELECT * FROM {quote_engine_identifier('duckdb', table)} LIMIT 0")
+        cur = conn.execute(f"SELECT * FROM {quote_engine_identifier('duckdb', matched_table)} LIMIT 0")
         return [c[0] for c in cur.description]
     finally:
         conn.close()
@@ -233,7 +247,11 @@ def list_tables_access(path: Path) -> List[str]:
     return []
 
 
-def list_columns_access(path: Path, table: str) -> List[str]:
+def list_columns_access(path: Path, table: str, known_tables: Optional[List[str]] = None) -> List[str]:
+    tables = known_tables if known_tables is not None else list_tables_access(path)
+    matched_table = select_known_identifier(table, tables)
+    if matched_table is None:
+        raise RuntimeError(f"tabela nao encontrada: {table}")
     odbc_error = None
     if pyodbc is not None:
         try:
@@ -242,13 +260,15 @@ def list_columns_access(path: Path, table: str) -> List[str]:
                 cols: List[str] = []
                 cur = conn.cursor()
                 try:
-                    for c in cur.columns(table=table):
+                    for c in cur.columns(table=matched_table):
                         name = getattr(c, "column_name", None) or (c[3] if len(c) > 3 else None)
                         if name:
                             cols.append(name)
                 except Exception:
                     cur = conn.cursor()
-                    cur.execute(f"SELECT TOP 0 * FROM {quote_engine_identifier('access', table)}")
+                    # Table name is quoted and validated against the live table list by callers.
+                    # codeql[py/sql-injection]
+                    cur.execute(f"SELECT TOP 0 * FROM {quote_engine_identifier('access', matched_table)}")
                     cols = [d[0] for d in cur.description]
                 return cols
             finally:
@@ -259,7 +279,7 @@ def list_columns_access(path: Path, table: str) -> List[str]:
         except Exception as exc:
             odbc_error = str(exc)
 
-    cols, parser_err = list_columns_access_parser(path, table)
+    cols, parser_err = list_columns_access_parser(path, matched_table)
     if cols:
         return cols
     if odbc_error and parser_err:
@@ -374,13 +394,18 @@ def list_tables_for_engine(engine: str, path: Path) -> List[str]:
     raise RuntimeError(f"engine nao suportada: {engine}")
 
 
-def list_columns_for_engine(engine: str, path: Path, table: str) -> List[str]:
+def list_columns_for_engine(
+    engine: str,
+    path: Path,
+    table: str,
+    known_tables: Optional[List[str]] = None,
+) -> List[str]:
     if engine == "sqlite":
-        return list_columns_sqlite(path, table)
+        return list_columns_sqlite(path, table, known_tables)
     if engine == "duckdb":
-        return list_columns_duckdb(path, table)
+        return list_columns_duckdb(path, table, known_tables)
     if engine == "access":
-        return list_columns_access(path, table)
+        return list_columns_access(path, table, known_tables)
     raise RuntimeError(f"engine nao suportada: {engine}")
 
 
@@ -412,36 +437,39 @@ def search_in_table(
     - sample_row_dict: dicionario simples com a linha encontrada
     - error: mensagem de erro (se algo deu errado ao acessar o arquivo/tabela)
     """
-    if engine == "access" and pyodbc is None:
-        # Fast path on non-Windows without ODBC: parse table once.
-        return search_in_table_access_parser(path, table, filters)
-
     try:
         tables = known_tables if known_tables is not None else list_tables_for_engine(engine, path)
-        if table not in tables:
+        matched_table = select_known_identifier(table, tables)
+        if matched_table is None:
             return False, None, f"tabela '{table}' nao encontrada"
     except Exception as exc:
         return False, None, f"erro ao validar tabela: {exc}"
 
+    if engine == "access" and pyodbc is None:
+        # Fast path on non-Windows without ODBC: parse validated table once.
+        return search_in_table_access_parser(path, matched_table, filters)
+
     try:
-        cols = list_columns_for_engine(engine, path, table)
+        cols = list_columns_for_engine(engine, path, matched_table, tables)
     except Exception as exc:
         return False, None, f"erro ao listar colunas: {exc}"
 
     try:
-        where_parts, params = build_engine_where_parts(engine, filters, cols, table)
+        where_parts, params = build_engine_where_parts(engine, filters, cols, matched_table)
     except ValueError as exc:
         return False, None, str(exc)
 
     if engine == "sqlite":
         conn = sqlite3.connect(str(path))
         sql = (
-            f"SELECT * FROM {quote_engine_identifier(engine, table)} WHERE "
+            f"SELECT * FROM {quote_engine_identifier(engine, matched_table)} WHERE "
             + " AND ".join(where_parts)
             + " LIMIT 1"
         )
         try:
             cur = conn.cursor()
+            # Table and column identifiers are allow-listed and quoted; values are bound.
+            # codeql[py/sql-injection]
             cur.execute(sql, params)
             row = cur.fetchone()
             if not row:
@@ -454,7 +482,7 @@ def search_in_table(
             return False, None, "duckdb nao instalado"
         conn = duckdb.connect(str(path))
         sql = (
-            f"SELECT * FROM {quote_engine_identifier(engine, table)} WHERE "
+            f"SELECT * FROM {quote_engine_identifier(engine, matched_table)} WHERE "
             + " AND ".join(where_parts)
             + " LIMIT 1"
         )
@@ -475,9 +503,11 @@ def search_in_table(
             try:
                 cur = conn.cursor()
                 sql = (
-                    f"SELECT TOP 1 * FROM {quote_engine_identifier(engine, table)} WHERE "
+                    f"SELECT TOP 1 * FROM {quote_engine_identifier(engine, matched_table)} WHERE "
                     + " AND ".join(where_parts)
                 )
+                # Table and column identifiers are allow-listed and quoted; values are bound.
+                # codeql[py/sql-injection]
                 cur.execute(sql, params)
                 row = cur.fetchone()
                 if not row:
@@ -489,7 +519,7 @@ def search_in_table(
                 except Exception:
                     pass
         except Exception as exc:
-            found, sample, parser_err = search_in_table_access_parser(path, table, filters)
+            found, sample, parser_err = search_in_table_access_parser(path, matched_table, filters)
             if parser_err is not None:
                 return False, None, f"falha ODBC: {exc}; falha access-parser: {parser_err}"
             return found, sample, None
@@ -532,10 +562,6 @@ def find_record_across_dbs(
         ]
       }
     """
-    base_dir = base_dir.resolve()
-    if not base_dir.exists() or not base_dir.is_dir():
-        return {"error": f"diretorio invalido: {base_dir}"}
-
     try:
         filters = parse_filters_string(filters_str)
     except Exception as exc:

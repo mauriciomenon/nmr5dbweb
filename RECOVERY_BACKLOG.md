@@ -73,6 +73,12 @@ Track real product debt that should not be fixed in the current slice.
 41. Reconcile upload non-2xx handling contract in `static/app_bootstrap_actions.js` (transport failure handling vs structured backend validation message path) with one explicit product decision and tests.
 42. Add focused regression for converter table-name uniqueness policy in `converters/convert_jackcess.py` to lock collision behavior for sanitized names.
 43. `converters/convert_pyaccess_parser.py`: split `convert_mdb_to_duckdb` into smaller units (file checks, table schema, row migration, metadata write) only in a dedicated maintenance slice with behavior-lock tests first.
+44. Resolve the broad `ty check` baseline in a dedicated type-safety slice; current failures are concentrated in legacy tools/tests and optional Windows/ODBC imports, while runtime tests and lint pass.
+45. Resolve the remaining CodeQL open alerts separately from dependency readiness:
+   - dynamic SQL identifier sinks that need analyzer-recognized allow-listing or local suppression with proof
+   - path validation sink around user-provided paths
+   - `/api/search` error payload reflection warning
+46. Decide Debian ARM support policy before claiming full Linux ARM readiness; current Debian amd64 passes, but `PyQt6-Qt6==6.9.0` is not installable in the tested Debian bookworm ARM container.
 
 ## Do Not Pull Into Slice 1
 

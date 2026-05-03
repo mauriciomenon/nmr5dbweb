@@ -2,11 +2,17 @@
 
 import argparse
 import duckdb
-import pypyodbc
 import sys
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, List
+from typing import Any, Optional, List
+
+try:
+    import pypyodbc as _pypyodbc  # ty: ignore[unresolved-import]
+except ImportError:
+    pypyodbc: Any = None
+else:
+    pypyodbc = _pypyodbc
 
 try:
     from converters.common import (
@@ -19,6 +25,8 @@ except ModuleNotFoundError:
 
 
 def get_mdb_connection(mdb_file: Path):
+    if pypyodbc is None:
+        raise ImportError("pypyodbc not installed.")
     try:
         conn_str = (
             r"Driver={Microsoft Access Driver (*.mdb, *.accdb)};"
@@ -145,12 +153,13 @@ def import_to_duckdb(
             conn.execute(
                 f"""
                 CREATE TABLE IF NOT EXISTS "{table_with_date}" AS
-                SELECT * FROM read_csv_auto('{{csv_file}}',
+                SELECT * FROM read_csv_auto(?,
                     header=true,
                     ignore_errors=true,
                     sample_size=100000
                 )
-            """
+            """,
+                [str(csv_file)],
             )
 
             result = conn.execute(f'SELECT COUNT(*) FROM "{table_with_date}"').fetchone()
@@ -222,10 +231,14 @@ def main():
     if input_error:
         print(input_error)
         sys.exit(1)
-    if args.batch:
-        batch_import(args.input, args.output)
-    else:
-        import_to_duckdb(args.input, args.output)
+    try:
+        if args.batch:
+            batch_import(args.input, args.output)
+        else:
+            import_to_duckdb(args.input, args.output)
+    except ImportError as exc:
+        print(exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -59,7 +59,7 @@ def main() -> int:
         return 2
 
     try:
-        import pyodbc  # type: ignore
+        import pyodbc
     except Exception as exc:  # pragma: no cover
         result["details"] = f"pyodbc_missing: {exc}"
         print(json.dumps(result, ensure_ascii=True))

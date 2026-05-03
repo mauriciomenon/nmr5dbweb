@@ -10,7 +10,7 @@ create_fulltext.py (versão segura)
 import argparse
 import duckdb
 import json
-from utils import normalize_text, serialize_value
+from interface.utils import normalize_text, serialize_value
 from pathlib import Path
 
 BATCH_INSERT = 1000
@@ -62,12 +62,19 @@ def create_or_resume_fulltext(db_path, drop=False, chunk=CHUNK, batch_insert=BAT
         for table in all_tables:
             print(f"\nProcessing table: {table}")
             try:
-                total_rows_in_table = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
+                total_row = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()
+                if total_row is None:
+                    raise RuntimeError("count query returned no row")
+                total_rows_in_table = int(total_row[0])
             except Exception as e:
                 print(f"  Cannot read table {table} row count, skipping. Error: {e}")
                 continue
 
-            already = conn.execute("SELECT COUNT(*) FROM _fulltext WHERE table_name = ?", [table]).fetchone()[0]
+            already_row = conn.execute(
+                "SELECT COUNT(*) FROM _fulltext WHERE table_name = ?",
+                [table],
+            ).fetchone()
+            already = int(already_row[0]) if already_row is not None else 0
             if already >= total_rows_in_table:
                 print(f"  Already indexed ({already}/{total_rows_in_table}), skipping.")
                 continue

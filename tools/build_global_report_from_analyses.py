@@ -50,7 +50,10 @@ def ler_top_csv(path: Path):
         df['contagem'] = pd.to_numeric(df['contagem'], errors='coerce').fillna(0).astype(int)
         return df
     except Exception:
-        return pd.DataFrame(columns=['valor','contagem'])
+        return pd.DataFrame({
+            "valor": pd.Series(dtype="object"),
+            "contagem": pd.Series(dtype="int64"),
+        })
 
 def agregar_tops_por_coluna(analises_dir: Path, table: str):
     """
@@ -58,9 +61,11 @@ def agregar_tops_por_coluna(analises_dir: Path, table: str):
     e agrega contagens por (coluna, valor).
     Retorna:
       - df_global(coluna, valor, count_total, files_count)
-      - map_top1_count_por_analise: dict[coluna] -> lista de top1_count (um por pasta de análise)
+      - lista de pastas de analise lidas
+      - map_top1: dict[coluna] -> lista de top1_count (um por pasta de analise)
     """
-    agreg = {}
+    agreg_counts: dict[tuple[str, str], int] = {}
+    agreg_files: dict[tuple[str, str], set[str]] = {}
     seen = {}
     map_top1 = {}
     cols_csvs = encontrar_columns_csvs(analises_dir, table)
@@ -77,14 +82,14 @@ def agregar_tops_por_coluna(analises_dir: Path, table: str):
         # agrega valores
         for _, r in df.iterrows():
             key = (col_name, str(r['valor']))
-            ent = agreg.get(key)
-            if ent is None:
-                ent = {'count_total': 0, 'files': set()}
-                agreg[key] = ent
-            ent['count_total'] += int(r['contagem'])
-            ent['files'].add(pasta_id)
-    rows = [{'coluna': k[0], 'valor': k[1], 'count_total': v['count_total'], 'files_count': len(v['files'])}
-            for k,v in agreg.items()]
+            agreg_counts[key] = agreg_counts.get(key, 0) + int(r['contagem'])
+            files = agreg_files.get(key)
+            if files is None:
+                files = set()
+                agreg_files[key] = files
+            files.add(pasta_id)
+    rows = [{'coluna': k[0], 'valor': k[1], 'count_total': v, 'files_count': len(agreg_files[k])}
+            for k,v in agreg_counts.items()]
     return pd.DataFrame(rows), list(seen.keys()), map_top1
 
 # ---------------- sumarizar summaries (métricas por coluna) ----------------
